@@ -1,0 +1,122 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" width="1200" height="720" font-family='system-ui, -apple-system, "Segoe UI", sans-serif' role="img" aria-label="Stoa take-off spike results">
+<rect width="1200" height="720" fill="#fcfcfb"/>
+<text x="40.0" y="58.0" font-size="22" fill="#0b0b0b" font-weight="600" text-anchor="start">Plain code answers 41% of the questions; a vision model would lift that to about 79%</text>
+<text x="40.0" y="84.0" font-size="14" fill="#52514e" font-weight="400" text-anchor="start">Stoa take-off spike · 7,990 preview questions · scored with the dataset&#x27;s rules: counts exact, areas within 2% · measured 13 November 2026</text>
+<text x="40.0" y="122.0" font-size="13" fill="#52514e" font-weight="600" text-anchor="start">All 7,990 preview questions</text>
+<rect x="40.0" y="134" width="457.6" height="28" rx="4" fill="#2a78d6"><title>Answered by plain geometry code (measured): 3,276 of 7,990 (41.0%)</title></rect>
+<text x="50.0" y="153.0" font-size="13" fill="#ffffff" font-weight="600" text-anchor="start">41%</text>
+<rect x="499.6" y="134" width="421.7" height="28" rx="4" fill="#eb6834"><title>Raster plans read by a vision model (projected from 30 drawings): 3,019 of 7,990 (37.8%)</title></rect>
+<text x="509.6" y="153.0" font-size="13" fill="#ffffff" font-weight="600" text-anchor="start">38%</text>
+<rect x="923.3" y="134" width="236.7" height="28" rx="4" fill="#c3c2b7"><title>Not answered correctly: 1,695 of 7,990 (21.2%)</title></rect>
+<text x="933.3" y="153.0" font-size="13" fill="#0b0b0b" font-weight="600" text-anchor="start">21%</text>
+<rect x="40" y="179" width="10" height="10" rx="2" fill="#2a78d6"/>
+<text x="56.0" y="188.5" font-size="13" fill="#52514e" font-weight="400" text-anchor="start">Answered by plain geometry code (measured)</text>
+<rect x="368" y="179" width="10" height="10" rx="2" fill="#eb6834"/>
+<text x="384.0" y="188.5" font-size="13" fill="#52514e" font-weight="400" text-anchor="start">Raster plans read by a vision model (projected from 30 drawings)</text>
+<rect x="828" y="179" width="10" height="10" rx="2" fill="#c3c2b7"/>
+<text x="844.0" y="188.5" font-size="13" fill="#52514e" font-weight="400" text-anchor="start">Not answered correctly</text>
+<line x1="40" y1="212" x2="1160" y2="212" stroke="#e1e0d9" stroke-width="1"/>
+<text x="40.0" y="246.0" font-size="15" fill="#0b0b0b" font-weight="600" text-anchor="start">Accuracy by part of the dataset</text>
+<text x="40.0" y="286.0" font-size="14" fill="#0b0b0b" font-weight="400" text-anchor="start">Swiss apartment floors, DXF</text>
+<text x="40.0" y="304.0" font-size="12" fill="#898781" font-weight="400" text-anchor="start">plain code · 2,338 of 2,358</text>
+<path d="M300.0,280.0 h186.0 a4,4 0 0 1 4,4 v2.0 a4,4 0 0 1 -4,4 h-186.0 z" fill="#cde2fb"></path>
+<path d="M300.0,280.0 h184.5 a4,4 0 0 1 4,4 v2.0 a4,4 0 0 1 -4,4 h-184.5 z" fill="#2a78d6"><title>Swiss apartment floors, DXF: 99.2%</title></path>
+<text x="560.0" y="290.0" font-size="15" fill="#0b0b0b" font-weight="600" text-anchor="end" style="font-variant-numeric: tabular-nums">99.2%</text>
+<text x="40.0" y="336.0" font-size="14" fill="#0b0b0b" font-weight="400" text-anchor="start">IFC building models</text>
+<text x="40.0" y="354.0" font-size="12" fill="#898781" font-weight="400" text-anchor="start">plain code · 938 of 1,049</text>
+<path d="M300.0,330.0 h186.0 a4,4 0 0 1 4,4 v2.0 a4,4 0 0 1 -4,4 h-186.0 z" fill="#cde2fb"></path>
+<path d="M300.0,330.0 h165.9 a4,4 0 0 1 4,4 v2.0 a4,4 0 0 1 -4,4 h-165.9 z" fill="#2a78d6"><title>IFC building models: 89.4%</title></path>
+<text x="560.0" y="340.0" font-size="15" fill="#0b0b0b" font-weight="600" text-anchor="end" style="font-variant-numeric: tabular-nums">89.4%</text>
+<text x="40.0" y="386.0" font-size="14" fill="#0b0b0b" font-weight="400" text-anchor="start">Raster floor plans</text>
+<text x="40.0" y="404.0" font-size="12" fill="#898781" font-weight="400" text-anchor="start">Sonnet 5.5 · 198 of 280 sampled</text>
+<path d="M300.0,380.0 h186.0 a4,4 0 0 1 4,4 v2.0 a4,4 0 0 1 -4,4 h-186.0 z" fill="#f9ded3"></path>
+<path d="M300.0,380.0 h130.3 a4,4 0 0 1 4,4 v2.0 a4,4 0 0 1 -4,4 h-130.3 z" fill="#eb6834"><title>Raster floor plans: 70.7%</title></path>
+<text x="560.0" y="390.0" font-size="15" fill="#0b0b0b" font-weight="600" text-anchor="end" style="font-variant-numeric: tabular-nums">70.7%</text>
+<text x="40.0" y="436.0" font-size="14" fill="#0b0b0b" font-weight="400" text-anchor="start">IFC text answers, drawing sets</text>
+<text x="40.0" y="454.0" font-size="12" fill="#898781" font-weight="400" text-anchor="start">no solver · 313 questions</text>
+<path d="M300.0,430.0 h186.0 a4,4 0 0 1 4,4 v2.0 a4,4 0 0 1 -4,4 h-186.0 z" fill="#e1e0d9"></path>
+<text x="560.0" y="440.0" font-size="13" fill="#898781" font-weight="400" text-anchor="end" style="font-variant-numeric: tabular-nums">not tried</text>
+<text x="40.0" y="506.0" font-size="15" fill="#0b0b0b" font-weight="600" text-anchor="start">Vision models on raster plans</text>
+<text x="40.0" y="530.0" font-size="12" fill="#898781" font-weight="400" text-anchor="start">Model</text>
+<text x="300.0" y="530.0" font-size="12" fill="#898781" font-weight="400" text-anchor="end">Correct</text>
+<text x="385.0" y="530.0" font-size="12" fill="#898781" font-weight="400" text-anchor="end">Accuracy</text>
+<text x="470.0" y="530.0" font-size="12" fill="#898781" font-weight="400" text-anchor="end">Time</text>
+<text x="560.0" y="530.0" font-size="12" fill="#898781" font-weight="400" text-anchor="end">Cost</text>
+<line x1="40" y1="539" x2="560" y2="539" stroke="#e1e0d9" stroke-width="1"/>
+<text x="40.0" y="561.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start" style="font-variant-numeric: tabular-nums">Sonnet 5.5</text>
+<text x="300.0" y="561.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="end" style="font-variant-numeric: tabular-nums">198 of 280</text>
+<text x="385.0" y="561.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="end" style="font-variant-numeric: tabular-nums">70.7%</text>
+<text x="470.0" y="561.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="end" style="font-variant-numeric: tabular-nums">14 s</text>
+<text x="560.0" y="561.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="end" style="font-variant-numeric: tabular-nums">$0.026</text>
+<text x="40.0" y="587.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start" style="font-variant-numeric: tabular-nums">Haiku 5.5</text>
+<text x="300.0" y="587.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="end" style="font-variant-numeric: tabular-nums">168 of 280</text>
+<text x="385.0" y="587.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="end" style="font-variant-numeric: tabular-nums">60.0%</text>
+<text x="470.0" y="587.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="end" style="font-variant-numeric: tabular-nums">11 s</text>
+<text x="560.0" y="587.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="end" style="font-variant-numeric: tabular-nums">$0.002</text>
+<text x="40.0" y="613.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start" style="font-variant-numeric: tabular-nums">Opus 5.5 (10 drawings)</text>
+<text x="300.0" y="613.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="end" style="font-variant-numeric: tabular-nums">74 of 95</text>
+<text x="385.0" y="613.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="end" style="font-variant-numeric: tabular-nums">77.9%</text>
+<text x="470.0" y="613.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="end" style="font-variant-numeric: tabular-nums">32 s</text>
+<text x="560.0" y="613.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="end" style="font-variant-numeric: tabular-nums">$0.104</text>
+<text x="40.0" y="642.0" font-size="12" fill="#898781" font-weight="400" text-anchor="start">Time and cost are per drawing. Cost is the CLI&#x27;s API-equivalent estimate.</text>
+<text x="640.0" y="246.0" font-size="15" fill="#0b0b0b" font-weight="600" text-anchor="start">Raster questions by kind</text>
+<text x="826.0" y="246.0" font-size="13" fill="#898781" font-weight="400" text-anchor="start">Sonnet 5.5, 30 drawings</text>
+<text x="640.0" y="284.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">Floors</text>
+<path d="M800.0,275.0 h246.0 a4,4 0 0 1 4,4 v2.0 a4,4 0 0 1 -4,4 h-246.0 z" fill="#f9ded3"></path>
+<path d="M800.0,275.0 h246.0 a4,4 0 0 1 4,4 v2.0 a4,4 0 0 1 -4,4 h-246.0 z" fill="#eb6834"><title>Floors: 30 of 30 (100%)</title></path>
+<text x="1100.0" y="284.0" font-size="13" fill="#0b0b0b" font-weight="600" text-anchor="end" style="font-variant-numeric: tabular-nums">100%</text>
+<text x="1160.0" y="284.0" font-size="12" fill="#898781" font-weight="400" text-anchor="end" style="font-variant-numeric: tabular-nums">30 of 30</text>
+<text x="640.0" y="314.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">Bedrooms</text>
+<path d="M800.0,305.0 h246.0 a4,4 0 0 1 4,4 v2.0 a4,4 0 0 1 -4,4 h-246.0 z" fill="#f9ded3"></path>
+<path d="M800.0,305.0 h235.6 a4,4 0 0 1 4,4 v2.0 a4,4 0 0 1 -4,4 h-235.6 z" fill="#eb6834"><title>Bedrooms: 23 of 24 (96%)</title></path>
+<text x="1100.0" y="314.0" font-size="13" fill="#0b0b0b" font-weight="600" text-anchor="end" style="font-variant-numeric: tabular-nums">96%</text>
+<text x="1160.0" y="314.0" font-size="12" fill="#898781" font-weight="400" text-anchor="end" style="font-variant-numeric: tabular-nums">23 of 24</text>
+<text x="640.0" y="344.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">Saunas</text>
+<path d="M800.0,335.0 h246.0 a4,4 0 0 1 4,4 v2.0 a4,4 0 0 1 -4,4 h-246.0 z" fill="#f9ded3"></path>
+<path d="M800.0,335.0 h224.3 a4,4 0 0 1 4,4 v2.0 a4,4 0 0 1 -4,4 h-224.3 z" fill="#eb6834"><title>Saunas: 21 of 23 (91%)</title></path>
+<text x="1100.0" y="344.0" font-size="13" fill="#0b0b0b" font-weight="600" text-anchor="end" style="font-variant-numeric: tabular-nums">91%</text>
+<text x="1160.0" y="344.0" font-size="12" fill="#898781" font-weight="400" text-anchor="end" style="font-variant-numeric: tabular-nums">21 of 23</text>
+<text x="640.0" y="374.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">Balconies</text>
+<path d="M800.0,365.0 h246.0 a4,4 0 0 1 4,4 v2.0 a4,4 0 0 1 -4,4 h-246.0 z" fill="#f9ded3"></path>
+<path d="M800.0,365.0 h210.3 a4,4 0 0 1 4,4 v2.0 a4,4 0 0 1 -4,4 h-210.3 z" fill="#eb6834"><title>Balconies: 6 of 7 (86%)</title></path>
+<text x="1100.0" y="374.0" font-size="13" fill="#0b0b0b" font-weight="600" text-anchor="end" style="font-variant-numeric: tabular-nums">86%</text>
+<text x="1160.0" y="374.0" font-size="12" fill="#898781" font-weight="400" text-anchor="end" style="font-variant-numeric: tabular-nums">6 of 7</text>
+<text x="640.0" y="404.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">Kitchens</text>
+<path d="M800.0,395.0 h246.0 a4,4 0 0 1 4,4 v2.0 a4,4 0 0 1 -4,4 h-246.0 z" fill="#f9ded3"></path>
+<path d="M800.0,395.0 h206.5 a4,4 0 0 1 4,4 v2.0 a4,4 0 0 1 -4,4 h-206.5 z" fill="#eb6834"><title>Kitchens: 16 of 19 (84%)</title></path>
+<text x="1100.0" y="404.0" font-size="13" fill="#0b0b0b" font-weight="600" text-anchor="end" style="font-variant-numeric: tabular-nums">84%</text>
+<text x="1160.0" y="404.0" font-size="12" fill="#898781" font-weight="400" text-anchor="end" style="font-variant-numeric: tabular-nums">16 of 19</text>
+<text x="640.0" y="434.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">WC rooms</text>
+<path d="M800.0,425.0 h246.0 a4,4 0 0 1 4,4 v2.0 a4,4 0 0 1 -4,4 h-246.0 z" fill="#f9ded3"></path>
+<path d="M800.0,425.0 h203.1 a4,4 0 0 1 4,4 v2.0 a4,4 0 0 1 -4,4 h-203.1 z" fill="#eb6834"><title>WC rooms: 29 of 35 (83%)</title></path>
+<text x="1100.0" y="434.0" font-size="13" fill="#0b0b0b" font-weight="600" text-anchor="end" style="font-variant-numeric: tabular-nums">83%</text>
+<text x="1160.0" y="434.0" font-size="12" fill="#898781" font-weight="400" text-anchor="end" style="font-variant-numeric: tabular-nums">29 of 35</text>
+<text x="640.0" y="464.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">Toilet bowls</text>
+<path d="M800.0,455.0 h246.0 a4,4 0 0 1 4,4 v2.0 a4,4 0 0 1 -4,4 h-246.0 z" fill="#f9ded3"></path>
+<path d="M800.0,455.0 h171.0 a4,4 0 0 1 4,4 v2.0 a4,4 0 0 1 -4,4 h-171.0 z" fill="#eb6834"><title>Toilet bowls: 21 of 30 (70%)</title></path>
+<text x="1100.0" y="464.0" font-size="13" fill="#0b0b0b" font-weight="600" text-anchor="end" style="font-variant-numeric: tabular-nums">70%</text>
+<text x="1160.0" y="464.0" font-size="12" fill="#898781" font-weight="400" text-anchor="end" style="font-variant-numeric: tabular-nums">21 of 30</text>
+<text x="640.0" y="494.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">Showers and bathtubs</text>
+<path d="M800.0,485.0 h246.0 a4,4 0 0 1 4,4 v2.0 a4,4 0 0 1 -4,4 h-246.0 z" fill="#f9ded3"></path>
+<path d="M800.0,485.0 h168.4 a4,4 0 0 1 4,4 v2.0 a4,4 0 0 1 -4,4 h-168.4 z" fill="#eb6834"><title>Showers and bathtubs: 20 of 29 (69%)</title></path>
+<text x="1100.0" y="494.0" font-size="13" fill="#0b0b0b" font-weight="600" text-anchor="end" style="font-variant-numeric: tabular-nums">69%</text>
+<text x="1160.0" y="494.0" font-size="12" fill="#898781" font-weight="400" text-anchor="end" style="font-variant-numeric: tabular-nums">20 of 29</text>
+<text x="640.0" y="524.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">Sinks</text>
+<path d="M800.0,515.0 h246.0 a4,4 0 0 1 4,4 v2.0 a4,4 0 0 1 -4,4 h-246.0 z" fill="#f9ded3"></path>
+<path d="M800.0,515.0 h137.7 a4,4 0 0 1 4,4 v2.0 a4,4 0 0 1 -4,4 h-137.7 z" fill="#eb6834"><title>Sinks: 17 of 30 (57%)</title></path>
+<text x="1100.0" y="524.0" font-size="13" fill="#0b0b0b" font-weight="600" text-anchor="end" style="font-variant-numeric: tabular-nums">57%</text>
+<text x="1160.0" y="524.0" font-size="12" fill="#898781" font-weight="400" text-anchor="end" style="font-variant-numeric: tabular-nums">17 of 30</text>
+<text x="640.0" y="554.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">Doors</text>
+<path d="M800.0,545.0 h246.0 a4,4 0 0 1 4,4 v2.0 a4,4 0 0 1 -4,4 h-246.0 z" fill="#f9ded3"></path>
+<path d="M800.0,545.0 h83.0 a4,4 0 0 1 4,4 v2.0 a4,4 0 0 1 -4,4 h-83.0 z" fill="#eb6834"><title>Doors: 8 of 23 (35%)</title></path>
+<text x="1100.0" y="554.0" font-size="13" fill="#0b0b0b" font-weight="600" text-anchor="end" style="font-variant-numeric: tabular-nums">35%</text>
+<text x="1160.0" y="554.0" font-size="12" fill="#898781" font-weight="400" text-anchor="end" style="font-variant-numeric: tabular-nums">8 of 23</text>
+<text x="640.0" y="584.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">Windows</text>
+<path d="M800.0,575.0 h246.0 a4,4 0 0 1 4,4 v2.0 a4,4 0 0 1 -4,4 h-246.0 z" fill="#f9ded3"></path>
+<path d="M800.0,575.0 h54.3 a4,4 0 0 1 4,4 v2.0 a4,4 0 0 1 -4,4 h-54.3 z" fill="#eb6834"><title>Windows: 7 of 30 (23%)</title></path>
+<text x="1100.0" y="584.0" font-size="13" fill="#0b0b0b" font-weight="600" text-anchor="end" style="font-variant-numeric: tabular-nums">23%</text>
+<text x="1160.0" y="584.0" font-size="12" fill="#898781" font-weight="400" text-anchor="end" style="font-variant-numeric: tabular-nums">7 of 30</text>
+<line x1="40" y1="662" x2="1160" y2="662" stroke="#e1e0d9" stroke-width="1"/>
+<text x="40.0" y="684.0" font-size="12" fill="#898781" font-weight="400" text-anchor="start">Raster figures: English questions only, one run per model. The 79% projection assumes the 30 sampled drawings are representative and that the Finnish</text>
+<text x="40.0" y="701.0" font-size="12" fill="#898781" font-weight="400" text-anchor="start">questions score like the English ones; neither was tested. Not answered: raster misses (about 1,250), questions with no solver (313) and code misses (131).</text>
+</svg>
