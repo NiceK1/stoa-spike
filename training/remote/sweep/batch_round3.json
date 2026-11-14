@@ -1,0 +1,4 @@
+[
+ {"name": "unitseg", "script": "/data/sweep/run_unitseg.sh", "epochs": 60},
+ {"name": "rfdetr", "script": "/data/sweep/run_rfdetr.sh", "epochs": 30}
+]

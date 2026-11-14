@@ -45,10 +45,13 @@ def progress(name):
 
 
 def summary(result):
-    if "dev" not in result:
+    if "summary" in result:
+        return str(result["summary"])[:200]
+    part = next((p for p in ("dev", "val") if p in result), None)
+    if part is None:
         return str(result.get("error", ""))[:80]
-    kinds = [f"{k} {v['exact']}/{v['asked']}" for k, v in result["dev"].items() if isinstance(v, dict)]
-    return f"dev {result['dev']['correct']}/{result['dev']['total']}: " + ", ".join(kinds)
+    kinds = [f"{k} {v['exact']}/{v['asked']}" for k, v in result[part].items() if isinstance(v, dict)]
+    return f"{part} {result[part]['correct']}/{result[part]['total']}: " + ", ".join(kinds)
 
 
 def collect():
@@ -62,11 +65,11 @@ def collect():
             except (OSError, ValueError):
                 continue
             name, run = spec["name"], spec.get("run", {})
-            entry = {"state": state, "gpu": run.get("gpu"), "epochs": spec["epochs"], "submitted": spec["submitted"]}
+            entry = {"state": state, "gpu": run.get("gpu"), "epochs": spec.get("epochs"), "submitted": spec["submitted"]}
             if state == "running":
                 done, per_epoch = progress(name)
                 entry.update(epoch=done, minutes=round((time.time() - run.get("started", time.time())) / 60, 1))
-                if per_epoch:
+                if per_epoch and spec.get("epochs"):
                     entry["eta_minutes"] = round((spec["epochs"] - done) * per_epoch / 60 + SCORE_MINUTES)
                 if not worker_alive(run.get("gpu")):
                     entry["state"] = "lost"  # its worker died, e.g. in a reboot

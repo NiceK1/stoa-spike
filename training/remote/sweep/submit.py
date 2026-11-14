@@ -7,6 +7,9 @@ The batch file is a JSON list; each experiment is
     {"name": "base", "weights": "yolo11l.pt", "imgsz": 1280, "epochs": 60, "batch": 16,
      "data": "/data/sweep/data/yolo_sym", "train": ["fliplr=0.5", "flipud=0.5"], "export": null}
 "train" holds extra train.py key=value arguments; "export" is an ONNX export name, or null for no export.
+Optional: "part" (the part scored, "dev" by default) and "env". A job with its own pipeline is
+    {"name": "unitseg", "script": "/data/sweep/run_unitseg.sh", "epochs": 60}
+(see worker.py); "epochs" there only feeds the progress line of status.py.
 """
 import json
 import os
@@ -38,9 +41,11 @@ def main():
     if clash or len({e["name"] for e in batch}) != len(batch):
         sys.exit(f"experiment names must be new and unique; already used: {clash}")
     for e in batch:
-        missing = [k for k in ("name", "weights", "imgsz", "epochs", "batch", "data") if k not in e]
-        if missing or not os.path.exists(f"{e['data']}/data.yaml"):
-            sys.exit(f"{e.get('name')}: missing {missing or e['data'] + '/data.yaml'}")
+        needed = ("name", "script") if "script" in e else ("name", "weights", "imgsz", "epochs", "batch", "data")
+        missing = [k for k in needed if k not in e]
+        target = e["script"] if "script" in e else f"{e.get('data')}/data.yaml"
+        if missing or not os.path.exists(target):
+            sys.exit(f"{e.get('name')}: missing {missing or target}")
     if batch_path and os.path.abspath(batch_path) != f"{ROOT}/batches/{os.path.basename(batch_path)}":
         shutil.copy(batch_path, f"{ROOT}/batches/{os.path.basename(batch_path)}")
     for i, e in enumerate(batch):

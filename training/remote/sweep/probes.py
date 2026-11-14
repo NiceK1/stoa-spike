@@ -232,7 +232,8 @@ def unit_polygons(d):
     return polygons
 
 
-def unit_mask(d):
+def unit_area(d):
+    """The annotated unit (rooms, walls, railings, windows, doors) as a mask of MASK_SIDE on the long side, and its scale."""
     import cv2
     import numpy as np
     s = MASK_SIDE / max(d["width"], d["height"])
@@ -243,8 +244,20 @@ def unit_mask(d):
     for item in d["windows"] + d["doors"]:
         x0, y0, x1, y1 = (round(v * s) for v in item["box"])
         mask[max(0, y0):y1 + 1, max(0, x0):x1 + 1] = 1
-    r = round(GATE_MARGIN * MASK_SIDE / 1280)
-    return cv2.dilate(mask, np.ones((2 * r + 1, 2 * r + 1), np.uint8)), s
+    return mask, s
+
+
+def grown(mask, margin):
+    """The mask dilated by margin pixels at 1280 on the long side."""
+    import cv2
+    import numpy as np
+    r = round(margin * MASK_SIDE / 1280)
+    return cv2.dilate(mask, np.ones((2 * r + 1, 2 * r + 1), np.uint8)) if r else mask
+
+
+def unit_mask(d):
+    mask, s = unit_area(d)
+    return grown(mask, GATE_MARGIN), s
 
 
 def in_mask(mask, s, box):

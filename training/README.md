@@ -87,6 +87,9 @@ therefore keeps a third part:
 - `submit.py <batch.json>` queues experiments (see `batch1.json` for the format) and starts one `worker.py` per GPU;
   each worker runs one experiment at a time with `CUDA_VISIBLE_DEVICES` set and writes
   `/data/sweep/results/<name>.json`. A failed run gets a result file too and does not hold up the queue.
+- An experiment may name the part it is scored on (`"part": "val"` for a dataset on the original split, which has no
+  dev) and extra environment variables (`"env"`). An experiment with a `"script"` runs that script on the GPU instead
+  of `run_all.sh`; the script trains, scores and writes its own result file (`batch_round3.json`).
 - `status.py` prints the queue and `ALL_DONE` when it is empty. `batch_status.py <names>` does the same for runs
   spread over two instances, with `push.sh` copying results, best weights and each run's latest checkpoint
   (`runs/<name>/weights/last.pt`) from a short-lived instance to the long-lived one.
@@ -111,6 +114,30 @@ one shared threshold. `sweep/probes.py` also holds the paired comparison of runs
 venv/bin/python sweep/probes.py paired base drawsafe y26l
 venv/bin/python sweep/build_winrun.py
 venv/bin/python sweep/panes.py prepare && venv/bin/python sweep/panes.py train && venv/bin/python sweep/panes.py export
+```
+
+`build_winrun.py full` writes the same labels on the original split (`yolo_winrun_full`: 4,282 train drawings, no
+dev), for a model that can be compared with the deployed one. Its `app_spec.json` makes `export_onnx.py` write the
+spec under the names the app counts: a run is a `window` that counts once, and `door_other` is named `door` only if
+that gives more exact door counts on validation, counted as the app counts (no NMS across classes).
+
+## Unit mask, RF-DETR and calibrated counts
+
+- `sweep/unitseg.py` and `run_unitseg.sh`: a `yolo11l-seg` model with one class, the annotated unit (rooms, walls,
+  railings, windows and doors of a drawing, one instance per connected piece). After training it scores base's
+  window and door counts with detections outside the predicted mask dropped (margin picked on validation), next to
+  no gate and the oracle mask, and exports the model. Result: `results/unitseg.json`, masks in `eval/unitseg/masks`.
+- `sweep/rfdetr_data.py`, `rfdetr_run.py` and `run_rfdetr.sh`: RF-DETR medium at 1280 in its own environment
+  (`/data/round3/venv-rfdetr`), on a COCO copy of `yolo_sym` letterboxed to 1280 squares, scored by
+  `eval_counts.report` and timed as ONNX on the CPU. Result: `results/rfdetr.json`.
+- `sweep/calib.py` (CPU, `/data/round3/venv-cal`): a per-class model on a run's detections above 0.01 that predicts
+  whether a detection matches an annotation, and count rules on its probabilities, chosen by grouped
+  cross-validation on validation and applied once to dev. Result: `results/calib_<run>.json`.
+
+```
+venv/bin/python sweep/build_winrun.py full && venv/bin/python sweep/submit.py sweep/batches/batch_winrun_full.json
+venv/bin/python sweep/unitseg.py build && venv/bin/python sweep/submit.py sweep/batches/batch_round3.json
+/data/round3/venv-cal/bin/python sweep/calib.py base base_s1
 ```
 
 ## Licences

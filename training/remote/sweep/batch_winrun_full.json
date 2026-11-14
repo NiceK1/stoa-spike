@@ -1,0 +1,3 @@
+[
+ {"name": "winrun_full", "weights": "yolo11l.pt", "imgsz": 1280, "epochs": 60, "batch": 16, "data": "/data/sweep/data/yolo_winrun_full", "train": ["fliplr=0.5", "flipud=0.5"], "export": "floorplan-winrun-full-yolo11l-1280", "part": "val", "env": {"PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"}}
+]

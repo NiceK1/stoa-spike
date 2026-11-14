@@ -1,12 +1,19 @@
 """Export a trained detector to ONNX with NMS inside the graph, verify it on CPU, and write the spec the app needs.
 
     export_onnx.py <weights> <imgsz> <name> <eval report.json>
+
+The ONNX counts are compared with PyTorch on 30 drawings: the raster sample (part of test) for a run scored on test,
+the first 30 validation drawings for any other run, so a sweep run never opens the test part.
+A dataset with an app_spec.json (build_winrun.py) is written under the class names the app counts: classes are
+renamed, and an optional class counts as another only if that gives more exact counts on validation. That is decided
+on the rows the ONNX graph returns, which have no NMS across classes, because that is what the app sums.
 """
 import json
 import os
 import shutil
 import sys
 import time
+from collections import Counter
 
 import numpy as np
 import onnxruntime as ort
@@ -39,13 +46,61 @@ def letterbox(image, size):
     return np.asarray(canvas, dtype=np.float32).transpose(2, 0, 1)[None] / 255.0, scale, left, top
 
 
+def app_view(names, thresholds, weights, val):
+    """Classes, thresholds and count weights under the names the app counts, and what validation decided."""
+    app_file = f"{E.DATA}/app_spec.json"
+    app = json.load(open(app_file)) if os.path.exists(app_file) else {}
+    classes, thresholds, weights = list(names), dict(thresholds), {k: dict(w) for k, w in weights.items()}
+    decided = None
+    optional = app.get("optional")
+    if optional:
+        kind, extra, main = optional["kind"], optional["class"], optional["counts_as"]
+        truth = json.load(open("/data/yolo/truth.json"))
+        labels = {s: Counter(names[int(l.split()[0])] for l in open(f"{E.DATA}/labels/val/{s}.txt") if l.strip()) for s in val}
+        asked = [s for s in val if kind in truth[s]["stoa"]]
+        tried = {}
+        for label, group in (("alone", [main]), ("with", [main, extra])):
+            def got(s, t):
+                return sum(E.count(val[s], c, t) for c in group)
+            t = max(E.THRESHOLDS, key=lambda t: (sum(got(s, t) == labels[s][main] + labels[s][extra] for s in val), -abs(t - 0.4)))
+            tried[label] = {"threshold": t, "exact": sum(got(s, t) == truth[s]["stoa"][kind] for s in asked), "asked": len(asked)}
+        counted = tried["with"]["exact"] > tried["alone"]["exact"]
+        thresholds[main] = tried["with" if counted else "alone"]["threshold"]
+        weights[kind] = {main: 1}
+        if counted:
+            classes[names.index(extra)] = main
+            del thresholds[extra]
+        decided = dict(optional, counted=counted, validation=tried)
+    rename = app.get("rename", {})
+    classes = [rename.get(c, c) for c in classes]
+    thresholds = {rename.get(c, c): t for c, t in thresholds.items()}
+    weights = {k: {rename.get(c, c): w for c, w in ws.items()} for k, ws in weights.items()}
+    return bool(app), classes, thresholds, weights, decided
+
+
+def app_exact(classes, thresholds, weights, names, val):
+    """Exact counts on validation the way the app sums the ONNX rows: [exact, asked] per question kind."""
+    truth = json.load(open("/data/yolo/truth.json"))
+    shown = dict(zip(names, classes))
+    result = {}
+    for kind, ws in weights.items():
+        asked = [s for s in val if kind in truth[s]["stoa"]]
+        got = [sum(ws.get(shown[c], 0) for c, p, *_ in val[s] if shown[c] in ws and p >= thresholds[shown[c]]) for s in asked]
+        result[kind] = [sum(g == truth[s]["stoa"][kind] for g, s in zip(got, asked)), len(asked)]
+    return result
+
+
 names = list(model.names.values())
 thresholds = report["thresholds"]
-sample = [os.path.splitext(os.path.basename(l.strip()))[0] for l in open("/data/raster-sample.txt") if l.strip()]
+if os.environ.get("STOA_PART", "test") == "test":
+    sample_part = "test"
+    sample = [os.path.splitext(os.path.basename(l.strip()))[0] for l in open("/data/raster-sample.txt") if l.strip()]
+else:
+    sample_part, sample = "val", E.stems_of("val")[:30]
 agree = total = 0
 seconds = []
 for stem in sample:
-    path = f"{E.DATA}/images/test/{stem}.png"
+    path = f"{E.DATA}/images/{sample_part}/{stem}.png"
     image = Image.open(path).convert("RGB")
     tensor, scale, left, top = letterbox(image, imgsz)
     started = time.time()
@@ -66,6 +121,10 @@ for stem in sample:
         total += 1
         agree += onnx_counts[n] == torch_counts[n]
 
+val_path = f"{os.path.dirname(report_path)}/val.json"
+val = json.load(open(val_path)) if os.path.exists(val_path) else {}
+for_app, classes, app_thresholds, count_weights, decided = app_view(
+    names, thresholds, report.get("count_weights") or E.COUNT_WEIGHTS, val)
 spec = {
     "model": f"{name}.onnx",
     "source": "Ultralytics YOLO (AGPL-3.0), trained on CubiCasa5k annotations (CC BY-NC-SA 4.0)",
@@ -76,17 +135,24 @@ spec = {
     "output": {"name": out.name, "shape": out.shape, "nms_in_graph": True,
                "row": "[x1, y1, x2, y2, confidence, class_index] in canvas pixels; rows with confidence 0 are padding",
                "to_image": "x_image = (x - left) / scale, y_image = (y - top) / scale"},
-    "classes": names,
-    "thresholds": thresholds,
-    "question_kinds": report.get("question_kinds") or E.KIND_CLASSES,
-    "count_weights": report.get("count_weights") or E.COUNT_WEIGHTS,
+    "classes": classes,
+    "thresholds": app_thresholds,
+    "question_kinds": {k: list(ws) for k, ws in count_weights.items()} if for_app else report.get("question_kinds") or E.KIND_CLASSES,
+    "count_weights": count_weights,
     "count_rule": "answer for a question kind = sum over its classes in count_weights of weight * number of rows of "
                   "that class with confidence >= thresholds[class]",
     "measured": {k: report[k] for k in ("val", "dev", "test", "sample30") if k in report},
     "onnx_vs_pytorch_count_agreement_on_sample": f"{agree}/{total}",
     "cpu_seconds_per_drawing_on_instance": round(float(np.median(seconds)), 3),
 }
+if for_app:
+    spec["trained_classes"] = names
+    spec["validation_as_the_app_counts"] = app_exact(classes, app_thresholds, count_weights, names, val)
+    if decided:
+        spec["optional_class"] = decided
 json.dump(spec, open(f"{out_dir}/{name}.json", "w"), indent=1)
 print(json.dumps({k: spec[k] for k in ("model", "input", "output", "onnx_vs_pytorch_count_agreement_on_sample",
                                        "cpu_seconds_per_drawing_on_instance")}, indent=1))
+print(json.dumps({k: spec[k] for k in ("classes", "thresholds", "count_weights", "optional_class",
+                                       "validation_as_the_app_counts") if k in spec}, indent=1))
 print("size MB:", round(os.path.getsize(onnx_path) / 1e6, 1))
