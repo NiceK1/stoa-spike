@@ -12,3 +12,4 @@ training/data/
 app/node_modules/
 app/.cache/
 app/web/dist/
+dataset-full/

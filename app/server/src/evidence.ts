@@ -38,8 +38,13 @@ export function renderPlanSvg({ solid = [], outlines = [], highlights, labels = 
     const [cx, cy] = centroid(p);
     const text = labels[i] ? `${i + 1} · ${labels[i]}` : String(i + 1);
     const w = 10 + text.length * 7.2;
+    // A badge would hide a small symbol such as a door or window, so it sits just above the shape instead.
+    const [bx0, by0, bx1, by1] = bbox(p);
+    const small = Math.min(bx1 - bx0, by1 - by0) * scale < 26;
+    const x = Number(px(cx));
+    const y = small ? Math.max(12, Number(py(by1)) - 13) : Number(py(cy));
     parts.push(
-      `<g transform="translate(${px(cx)},${py(cy)})">` +
+      `<g transform="translate(${x.toFixed(1)},${y.toFixed(1)})">` +
         `<rect x="${(-w / 2).toFixed(1)}" y="-10" width="${w.toFixed(1)}" height="20" rx="10" fill="#1d1d1b"/>` +
         `<text y="4.5" text-anchor="middle" font-size="13" font-weight="600" fill="#ffffff">${escapeXml(text)}</text></g>`,
     );

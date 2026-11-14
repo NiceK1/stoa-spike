@@ -26,6 +26,7 @@ const PIPELINES: Record<string, string> = {
   detector: "Counted by the symbol detector",
   "vision-model": "Read from the image by a vision model",
   "sheet-text": "Read from the text on the sheet",
+  "ifc-facts": "Answered from facts in the building model",
   none: "No answer",
 };
 

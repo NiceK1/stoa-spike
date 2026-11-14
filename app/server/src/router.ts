@@ -10,6 +10,7 @@ import type { Detector } from "./models/detector.js";
 import type { VisionModel } from "./models/vision.js";
 import { inferType, parseTakeoff } from "./questions.js";
 import { rasterize } from "./rasterize.js";
+import { toEnglish } from "./rewrite.js";
 import { isLayeredPlan, loadPlan } from "./solvers/dxf.js";
 import { solveRaster } from "./solvers/raster.js";
 import type { Answer, AskInput } from "./types.js";
@@ -43,7 +44,19 @@ export async function ask(input: AskInput, deps: Deps): Promise<Answer> {
   if (ifc) {
     // Loaded on demand: the IFC engine is heavy and the other pipelines should not wait for it.
     const { solveIfc } = await import("./solvers/ifc.js");
-    const answer = await solveIfc(ifc, input.question, qtype);
+    let answer = await solveIfc(ifc, input.question, qtype);
+    if (!answer && qtype !== "text") {
+      const english = await toEnglish(input.question, deps.vision);
+      if (english) answer = await solveIfc(ifc, english, qtype);
+    }
+    if (answer && qtype !== "text") return answer;
+    if (extension === ".ifc") {
+      // A free-text question: the fixed rules give a fact sheet on the topic at best, so a language model
+      // writes the answer to the actual question from the model's extracted facts.
+      const { answerFromDigest } = await import("./solvers/ifc/digest.js");
+      const related = typeof answer?.value === "string" ? answer.value : undefined;
+      return { ...(await answerFromDigest(ifc, input.question, qtype, deps.vision, related)), evidence: answer?.evidence };
+    }
     if (answer) return answer;
   }
 
