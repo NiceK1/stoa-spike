@@ -7,7 +7,7 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import { readJson, writeJsonAtomic } from "../cache.js";
+import { cachedJson, readJson, writeJsonAtomic } from "../cache.js";
 import { cacheDir } from "../config.js";
 import { GemmaLocal } from "./gemma.js";
 
@@ -303,6 +303,125 @@ export class GeminiApiVision implements VisionModel {
   }
 }
 
+/** The first way `value` departs from `schema` (type, required, properties, items, enum), or null when it conforms. */
+export function schemaViolation(value: unknown, schema: Record<string, any>, path = "answer"): string | null {
+  const actual = value === null ? "null" : Array.isArray(value) ? "array" : Number.isInteger(value) ? "integer" : typeof value;
+  const allowed: string[] = schema.type === undefined ? [] : [schema.type].flat();
+  if (allowed.length && !allowed.includes(actual) && !(actual === "integer" && allowed.includes("number"))) {
+    return `${path} is ${actual}, not ${allowed.join(" or ")}`;
+  }
+  if (schema.enum && !schema.enum.includes(value)) return `${path} is not one of the allowed values`;
+  if (actual === "object") {
+    const object = value as Record<string, unknown>;
+    for (const key of schema.required ?? []) if (!(key in object)) return `${path}.${key} is missing`;
+    for (const [key, property] of Object.entries(schema.properties ?? {})) {
+      const violation = key in object ? schemaViolation(object[key], property as Record<string, any>, `${path}.${key}`) : null;
+      if (violation) return violation;
+    }
+  }
+  if (actual === "array" && schema.items) {
+    for (const [index, item] of (value as unknown[]).entries()) {
+      const violation = schemaViolation(item, schema.items, `${path}[${index}]`);
+      if (violation) return violation;
+    }
+  }
+  return null;
+}
+
+/**
+ * A model behind an OpenAI-compatible chat endpoint: an open vision model we serve ourselves (vLLM), or any server
+ * speaking the same protocol. VISION_BASE_URL is the server, VISION_MODEL the name it serves, VISION_API_KEY optional.
+ * VISION_IMAGE_MIN_SIDE enlarges drawings whose longer side is below that many pixels before they are sent.
+ */
+export class OpenAiCompatibleVision implements VisionModel {
+  readonly id: string;
+  private readonly endpoint: string;
+
+  constructor(
+    private readonly model = process.env.VISION_MODEL ?? "",
+    baseUrl = process.env.VISION_BASE_URL ?? "",
+    private readonly apiKey = process.env.VISION_API_KEY,
+    private readonly minSide = Number(process.env.VISION_IMAGE_MIN_SIDE ?? 0),
+    private readonly timeoutMs = 600_000,
+  ) {
+    if (!model || !baseUrl) throw new Error("VISION_PROVIDER=openai-compatible needs VISION_BASE_URL and VISION_MODEL");
+    this.endpoint = `${baseUrl.replace(/\/+$/, "").replace(/\/v1$/, "")}/v1/chat/completions`;
+    // Whatever changes the answer belongs in the id, because the id is part of the cache key.
+    this.id = `openai-compatible:${model}${minSide ? `:min${minSide}` : ""}`;
+  }
+
+  async ask(request: VisionRequest): Promise<VisionResult> {
+    const cacheFile = join(cacheDir("vision"), `${await cacheKey(this.id, request)}.json`);
+    const unusable = this.unusable.get(cacheFile);
+    if (unusable) throw unusable;
+    let called = false;
+    const result = await cachedJson(cacheFile, () => {
+      called = true;
+      return this.call(request);
+    }).catch((error) => {
+      if (error instanceof UnusableAnswer) this.unusable.set(cacheFile, error);
+      throw error;
+    });
+    return { ...result, cached: !called };
+  }
+
+  // At temperature 0 the same request gives the same unusable answer, and a runaway list costs minutes each time:
+  // every question about one drawing would pay for it again. Kept for this process only; server errors are retried.
+  private readonly unusable = new Map<string, UnusableAnswer>();
+
+  private async image(imagePath: string): Promise<string> {
+    const { default: sharp } = await import("sharp");
+    const { width = 0, height = 0 } = await sharp(imagePath).metadata();
+    const side = Math.max(API_IMAGE_LONG_SIDE, this.minSide);
+    const enlarge = Math.max(width, height) < this.minSide;
+    const png = await sharp(imagePath)
+      .resize({ width: enlarge ? this.minSide : side, height: enlarge ? this.minSide : side, fit: "inside", withoutEnlargement: !enlarge }).png().toBuffer();
+    return `data:image/png;base64,${png.toString("base64")}`;
+  }
+
+  private async call(request: VisionRequest): Promise<Omit<VisionResult, "cached">> {
+    // Guided decoding enforces the schema's structure without showing it to the model, so the system turn carries it too.
+    const system = `${request.system.replace("Open the image with the Read tool before answering. ", "").replace("Open the image with the Read tool first. ", "")}\n\n` +
+      `Answer with one JSON object that follows this JSON schema: ${JSON.stringify(request.schema)}`;
+    const user = request.imagePath
+      ? [{ type: "image_url", image_url: { url: await this.image(request.imagePath) } }, { type: "text", text: request.prompt }]
+      : request.prompt;
+
+    const started = Date.now();
+    const response = await fetch(this.endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...(this.apiKey ? { authorization: `Bearer ${this.apiKey}` } : {}) },
+      body: JSON.stringify({
+        model: this.model,
+        temperature: 0,
+        max_tokens: OPEN_MODEL_MAX_TOKENS,
+        messages: [{ role: "system", content: system }, { role: "user", content: user }],
+        response_format: { type: "json_schema", json_schema: { name: "answer", schema: request.schema, strict: true } },
+      }),
+      signal: AbortSignal.timeout(this.timeoutMs),
+    });
+    const body = await response.text();
+    if (!response.ok) throw new Error(`${this.id} answered ${response.status}: ${body.slice(0, 300)}`);
+    let output: unknown;
+    let choice: { finish_reason?: string; message?: { content?: string | null } } | undefined;
+    try {
+      choice = JSON.parse(body).choices?.[0];
+      output = JSON.parse(choice?.message?.content ?? "");
+    } catch {
+      const reason = choice?.finish_reason === "length" ? "the answer was cut off at the token limit" : "the answer is not JSON";
+      throw new UnusableAnswer(`${this.id}: ${reason}: ${(choice?.message?.content ?? body).slice(0, 300)}`);
+    }
+    const violation = schemaViolation(output, { ...request.schema, type: "object" });
+    if (violation) throw new UnusableAnswer(`${this.id}: the answer does not follow the schema: ${violation}`);
+    return { output: output as Record<string, any>, seconds: (Date.now() - started) / 1000, costUsd: 0 };
+  }
+}
+/** The model answered, and the answer is cut off, not JSON, or not what the schema asks for. */
+class UnusableAnswer extends Error {}
+
+/** An inventory of a dense plan lists a few hundred positions; a runaway list stops here instead of running on. */
+const OPEN_MODEL_MAX_TOKENS = 4096;
+
 /**
  * No vision model: everything runs on this machine, image plans are answered by the local detectors alone.
  * A question that only a vision model can answer fails with a message saying so.
@@ -314,9 +433,13 @@ export class NoVision implements VisionModel {
   }
 }
 
-/** VISION_PROVIDER picks the provider: "claude-cli" (default, local), "anthropic-api", "gemini-api", or "none" (local detectors only). */
+/**
+ * VISION_PROVIDER picks the provider: "claude-cli" (default, local), "anthropic-api", "gemini-api",
+ * "openai-compatible" (a model we serve ourselves), or "none" (local detectors only).
+ */
 export function createVision(): VisionModel {
   if (process.env.VISION_PROVIDER === "none") return new NoVision();
+  if (process.env.VISION_PROVIDER === "openai-compatible") return new OpenAiCompatibleVision();
   if (process.env.VISION_PROVIDER === "anthropic-api") return new AnthropicApiVision();
   if (process.env.VISION_PROVIDER === "gemini-api") return new GeminiApiVision();
   return new ClaudeCliVision();
@@ -336,6 +459,7 @@ export function createPlanner(): VisionModel | null {
   
   if (provider === "anthropic-api") return new AnthropicApiVision(model);
   if (provider === "gemini-api") return new GeminiApiVision(model);
+  if (provider === "openai-compatible") return new OpenAiCompatibleVision(model);
   // The tuned Gemma on this machine's CPU; PLANNER_MODEL may give the GGUF file.
   if (provider === "gemma-local") return new GemmaLocal(model && /\.gguf$/i.test(model) ? model : undefined);
   
