@@ -23,24 +23,26 @@ interface Target {
   pattern: RegExp;
   /** Inventory categories that add up to this target. */
   categories: string[];
-  /** Detector class that counts this target, when one exists. */
-  detectorClass?: string;
+  /** Detector classes that add up to this target. */
+  detectorClasses: string[];
+  /** A drawn symbol, which a detector counts best, as opposed to a room type or a storey, which is read from labels. */
+  symbol?: boolean;
 }
 
 // The target is the one whose words appear first in the question: later mentions are usually exclusions.
 export const TARGETS: Target[] = [
-  { id: "window", pattern: /\bwindows?\b|ikkuna/, categories: ["windows"], detectorClass: "window" },
-  { id: "door", pattern: /\bdoors?\b|\bove[at]\b|\bovia\b/, categories: ["doors"], detectorClass: "door" },
-  { id: "toilet", pattern: /toilet bowls?|wc seats?|wc-istuin/, categories: ["toilet_bowls"] },
-  { id: "sink", pattern: /\bsinks?\b|wash ?basins?|tiskiallas|pesuallas|allasta/, categories: ["sinks"] },
-  { id: "shower_bathtub", pattern: /\bshowers?\b|\bbathtubs?\b|suihku|kylpyamme/, categories: ["showers", "bathtubs"] },
-  { id: "sauna", pattern: /\bsauna/, categories: ["saunas"] },
-  { id: "kitchen", pattern: /\bkitchens?\b|keittiö/, categories: ["kitchens"] },
-  { id: "bedroom", pattern: /\bbedrooms?\b|makuuhuone/, categories: ["bedrooms"] },
-  { id: "wc_room", pattern: /wc rooms?|toilet rooms?|wc-tila/, categories: ["wc_rooms"] },
-  { id: "bathroom", pattern: /\bbathrooms?\b|washrooms?|kylpy- tai pesuhuone/, categories: ["bathrooms"] },
-  { id: "balcony", pattern: /\bbalcon(y|ies)\b|parveke/, categories: ["balconies"] },
-  { id: "floor", pattern: /\bfloors\b|\bstoreys?\b|kerrosta/, categories: [] },
+  { id: "window", pattern: /\bwindows?\b|ikkuna/, categories: ["windows"], detectorClasses: ["window"], symbol: true },
+  { id: "door", pattern: /\bdoors?\b|\bove[at]\b|\bovia\b/, categories: ["doors"], detectorClasses: ["door"], symbol: true },
+  { id: "toilet", pattern: /toilet bowls?|wc seats?|wc-istuin/, categories: ["toilet_bowls"], detectorClasses: ["toilet"], symbol: true },
+  { id: "sink", pattern: /\bsinks?\b|wash ?basins?|tiskiallas|pesuallas|allasta/, categories: ["sinks"], detectorClasses: ["sink"], symbol: true },
+  { id: "shower_bathtub", pattern: /\bshowers?\b|\bbathtubs?\b|suihku|kylpyamme/, categories: ["showers", "bathtubs"], detectorClasses: ["shower", "bathtub"], symbol: true },
+  { id: "sauna", pattern: /\bsauna/, categories: ["saunas"], detectorClasses: ["sauna"] },
+  { id: "kitchen", pattern: /\bkitchens?\b|keittiö/, categories: ["kitchens"], detectorClasses: ["kitchen"] },
+  { id: "bedroom", pattern: /\bbedrooms?\b|makuuhuone/, categories: ["bedrooms"], detectorClasses: ["bedroom"] },
+  { id: "wc_room", pattern: /wc rooms?|toilet rooms?|wc-tila/, categories: ["wc_rooms"], detectorClasses: ["wc_room"] },
+  { id: "bathroom", pattern: /\bbathrooms?\b|washrooms?|kylpy- tai pesuhuone/, categories: ["bathrooms"], detectorClasses: ["bathroom"] },
+  { id: "balcony", pattern: /\bbalcon(y|ies)\b|parveke/, categories: ["balconies"], detectorClasses: ["balcony"] },
+  { id: "floor", pattern: /\bfloors\b|\bstoreys?\b|kerrosta/, categories: [], detectorClasses: ["floor"] },
 ];
 
 export function rasterTarget(question: string): Target | null {
@@ -157,17 +159,25 @@ export async function solveRaster(imagePath: string, question: string, qtype: Qu
   }
 
   const target = rasterTarget(question);
-  const detectorClass = target?.detectorClass;
-  if (deps.useDetector !== false && deps.detector && detectorClass && detectorClass in deps.detector.thresholds) {
-    const threshold = deps.detector.thresholds[detectorClass];
-    const found = (await deps.detector.detect(imagePath))
-      .filter((d) => d.cls === detectorClass && d.score >= threshold)
+  // RASTER_DETECTOR_TARGETS: "symbols" (default) lets the detector count drawn symbols and leaves room types and
+  // storeys to the vision model; "all" gives the detector everything it knows; "none" switches it off.
+  const scope = deps.useDetector === false ? "none" : (process.env.RASTER_DETECTOR_TARGETS ?? "symbols");
+  const detector = deps.detector;
+  if (
+    detector && target && scope !== "none" && (scope === "all" || target.symbol) &&
+    target.detectorClasses.every((cls) => cls in detector.thresholds)
+  ) {
+    const found = (await detector.detect(imagePath))
+      .filter((d) => target.detectorClasses.includes(d.cls) && d.score >= detector.thresholds[d.cls])
       .sort((a, b) => a.y - b.y || a.x - b.x);
-    const marks = found.map((d, i) => ({ n: i + 1, x: d.x, y: d.y, w: d.w, h: d.h, label: `${Math.round(d.score * 100)}%` }));
+    const marks = found.map((d, i) => ({
+      n: i + 1, x: d.x, y: d.y, w: d.w, h: d.h, label: `${d.cls.replace("_", " ")}, ${Math.round(d.score * 100)}% confidence`,
+    }));
+    const names = target.detectorClasses.map((cls) => cls.replace("_", " ")).join(" and ");
     return {
-      value: found.length, unit: "count", pipeline: "detector", exact: false, kind: target!.id,
-      method: `${detectorClass} symbols found by ${deps.detector.id} at confidence ${threshold} or higher`,
-      evidence: image(marks, `Each box is one counted ${detectorClass}`),
+      value: found.length, unit: "count", pipeline: "detector", exact: false, kind: target.id,
+      method: `${names} symbols found by ${detector.id}`,
+      evidence: image(marks, `Each box is one counted ${names}`),
     };
   }
 
