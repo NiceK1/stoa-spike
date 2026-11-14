@@ -44,9 +44,18 @@ const TYPE_WORDS: [QuestionType, RegExp][] = [
   ["area", /\b(area|fläche|nettofläche|surface|superficie|pinta-ala|areal|nettoareal|pindala)\b|m²|ft²/],
 ];
 
+const HOW_MANY = "(?:how many|wie viele|combien de|quant[ie]|kuinka monta)\\s+";
+// "How many square metres ..." asks for a measure, not a count.
+const UNIT_AFTER_HOW_MANY: [QuestionType, RegExp][] = [
+  ["volume", new RegExp(`${HOW_MANY}(?:cubic\\s|m³|m3\\b|kubikmeter|mètres cubes|metri cubi|kuutiometri)`)],
+  ["area", new RegExp(`${HOW_MANY}(?:square\\s|m²|m2\\b|sq\\.?\\s?(?:m|ft)\\b|quadratmeter|mètres carrés|metri quadr|neliömetri)`)],
+  ["length", new RegExp(`${HOW_MANY}(?:linear\\s+|running\\s+)?(?:metres|meters|meter|feet|foot|millimetres|millimeters|centimetres|centimeters|mètres|metri|metriä)\\b`)],
+];
+
 /** Guess the answer type of a free-form question, for questions that do not come from the dataset. */
 export function inferType(question: string): QuestionType {
   const lowered = question.toLowerCase();
+  for (const [type, pattern] of UNIT_AFTER_HOW_MANY) if (pattern.test(lowered)) return type;
   for (const [type, pattern] of TYPE_WORDS) if (pattern.test(lowered)) return type;
   return "text";
 }

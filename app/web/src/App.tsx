@@ -7,7 +7,11 @@ type Evidence =
 interface Answer {
   value: number | string | null; unit?: string; pipeline: string; method: string; exact: boolean; evidence?: Evidence; note?: string;
 }
-interface Reply { answer: Answer; seconds: number; expected: { value: number | string; unit: string | null; correct: boolean | null } | null }
+interface Reply {
+  answer: Answer; seconds: number; expected: { value: number | string; unit: string | null; correct: boolean | null } | null;
+  /** The question this reply answers, which may differ from what is in the text box by now. */
+  question: string;
+}
 interface DatasetFile { path: string; questions: number }
 interface Source { source: string; files: DatasetFile[] }
 interface Known { question: string; answer: number | string; unit: string | null; type: string }
@@ -24,6 +28,7 @@ const PIPELINES: Record<string, string> = {
   "dxf-geometry": "Measured from the CAD geometry",
   "ifc-geometry": "Measured from the building model",
   detector: "Counted by the symbol detector",
+  "symbol-vote": "Counted independently by the detectors and a vision model",
   "vision-model": "Read from the image by a vision model",
   "sheet-text": "Read from the text on the sheet",
   "ifc-facts": "Answered from facts in the building model",
@@ -71,8 +76,12 @@ export function App() {
 
   const drawingChosen = path !== null || upload !== null;
 
+  // Only the latest request may update the screen: a slow answer must not land under another drawing or question.
+  const latest = useRef(0);
+
   async function ask(text: string, drawing: string | null = path) {
     if (!(drawing || upload) || !text.trim()) return;
+    const request = ++latest.current;
     setQuestion(text);
     setBusy(true);
     setError(null);
@@ -83,14 +92,24 @@ export function App() {
         body: JSON.stringify({ path: drawing ?? undefined, upload: drawing ? undefined : upload?.id, question: text }),
       });
       const body = await response.json();
+      if (request !== latest.current) return;
       if (!response.ok) throw new Error(body.error ?? "The question could not be answered.");
-      setReply(body);
+      setReply({ ...body, question: text });
     } catch (e) {
+      if (request !== latest.current) return;
       setReply(null);
       setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setBusy(false);
+      if (request === latest.current) setBusy(false);
     }
+  }
+
+  function changeDrawing() {
+    latest.current++;
+    setBusy(false);
+    setReply(null);
+    setError(null);
+    setQuestion("");
   }
 
   async function chooseUpload(file: File | undefined) {
@@ -100,9 +119,9 @@ export function App() {
     const response = await fetch("/api/upload", { method: "POST", body: form });
     if (!response.ok) return setError("The upload failed.");
     const body = await response.json();
+    changeDrawing();
     setUpload({ id: body.upload, name: body.name });
     setPath(null);
-    setReply(null);
   }
 
   return (
@@ -122,7 +141,7 @@ export function App() {
                   <button
                     key={f.path} role="option" aria-selected={f.path === path}
                     className={f.path === path ? "file chosen" : "file"}
-                    onClick={() => { setPath(f.path); setUpload(null); setReply(null); setQuestion(""); }}
+                    onClick={() => { changeDrawing(); setPath(f.path); setUpload(null); }}
                   >
                     <span>{fileName(f.path)}</span>
                     <span className="count">{f.questions}</span>
@@ -163,7 +182,7 @@ export function App() {
 
       <main className="stage">
         {error && <div className="notice" role="alert">{error}</div>}
-        {reply ? <Result reply={reply} question={question} /> : !error && (
+        {reply ? <Result reply={reply} question={reply.question} /> : !error && (
           <div className="empty">
             <p>{drawingChosen ? "Ask a question, or pick one from the list." : "Choose a drawing to start."}</p>
           </div>
@@ -223,7 +242,13 @@ function Viewer({ evidence }: { evidence: Evidence }) {
       <div
         className="canvas" onWheel={zoom}
         onPointerDown={(e) => { drag.current = { x: e.clientX - view.x, y: e.clientY - view.y }; e.currentTarget.setPointerCapture(e.pointerId); }}
-        onPointerMove={(e) => { if (drag.current) setView((v) => ({ ...v, x: e.clientX - drag.current!.x, y: e.clientY - drag.current!.y })); }}
+        onPointerMove={(e) => {
+          // Read the drag start now: by the time the state update runs, pointer-up may have cleared it.
+          const start = drag.current;
+          if (!start) return;
+          const x = e.clientX - start.x, y = e.clientY - start.y;
+          setView((v) => ({ ...v, x, y }));
+        }}
         onPointerUp={() => (drag.current = null)}
       >
         <div className="sheet" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})` }}>

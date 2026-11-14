@@ -9,7 +9,7 @@ import { renderPlanSvg } from "./evidence.js";
 import type { Detector } from "./models/detector.js";
 import type { VisionModel } from "./models/vision.js";
 import { inferType, parseTakeoff } from "./questions.js";
-import { rasterize } from "./rasterize.js";
+import { rasterize, upright } from "./rasterize.js";
 import { toEnglish } from "./rewrite.js";
 import { isLayeredPlan, loadPlan } from "./solvers/dxf.js";
 import { solveRaster } from "./solvers/raster.js";
@@ -70,7 +70,7 @@ export async function ask(input: AskInput, deps: Deps): Promise<Answer> {
         value: result.value, unit: qtype === "area" ? "m2" : "count", pipeline: "dxf-geometry", exact: true, method: result.method,
         evidence: {
           kind: "svg", caption: `Highlighted: ${result.method}`,
-          svg: renderPlanSvg({ solid: plan.walls, outlines: plan.roomOutlines, highlights: result.highlights }),
+          svg: renderPlanSvg({ solid: plan.walls, outlines: plan.roomOutlines, highlights: result.highlights }, result.cutouts),
         },
       };
     }
@@ -88,6 +88,7 @@ export async function ask(input: AskInput, deps: Deps): Promise<Answer> {
   else if (RENDERABLE.has(extension) && existsSync(input.file)) image = await rasterize(input.file);
   else image = twin(input.file, ".png") ?? twin(input.file, ".jpg") ?? (twin(input.file, ".pdf") ? await rasterize(twin(input.file, ".pdf")!) : null);
   if (image) {
+    image = await upright(image);
     return solveRaster(image, input.question, qtype, { vision: deps.vision, detector: deps.detector, imageUrl: deps.fileUrl(image), useDetector: deps.useDetector });
   }
 

@@ -171,11 +171,11 @@ function byType(model: IfcModel, ids: number[]): [string, number[]][] {
   return [...groups].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
 }
 
-function modelEvidence(model: IfcModel, ids: number[], caption: string): Evidence | undefined {
+function modelEvidence(model: IfcModel, ids: number[], caption: string, label?: (id: number) => string): Evidence | undefined {
   const groups = model.storeys.map((storey) => ({ storey, ids: ids.filter((id) => model.storeyOf(id)?.id === storey.id) })).filter((group) => group.ids.length > 0);
   if (groups.length === 0) return undefined;
   const order = groups.map((group) => `${group.storey.name} ${group.ids.length}`).join(", ");
-  return planEvidence(model, groups, `${caption}; levels left to right, top to bottom: ${order}`);
+  return planEvidence(model, groups, `${caption}; levels left to right, top to bottom: ${order}`, label);
 }
 
 function elementTypes(model: IfcModel, element: ElementKind, side: "exterior" | "interior" | null): Answer {
@@ -216,7 +216,14 @@ function elementWidths(model: IfcModel, element: ElementKind): Answer {
     `Narrowest ${singular}: ${describe(widths.at(-1)!)}`,
     `Average width: ${mean.toFixed(2)} m over ${widths.length} ${plural}`,
   ];
-  return reply(`${element}_widths`, lines, `the OverallWidth attribute of the ${widths.length} ${ifcClass} elements`, modelEvidence(model, [widths[0].id, widths.at(-1)!.id], `The widest (1) and the narrowest ${singular}`));
+  // Marks are numbered in storey order, so each one says which it is.
+  const widest = widths[0];
+  const narrowest = widths.at(-1)!;
+  const evidence =
+    widest.id === narrowest.id
+      ? modelEvidence(model, [widest.id], `The only ${singular} with a width`)
+      : modelEvidence(model, [widest.id, narrowest.id], `The widest and the narrowest ${singular}`, (id) => (id === widest.id ? "widest" : "narrowest"));
+  return reply(`${element}_widths`, lines, `the OverallWidth attribute of the ${widths.length} ${ifcClass} elements`, evidence);
 }
 
 function elementVolume(model: IfcModel, element: ElementKind): Answer {

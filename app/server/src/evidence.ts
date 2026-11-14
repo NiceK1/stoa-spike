@@ -16,7 +16,7 @@ export interface PlanDrawing {
 }
 
 /** SVG of a plan with the shapes behind an answer highlighted and numbered 1..n, so a person can check them. */
-export function renderPlanSvg({ solid = [], outlines = [], highlights, labels = [] }: PlanDrawing): string {
+export function renderPlanSvg({ solid = [], outlines = [], highlights, labels = [] }: PlanDrawing, cutouts: Polygon[][] = []): string {
   const all = [...solid, ...outlines, ...highlights].flat();
   if (all.length === 0) return "";
   const [x0, y0, x1, y1] = bbox(all);
@@ -32,7 +32,8 @@ export function renderPlanSvg({ solid = [], outlines = [], highlights, labels = 
     `<rect width="100%" height="100%" fill="#ffffff"/>`,
     ...outlines.map((p) => `<path d="${path(p)}" fill="none" stroke="#c9c9c4" stroke-width="1"/>`),
     ...solid.map((p) => `<path d="${path(p)}" fill="#4b4b48"/>`),
-    ...highlights.map((p) => `<path d="${path(p)}" fill="#ff7a00" fill-opacity="0.4" stroke="#c44d00" stroke-width="2"/>`),
+    // Even-odd fill leaves the cut-out rings (holes in a room) unpainted.
+    ...highlights.map((p, i) => `<path d="${[p, ...(cutouts[i] ?? [])].map(path).join(" ")}" fill="#ff7a00" fill-opacity="0.4" fill-rule="evenodd" stroke="#c44d00" stroke-width="2"/>`),
   ];
   highlights.forEach((p, i) => {
     const [cx, cy] = centroid(p);

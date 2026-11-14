@@ -69,6 +69,8 @@ export interface Room {
   name: string | null;
   number: string | null;
   polygon: Polygon | null;
+  /** Rings cut out of `polygon`: a room with a hole is drawn as its outer ring plus the inner rings on the same layer. */
+  holes: Polygon[];
   area: number | null;
   point: Point;
 }
@@ -78,6 +80,8 @@ export interface TakeoffResult {
   method: string;
   /** The shapes the value was derived from, in drawing coordinates. */
   highlights: Polygon[];
+  /** Per highlight, the rings that are not part of it. */
+  cutouts?: Polygon[][];
 }
 
 export class Plan {
@@ -132,7 +136,11 @@ export class Plan {
     const room = (name: string | null, number: string | null, point: Point): Room => {
       const printed = stacked(point, -1).map((t) => AREA_TEXT.exec(t)).find(Boolean);
       const polygon = this.roomOutlines.filter((o) => contains(o, point)).sort((a, b) => polygonArea(a) - polygonArea(b))[0] ?? null;
-      return { name, number, polygon, area: polygon ? polygonArea(polygon) : printed ? Number.parseFloat(printed[1]) : null, point };
+      const holes = polygon ? outermostWithin(this.roomOutlines, polygon) : [];
+      const area = polygon
+        ? polygonArea(polygon) - holes.reduce((sum, hole) => sum + polygonArea(hole), 0)
+        : printed ? Number.parseFloat(printed[1]) : null;
+      return { name, number, polygon, holes, area, point };
     };
 
     // Rooms too small for a full label carry only their number.
@@ -169,14 +177,16 @@ export class Plan {
     const label = this.unitLabels.get(letter);
     if (!label) return [];
     const outlines = this.unitOutlines.filter((o) => contains(o, label));
-    return this.rooms.filter((r) => outlines.some((o) => contains(o, r.point)));
+    // A ring nested in the unit's outline that does not hold the unit label is a hole in the unit.
+    const holes = this.unitOutlines.filter((h) => !contains(h, label) && outlines.some((o) => within(h, o)));
+    return this.rooms.filter((r) => outlines.some((o) => contains(o, r.point)) && !holes.some((h) => contains(h, r.point)));
   }
 
   answer(intent: Intent): TakeoffResult | null {
     const { kind } = intent;
     if (kind === "count_rooms_labelled" && intent.name) {
       const rooms = this.labelled(intent.name);
-      return { value: rooms.length, method: `room labels equal to '${intent.name}'`, highlights: outlines(rooms) };
+      return { value: rooms.length, method: `room labels equal to '${intent.name}'`, ...shapes(rooms) };
     }
     if (kind === "count_apartments") {
       const labels = [...this.unitLabels.values()];
@@ -211,14 +221,25 @@ function isIndoor(room: Room): boolean {
   return !OUTDOOR.has((room.name ?? "").toLowerCase());
 }
 
-function outlines(rooms: Room[]): Polygon[] {
-  return rooms.map((r) => r.polygon).filter((p): p is Polygon => p !== null);
+function within(inner: Polygon, outer: Polygon): boolean {
+  return inner !== outer && inner.every((p) => contains(outer, p));
+}
+
+/** The rings nested directly in `outer`; a ring nested deeper belongs to one of those. */
+function outermostWithin(rings: Polygon[], outer: Polygon): Polygon[] {
+  const nested = rings.filter((r) => within(r, outer));
+  return nested.filter((r) => !nested.some((n) => within(r, n)));
+}
+
+function shapes(rooms: Room[]): Pick<TakeoffResult, "highlights" | "cutouts"> {
+  const drawn = rooms.filter((r) => r.polygon !== null);
+  return { highlights: drawn.map((r) => r.polygon as Polygon), cutouts: drawn.map((r) => r.holes) };
 }
 
 function totalArea(rooms: Room[], method: string): TakeoffResult | null {
   if (rooms.length === 0 || rooms.some((r) => r.area === null)) return null;
   const sum = rooms.reduce((s, r) => s + (r.area as number), 0);
-  return { value: Math.round(sum * 100) / 100, method, highlights: outlines(rooms) };
+  return { value: Math.round(sum * 100) / 100, method, ...shapes(rooms) };
 }
 
 const plans = new Map<string, Promise<Plan>>();

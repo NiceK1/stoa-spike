@@ -52,6 +52,9 @@ describe("take-off questions", () => {
     expect(inferType("How many windows are there?")).toBe("count");
     expect(inferType("What is the net floor area of room 1.04 in m²?")).toBe("area");
     expect(inferType("Who is the architect?")).toBe("text");
+    expect(inferType("How many square metres is the living room?")).toBe("area");
+    expect(inferType("How many metres of wall are on this level?")).toBe("length");
+    expect(inferType("How many cubic metres of concrete are in the slabs?")).toBe("volume");
   });
 });
 
@@ -65,11 +68,45 @@ describe("raster targets", () => {
     expect(rasterTarget("How many windows are shown on this floor plan?")?.id).toBe("window");
   });
 
+  it("separates showers, bathtubs and the two together", () => {
+    expect(rasterTarget("How many showers are drawn on this floor plan?")?.id).toBe("shower");
+    expect(rasterTarget("How many bathtubs are drawn on this floor plan?")?.id).toBe("bathtub");
+    expect(rasterTarget("Kuinka monta suihkua pohjapiirustuksessa on?")?.id).toBe("shower");
+    expect(rasterTarget("How many showers are there, not counting bathtubs?")?.id).toBe("shower");
+    expect(rasterTarget("How many showers and bathtubs are drawn on this floor plan in total?")?.id).toBe("shower_bathtub");
+  });
+
   it("reads the Finnish questions", () => {
     expect(rasterTarget("Kuinka monta ovea pohjapiirustuksessa on? Laske oviaukot, joissa on ovi.")?.id).toBe("door");
     expect(rasterTarget("Kuinka monta kerrosta pohjapiirustuksessa on esitetty?")?.id).toBe("floor");
     expect(rasterTarget("Kuinka monta suihkua ja kylpyammetta pohjapiirustukseen on piirretty yhteensä?")?.id).toBe("shower_bathtub");
     expect(rasterTarget("Kuinka monta erillistä WC-tilaa pohjapiirustuksessa on?")?.id).toBe("wc_room");
+  });
+});
+
+describe("layered DXF plan with a hole", () => {
+  const plan = new Plan(parseDxf(
+    "0\nSECTION\n2\nENTITIES\n" +
+      polyline("ROOM_OUTLINE", rect(0, 0, 6, 4)) + polyline("ROOM_OUTLINE", rect(2, 1, 2, 2)) + text("App. A", 1, 3.5) + text("Zimmer", 1, 1.8) + text("1.01", 1, 1.5) +
+      polyline("ROOM_OUTLINE", rect(2.5, 1.5, 1, 1)) + text("Lift", 3, 2.3) + text("1.02", 3, 2.0) +
+      polyline("UNIT_OUTLINE", rect(0, 0, 6, 4)) + polyline("UNIT_OUTLINE", rect(2, 1, 2, 2)) +
+      "0\nENDSEC\n0\nEOF\n",
+  ));
+
+  it("subtracts a nested ring from the room around it", () => {
+    expect(plan.answer({ kind: "area_room", number: "1.01" })?.value).toBe(20);
+    expect(plan.answer({ kind: "area_room", number: "1.02" })?.value).toBe(1);
+    expect(plan.answer({ kind: "area_all_indoor" })?.value).toBe(21);
+  });
+
+  it("leaves rooms in a hole of the unit outline out of the apartment", () => {
+    expect(plan.answer({ kind: "area_apartment", unit: "A" })?.value).toBe(20);
+  });
+
+  it("cuts the hole out of the highlight", () => {
+    const room = plan.answer({ kind: "area_room", number: "1.01" })!;
+    const svg = renderPlanSvg({ outlines: plan.roomOutlines, highlights: room.highlights }, room.cutouts);
+    expect(svg).toMatch(/<path d="M[^"]* Z M[^"]* Z" fill="#ff7a00"[^>]*fill-rule="evenodd"/);
   });
 });
 

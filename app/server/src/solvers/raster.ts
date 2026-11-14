@@ -35,7 +35,13 @@ export const TARGETS: Target[] = [
   { id: "door", pattern: /\bdoors?\b|\bove[at]\b|\bovia\b/, categories: ["doors"], detectorClasses: ["door"], symbol: true },
   { id: "toilet", pattern: /toilet bowls?|wc seats?|wc-istuin/, categories: ["toilet_bowls"], detectorClasses: ["toilet"], symbol: true },
   { id: "sink", pattern: /\bsinks?\b|wash ?basins?|tiskiallas|pesuallas|allasta/, categories: ["sinks"], detectorClasses: ["sink"], symbol: true },
-  { id: "shower_bathtub", pattern: /\bshowers?\b|\bbathtubs?\b|suihku|kylpyamme/, categories: ["showers", "bathtubs"], detectorClasses: ["shower", "bathtub"], symbol: true },
+  // The combined target stays first: on an equal match position the earlier entry wins.
+  {
+    id: "shower_bathtub", categories: ["showers", "bathtubs"], detectorClasses: ["shower", "bathtub"], symbol: true,
+    pattern: /\bshowers?\s*(?:and|or|&|\/|,)\s*bathtubs?\b|\bbathtubs?\s*(?:and|or|&|\/|,)\s*showers?\b|suihku\S*\s+(?:ja|tai|sekä)\s+kylpyamme|kylpyamme\S*\s+(?:ja|tai|sekä)\s+suihku/,
+  },
+  { id: "shower", pattern: /\bshowers?\b|suihku/, categories: ["showers"], detectorClasses: ["shower"], symbol: true },
+  { id: "bathtub", pattern: /\bbathtubs?\b|kylpyamme/, categories: ["bathtubs"], detectorClasses: ["bathtub"], symbol: true },
   { id: "sauna", pattern: /\bsauna/, categories: ["saunas"], detectorClasses: ["sauna"] },
   { id: "kitchen", pattern: /\bkitchens?\b|keittiö/, categories: ["kitchens"], detectorClasses: ["kitchen"] },
   { id: "bedroom", pattern: /\bbedrooms?\b|makuuhuone/, categories: ["bedrooms"], detectorClasses: ["bedroom"] },
