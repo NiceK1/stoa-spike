@@ -183,7 +183,7 @@ export async function solveRaster(imagePath: string, question: string, qtype: Qu
     const names = target.detectorClasses.map((cls) => cls.replace("_", " ")).join(" and ");
     return {
       value: found.length, unit: "count", pipeline: "detector", exact: false, kind: target.id,
-      method: `${names} symbols found by the detector ${detector.id.split(":")[1]}`,
+      method: `${names} symbols found by the detector ${detector.nameFor?.(target.detectorClasses[0]) ?? detector.id.split(":")[1]}`,
       evidence: image(marks, `Each box is one counted ${names}`),
     };
   }
