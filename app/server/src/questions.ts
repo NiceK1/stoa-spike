@@ -76,3 +76,23 @@ export function parseTakeoff(question: string, qtype: QuestionType): Intent | nu
   }
   return null;
 }
+
+// Verbs and question words that ask to be shown something, in the languages the dataset uses and a few neighbours.
+const LOCATE_WORDS = [
+  "show", "mark", "highlight", "locate", "find", "point out", "pinpoint", "circle", "indicate", "where", "where's",
+  "näytä", "merkitse", "merkkaa", "korosta", "etsi", "paikanna", "osoita", "missä",
+  "zeig", "zeige", "zeigen", "markiere", "markieren", "finde", "kennzeichne", "wo",
+  "montre", "montrez", "montre-moi", "marque", "marquez", "trouve", "trouvez", "surligne", "indique", "indiquez", "repère", "où",
+  "mostra", "mostrami", "segna", "evidenzia", "trova", "individua", "dove", "dov'è",
+  "visa", "markera", "hitta", "muestra", "muéstrame", "señala", "resalta", "localiza", "dónde",
+];
+const LOCATE = new RegExp(String.raw`(?<![\p{L}'])(?:${LOCATE_WORDS.join("|")})(?![\p{L}'-])`, "u");
+
+/**
+ * True for a request to be shown something ("show me the bedrooms", "where is the sauna") rather than told a
+ * quantity. Such a request is answered like the count of that thing, which comes with the marks on the drawing.
+ */
+export function isLocate(question: string): boolean {
+  const lowered = question.toLowerCase();
+  return inferType(lowered) === "text" && LOCATE.test(lowered);
+}

@@ -6,6 +6,8 @@ Per-class confidence thresholds are tuned on the validation split only (against 
 unchanged to the held-out part, which is scored on the questions Stoa actually asks. The held-out part is the test
 split unless part=dev is given: that scores the dev drawings of a sweep dataset and never reads the test split.
 Every detection above the floor is saved per drawing as [class, score, [x1, y1, x2, y2]] in <out>/<part>.json.
+A count is a weighted sum over the classes of the question kind. A box counts once, unless the dataset has a
+count_weights.json ({kind: {class: weight}}, e.g. window_3 counts three); the report then repeats that table.
 """
 import json
 import os
@@ -19,7 +21,11 @@ ALL_KIND_CLASSES = {
     "showers_bathtubs": ["shower", "bathtub"], "saunas": ["sauna"], "kitchens": ["kitchen"], "bedrooms": ["bedroom"],
     "wc_rooms": ["wc_room"], "bathrooms": ["bathroom"], "balconies": ["balcony"], "floors": ["floor"],
 }
-KIND_CLASSES = {k: cs for k, cs in ALL_KIND_CLASSES.items() if all(c in NAMES for c in cs)}
+WEIGHTS_FILE = f"{DATA}/count_weights.json"
+WEIGHTED = os.path.exists(WEIGHTS_FILE)
+COUNT_WEIGHTS = json.load(open(WEIGHTS_FILE)) if WEIGHTED else {
+    k: {c: 1 for c in cs} for k, cs in ALL_KIND_CLASSES.items() if all(c in NAMES for c in cs)}
+KIND_CLASSES = {k: list(ws) for k, ws in COUNT_WEIGHTS.items()}
 THRESHOLDS = [round(0.05 + 0.025 * i, 3) for i in range(35)]
 
 
@@ -48,9 +54,9 @@ def tune(val):
 
 def score(dets, stems, truth, thresholds, label):
     per_kind, total, right = {}, 0, 0
-    for kind, classes in KIND_CLASSES.items():
+    for kind, weights in COUNT_WEIGHTS.items():
         asked = [(s, truth[s]["stoa"][kind]) for s in stems if kind in truth[s]["stoa"]]
-        got = [sum(count(dets[s], c, thresholds[c]) for c in classes) for s, _ in asked]
+        got = [sum(w * count(dets[s], c, thresholds[c]) for c, w in weights.items()) for s, _ in asked]
         ok = sum(g == a for g, (_, a) in zip(got, asked))
         near = sum(abs(g - a) <= 1 for g, (_, a) in zip(got, asked))
         per_kind[kind] = [ok, len(asked), near]
@@ -67,6 +73,9 @@ def report(val, held, out_dir, extra, part="test"):
     thresholds = tune(val)
     print("thresholds from validation:", thresholds)
     result = dict(extra, thresholds=thresholds)
+    if WEIGHTED:
+        print("count weights:", COUNT_WEIGHTS)
+        result["count_weights"] = COUNT_WEIGHTS
     result["val"] = score(val, list(val), truth, thresholds, "VALIDATION (thresholds tuned here)")
     result[part] = score(held, list(held), truth, thresholds, part.upper())
     if part == "test":

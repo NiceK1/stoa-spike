@@ -3,6 +3,7 @@
  *
  *   npm run eval -- --source swiss_dwellings
  *   npm run eval -- --source cubicasa5k --no-detector
+ *   npm run eval -- --source swiss_dwellings --no-planner
  *   npm run eval -- --source ifc_bench --per-file 2 --judge
  *
  * Raster drawings are limited to the list in raster-sample.txt and to English questions unless --all-languages is set,
@@ -16,7 +17,7 @@ import { REPO_ROOT, datasetRoot, loadEnv } from "./config.js";
 import { isAvailable, questionsByPath } from "./dataset.js";
 import { judge } from "./judge.js";
 import { createDetector } from "./models/detector.js";
-import { createVision } from "./models/vision.js";
+import { createPlanner, createVision } from "./models/vision.js";
 import { parseTakeoff } from "./questions.js";
 import { ask, type Deps } from "./router.js";
 import { isCorrect } from "./scoring.js";
@@ -36,7 +37,11 @@ const shift = Number(option("shift", "0"));
 const sampleFile = option("sample", join(REPO_ROOT, "raster-sample.txt"))!;
 const rasterSample = new Set(existsSync(sampleFile) ? readFileSync(sampleFile, "utf8").split(/\s+/).filter(Boolean) : []);
 
-const deps: Deps = { vision: createVision(), detector: createDetector(), fileUrl: () => "", useDetector: !flag("no-detector") };
+// --no-planner scores the fixed parsers alone: a question they do not recognise then stays unanswered and costs no model call.
+const deps: Deps = {
+  vision: createVision(), planner: flag("no-planner") ? null : createPlanner(), detector: createDetector(), fileUrl: () => "",
+  useDetector: !flag("no-detector"),
+};
 
 function kindOf(row: QuestionRow, sourceName: string): string {
   if (sourceName === "cubicasa5k") return rasterTarget(row.question)?.id ?? "other";

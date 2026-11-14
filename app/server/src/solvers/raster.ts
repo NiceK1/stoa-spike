@@ -7,6 +7,7 @@
 import sharp from "sharp";
 import type { Detection, Detector } from "../models/detector.js";
 import type { VisionModel } from "../models/vision.js";
+import { markedSentence, planRaster, type RasterCall } from "../planner.js";
 import type { Answer, Mark, QuestionType } from "../types.js";
 
 export interface RasterDeps {
@@ -16,10 +17,16 @@ export interface RasterDeps {
   imageUrl: string;
   /** Use the detector for the classes it offers. Off to measure the vision model alone. */
   useDetector?: boolean;
+  /** Maps wording the target patterns do not know onto a target. Without it such a question goes the way its type says. */
+  planner?: VisionModel | null;
 }
 
 export interface Target {
   id: string;
+  /** The items as a plural noun phrase, for sentences and for the planner's menu. */
+  plural: string;
+  /** What tells this kind from its neighbours, for the planner. */
+  hint?: string;
   pattern: RegExp;
   /** Inventory categories that add up to this target. */
   categories: string[];
@@ -31,24 +38,24 @@ export interface Target {
 
 // The target is the one whose words appear first in the question: later mentions are usually exclusions.
 export const TARGETS: Target[] = [
-  { id: "window", pattern: /\bwindows?\b|ikkuna/, categories: ["windows"], detectorClasses: ["window"], symbol: true },
-  { id: "door", pattern: /\bdoors?\b|\bove[at]\b|\bovia\b/, categories: ["doors"], detectorClasses: ["door"], symbol: true },
-  { id: "toilet", pattern: /toilet bowls?|wc seats?|wc-istuin/, categories: ["toilet_bowls"], detectorClasses: ["toilet"], symbol: true },
-  { id: "sink", pattern: /\bsinks?\b|wash ?basins?|tiskiallas|pesuallas|allasta/, categories: ["sinks"], detectorClasses: ["sink"], symbol: true },
+  { id: "window", plural: "windows", pattern: /\bwindows?\b|ikkuna/, categories: ["windows"], detectorClasses: ["window"], symbol: true },
+  { id: "door", plural: "doors", hint: "doorways fitted with a door leaf", pattern: /\bdoors?\b|\bove[at]\b|\bovia\b/, categories: ["doors"], detectorClasses: ["door"], symbol: true },
+  { id: "toilet", plural: "toilet bowls", hint: "the fixture: toilets, WCs, WC seats, loos", pattern: /toilet bowls?|wc seats?|wc-istuin/, categories: ["toilet_bowls"], detectorClasses: ["toilet"], symbol: true },
+  { id: "sink", plural: "sinks and wash basins", hint: "in kitchens and bathrooms together", pattern: /\bsinks?\b|wash ?basins?|tiskiallas|pesuallas|allasta/, categories: ["sinks"], detectorClasses: ["sink"], symbol: true },
   // The combined target stays first: on an equal match position the earlier entry wins.
   {
-    id: "shower_bathtub", categories: ["showers", "bathtubs"], detectorClasses: ["shower", "bathtub"], symbol: true,
+    id: "shower_bathtub", plural: "showers and bathtubs", hint: "both together in one total", categories: ["showers", "bathtubs"], detectorClasses: ["shower", "bathtub"], symbol: true,
     pattern: /\bshowers?\s*(?:and|or|&|\/|,)\s*bathtubs?\b|\bbathtubs?\s*(?:and|or|&|\/|,)\s*showers?\b|suihku\S*\s+(?:ja|tai|sekä)\s+kylpyamme|kylpyamme\S*\s+(?:ja|tai|sekä)\s+suihku/,
   },
-  { id: "shower", pattern: /\bshowers?\b|suihku/, categories: ["showers"], detectorClasses: ["shower"], symbol: true },
-  { id: "bathtub", pattern: /\bbathtubs?\b|kylpyamme/, categories: ["bathtubs"], detectorClasses: ["bathtub"], symbol: true },
-  { id: "sauna", pattern: /\bsauna/, categories: ["saunas"], detectorClasses: ["sauna"] },
-  { id: "kitchen", pattern: /\bkitchens?\b|keittiö/, categories: ["kitchens"], detectorClasses: ["kitchen"] },
-  { id: "bedroom", pattern: /\bbedrooms?\b|makuuhuone/, categories: ["bedrooms"], detectorClasses: ["bedroom"] },
-  { id: "wc_room", pattern: /wc rooms?|toilet rooms?|wc-tila/, categories: ["wc_rooms"], detectorClasses: ["wc_room"] },
-  { id: "bathroom", pattern: /\bbathrooms?\b|washrooms?|kylpy- tai pesuhuone/, categories: ["bathrooms"], detectorClasses: ["bathroom"] },
-  { id: "balcony", pattern: /\bbalcon(y|ies)\b|parveke/, categories: ["balconies"], detectorClasses: ["balcony"] },
-  { id: "floor", pattern: /\bfloors\b|\bstoreys?\b|kerrosta/, categories: [], detectorClasses: ["floor"] },
+  { id: "shower", plural: "showers", pattern: /\bshowers?\b|suihku/, categories: ["showers"], detectorClasses: ["shower"], symbol: true },
+  { id: "bathtub", plural: "bathtubs", pattern: /\bbathtubs?\b|kylpyamme/, categories: ["bathtubs"], detectorClasses: ["bathtub"], symbol: true },
+  { id: "sauna", plural: "saunas", hint: "sauna rooms", pattern: /\bsauna/, categories: ["saunas"], detectorClasses: ["sauna"] },
+  { id: "kitchen", plural: "kitchens", hint: "including kitchenettes", pattern: /\bkitchens?\b|keittiö/, categories: ["kitchens"], detectorClasses: ["kitchen"] },
+  { id: "bedroom", plural: "bedrooms", pattern: /\bbedrooms?\b|makuuhuone/, categories: ["bedrooms"], detectorClasses: ["bedroom"] },
+  { id: "wc_room", plural: "separate WC rooms", hint: "toilet rooms as rooms, not the fixture in them", pattern: /wc rooms?|toilet rooms?|wc-tila/, categories: ["wc_rooms"], detectorClasses: ["wc_room"] },
+  { id: "bathroom", plural: "bathrooms", hint: "bathrooms and washrooms; a separate WC room is not one", pattern: /\bbathrooms?\b|washrooms?|kylpy- tai pesuhuone/, categories: ["bathrooms"], detectorClasses: ["bathroom"] },
+  { id: "balcony", plural: "balconies", pattern: /\bbalcon(y|ies)\b|parveke/, categories: ["balconies"], detectorClasses: ["balcony"] },
+  { id: "floor", plural: "storeys", hint: "how many floors or storeys the image shows", pattern: /\bfloors\b|\bstoreys?\b|kerrosta/, categories: [], detectorClasses: ["floor"] },
 ];
 
 export function rasterTarget(question: string): Target | null {
@@ -302,13 +309,24 @@ export async function countSources(imagePath: string, target: Target, deps: Rast
   return { sources, routed: { name: detector.nameFor?.(target.detectorClasses[0]) ?? detector.id.split(":")[1], count: boxes.length, boxes } };
 }
 
-export async function solveRaster(imagePath: string, question: string, qtype: QuestionType, deps: RasterDeps): Promise<Answer> {
+/** `locate` marks a request to be shown the items: the answer then carries a sentence saying what was marked. */
+export async function solveRaster(imagePath: string, question: string, qtype: QuestionType, deps: RasterDeps, locate = false): Promise<Answer> {
   const { width = 0, height = 0 } = await sharp(imagePath).metadata();
   const image = (marks: Mark[], caption: string) => ({ kind: "image" as const, imageUrl: deps.imageUrl, width, height, marks, caption });
   const toMarks = (items: Located[]): Mark[] =>
     readingOrder(items, (item) => item, 1000 * ROW).map((item, i) => ({ n: i + 1, x: (item.x / 1000) * width, y: (item.y / 1000) * height }));
 
-  if (qtype !== "count") {
+  let target = qtype === "count" ? rasterTarget(question) : null;
+  let call: RasterCall | null = null;
+  if (!target && deps.planner && (qtype === "count" || qtype === "text")) {
+    call = await planRaster(question, TARGETS.map((t) => ({ id: t.id, description: t.hint ? `${t.plural} (${t.hint})` : t.plural })), deps.planner);
+    if (call?.operation === "count_known") target = TARGETS.find((t) => t.id === (call as { target: string }).target) ?? null;
+  }
+  const show = locate || (call !== null && call.operation !== "free" && call.locate);
+  const understood = (reading: string) => (call ? `understood as "${reading}" by ${deps.planner!.id}; ` : "");
+  const counting = target !== null || call?.operation === "count_other" || (qtype === "count" && call?.operation !== "free");
+
+  if (!counting) {
     const { output } = await deps.vision.ask({ imagePath, system: FREE_SYSTEM, prompt: question, schema: FREE_SCHEMA });
     return {
       value: qtype === "text" ? output.answer : (output.value ?? output.answer), unit: output.unit ?? undefined, pipeline: "vision-model", exact: false,
@@ -316,17 +334,30 @@ export async function solveRaster(imagePath: string, question: string, qtype: Qu
     };
   }
 
-  const target = rasterTarget(question);
   if (!target) {
     const { output } = await deps.vision.ask({ imagePath, system: COUNT_SYSTEM, prompt: question, schema: COUNT_SCHEMA });
     const items: Located[] = output.items ?? [];
+    const subject = call?.operation === "count_other" ? call.items : "items";
     return {
       value: items.length > 0 ? items.length : output.count, unit: "count", pipeline: "vision-model", exact: false, kind: "other",
-      method: `items listed by ${deps.vision.id}`,
+      method: `${understood(`count ${subject}`)}items listed by ${deps.vision.id}`,
+      note: show ? markedSentence(items.length, subject) : undefined,
       evidence: image(toMarks(items), "Each number is one counted item; positions are the model's estimate"),
     };
   }
 
+  const answer = await countTarget(imagePath, target, deps, image, toMarks);
+  const marked = answer.evidence?.kind === "image" ? answer.evidence.marks.length : 0;
+  return {
+    ...answer, method: understood(`count ${target.plural}`) + answer.method,
+    note: show && target.id !== "floor" ? markedSentence(marked, target.plural) : undefined,
+  };
+}
+
+async function countTarget(
+  imagePath: string, target: Target, deps: RasterDeps,
+  image: (marks: Mark[], caption: string) => Answer["evidence"], toMarks: (items: Located[]) => Mark[],
+): Promise<Answer> {
   const names = target.detectorClasses.map((cls) => cls.replace("_", " ")).join(" and ");
   const boxMarks = (found: Detection[]): Mark[] =>
     found.map((d, i) => ({ n: i + 1, x: d.x, y: d.y, w: d.w, h: d.h, label: `${d.cls.replace("_", " ")}, ${Math.round(d.score * 100)}% confidence` }));

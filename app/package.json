@@ -9,6 +9,7 @@
     "build": "vite build",
     "start": "vite build && tsx server/src/server.ts",
     "eval": "tsx server/src/eval.ts",
+    "eval:paraphrase": "tsx server/src/eval-paraphrase.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p ."
   },

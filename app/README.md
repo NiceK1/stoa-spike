@@ -33,6 +33,39 @@ Vector answers are exact and labelled so; model answers are labelled as estimate
 `VisionModel` (`server/src/models/vision.ts`) and `Detector` (`server/src/models/detector.ts`), so a provider can be
 replaced without touching the pipelines.
 
+## Questions outside the templates
+
+The fixed parsers know the dataset's wording. They run first, because they cost nothing and their accuracy is measured.
+A question they do not recognise ("show me the bedrooms", "which room is the largest?", "ikkunoiden määrä", a typo)
+goes to a planner: a language model that gets the question and a menu of what this drawing supports, and returns one
+operation with its parameters. Code then computes the answer and the marks, so the numbers stay exact.
+
+| Drawing | What the planner chooses from | Then |
+|---|---|---|
+| Layered DXF | the take-off operations, with this plan's own room labels (and how many rooms carry each), room numbers, apartments and symbol counts; a room selection by label, number or apartment that is counted, summed, listed or narrowed to its largest or smallest room; a free answer from the room table | the geometry is measured as for a dataset question; a free answer is labelled an estimate and highlights the rooms it rests on |
+| Raster image | the kinds the detectors and the inventory know, a count of any other item that can be pointed at, or a free reading | the detector vote, the located count, or the free-form prompt |
+| IFC model | the rewrite into the English templates (`server/src/rewrite.ts`), now also tried when a typed question reads as free text | the rule parser |
+
+A request to show, mark, find or locate something is answered like the count of that thing: the marks are on the
+drawing, the number stays in the answer, and a sentence says what was marked. The method line of an answer says when
+the planner was used and how it read the question, for example `understood as "count rooms labelled 'Schlafzimmer'"`.
+The planner costs one text call (5 to 20 seconds through the local CLI); `PLANNER_MODEL` can name a smaller model for it.
+
+Measured on reworded dataset questions (`npm run eval:paraphrase`): a language model rewrites each sampled question
+in one of five styles (casual, show/mark/where, terse keywords, another language, typos), the app answers it without
+being told the answer type, and the original expected answer decides. Before is the app without the planner and the
+locate intent.
+
+| Sample | Questions | Before | After | Same questions in the dataset's wording |
+|---|---|---|---|---|
+| Swiss apartment floors, 24 plans | 120 | 53 (44%) | 120 (100%) | 120 |
+| Raster floor plans, the 30 drawings of `raster-dev.txt` | 90 | 33 (37%) | 75 (83%) | 75 |
+| IFC models, 20 models | 40 | 17 (43%) | 39 (98%) | 40 |
+
+The style set was used while building the planner, so these are development numbers, not held-out ones. On raster
+drawings every reworded question was understood as the same kind as the original; the misses are counting errors that
+the dataset's wording has as well.
+
 ## Measured
 
 Scored with the dataset's rules (counts exact; areas, lengths and volumes within 2%) on 14 November 2026.
@@ -74,6 +107,10 @@ npm run eval -- --source opening_design
 npm run eval -- --source cubicasa5k --sample ../raster-test100.txt     # sample A; raster-test100b.txt is sample B
 npm run eval -- --source cubicasa5k --sample ../raster-test100.txt --no-detector
 npm run eval -- --source ifc_bench --per-file 2 --judge                # free text, graded by a language model
+npm run eval -- --source swiss_dwellings --no-planner                  # fixed parsers alone; unrecognised questions cost no call
+npm run eval:paraphrase -- --source swiss_dwellings --drawings 24 --per-file 5      # reworded questions
+npm run eval:paraphrase -- --source cubicasa5k --sample ../raster-dev.txt --drawings 30 --per-file 3
+npm run eval:paraphrase -- --source ifc_models --drawings 20 --per-file 2 --original   # same sample, dataset wording
 npx tsx scripts/voters.ts count ../raster-test100.txt a.json           # every count source per question
 npx tsx scripts/voters.ts report a.json b.json                         # rules chosen on a.json, checked on b.json
 npm test
@@ -92,6 +129,7 @@ The server reads `../.env` and the environment:
 | `STOA_DATASET` | dataset folder, default `../dataset` |
 | `VISION_PROVIDER` | `claude-cli` (default, the local `claude` CLI) or `anthropic-api` (needs `ANTHROPIC_API_KEY`) |
 | `VISION_MODEL` | model id, default `claude-sonnet-5-5` |
+| `PLANNER_MODEL` | model that maps free-form questions onto operations, default the vision model; `PLANNER_EFFORT` sets its effort with the CLI |
 | `DETECTOR` | `onnx` (our weights in `../models`, the default when present), `roboflow` (needs `ROBOFLOW_API_KEY`), `none` |
 | `RASTER_DETECTOR_TARGETS` | `symbols` (default), `all` (detectors also count room types), `none` |
 | `RASTER_SYMBOL_VOTE` | `off` answers from the preferred detector alone |

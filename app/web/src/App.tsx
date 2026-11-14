@@ -26,6 +26,7 @@ const SOURCE_NAMES: Record<string, string> = {
 
 const PIPELINES: Record<string, string> = {
   "dxf-geometry": "Measured from the CAD geometry",
+  "dxf-facts": "Answered from the rooms measured in the CAD geometry",
   "ifc-geometry": "Measured from the building model",
   detector: "Counted by the symbol detector",
   "symbol-vote": "Counted independently by the detectors and a vision model",
@@ -34,6 +35,18 @@ const PIPELINES: Record<string, string> = {
   "ifc-facts": "Answered from facts in the building model",
   none: "No answer",
 };
+
+// Wording outside the dataset's templates, to show that a question does not have to follow them.
+const FREE_QUESTIONS: Record<string, string[]> = {
+  cad: ["Show me the bedrooms", "Which room is the largest?", "What is the combined area of the bathrooms and the corridors?"],
+  image: ["Show me the bedrooms", "Where are the toilets?", "Mark all windows"],
+};
+
+function freeQuestions(path: string | null, uploadName: string | undefined): string[] {
+  if (path) return FREE_QUESTIONS[{ swiss_dwellings: "cad", cubicasa5k: "image" }[path.split("/")[1]] ?? ""] ?? [];
+  if (!uploadName) return [];
+  return /\.dxf$/i.test(uploadName) ? FREE_QUESTIONS.cad : /\.(png|jpe?g|webp)$/i.test(uploadName) ? FREE_QUESTIONS.image : [];
+}
 
 const fileName = (path: string) => path.split("/").pop() ?? path;
 
@@ -75,6 +88,7 @@ export function App() {
   }, [sources, filter]);
 
   const drawingChosen = path !== null || upload !== null;
+  const free = freeQuestions(path, upload?.name);
 
   // Only the latest request may update the screen: a slow answer must not land under another drawing or question.
   const latest = useRef(0);
@@ -167,6 +181,16 @@ export function App() {
             />
             <button className="primary" disabled={!drawingChosen || busy || !question.trim()}>{busy ? "Reading the drawing…" : "Ask"}</button>
           </form>
+          {free.length > 0 && (
+            <>
+              <h3>Or in your own words</h3>
+              <div className="known">
+                {free.map((q) => (
+                  <button key={q} className="suggestion" onClick={() => ask(q)} disabled={busy}>{q}</button>
+                ))}
+              </div>
+            </>
+          )}
           {known.length > 0 && (
             <>
               <h3>Questions that come with this drawing</h3>

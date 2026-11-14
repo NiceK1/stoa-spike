@@ -95,6 +95,8 @@ def run(f, gpu):
         result.update(status="ok" if train_exit == 0 else "truncated", thresholds=report["thresholds"],
                       dev=dict(kinds(report["dev"]), correct=report["dev"]["correct"], total=report["dev"]["total"]),
                       val=dict(kinds(report["val"]), correct=report["val"]["correct"], total=report["val"]["total"]))
+        if "count_weights" in report:
+            result["count_weights"] = report["count_weights"]
     else:
         result.update(status="failed", error=error or "no dev report",
                       log_tail={"train": tail(log_path), "eval": tail(f"{ROOT}/logs/eval_{name}.log")})

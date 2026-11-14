@@ -79,6 +79,9 @@ spec = {
     "classes": names,
     "thresholds": thresholds,
     "question_kinds": report.get("question_kinds") or E.KIND_CLASSES,
+    "count_weights": report.get("count_weights") or E.COUNT_WEIGHTS,
+    "count_rule": "answer for a question kind = sum over its classes in count_weights of weight * number of rows of "
+                  "that class with confidence >= thresholds[class]",
     "measured": {k: report[k] for k in ("val", "dev", "test", "sample30") if k in report},
     "onnx_vs_pytorch_count_agreement_on_sample": f"{agree}/{total}",
     "cpu_seconds_per_drawing_on_instance": round(float(np.median(seconds)), 3),

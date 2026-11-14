@@ -8,7 +8,7 @@ import { basename, extname, join, relative, resolve, sep } from "node:path";
 import { APP_ROOT, CACHE_DIR, UPLOAD_DIR, datasetRoot, loadEnv } from "./config.js";
 import { isAvailable, questionsByPath } from "./dataset.js";
 import { createDetector } from "./models/detector.js";
-import { createVision } from "./models/vision.js";
+import { createPlanner, createVision } from "./models/vision.js";
 import { ask, type Deps } from "./router.js";
 import { isCorrect } from "./scoring.js";
 import type { QuestionType } from "./types.js";
@@ -35,7 +35,7 @@ function fileUrl(absolute: string): string {
   throw new Error("file is outside the served folders");
 }
 
-const deps: Deps = { vision: createVision(), detector: createDetector(), fileUrl };
+const deps: Deps = { vision: createVision(), planner: createPlanner(), detector: createDetector(), fileUrl };
 const app = Fastify({ logger: false, bodyLimit: 64 * 1024 * 1024 });
 await app.register(multipart, { limits: { fileSize: 200 * 1024 * 1024 } });
 

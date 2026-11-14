@@ -78,10 +78,19 @@ export interface Room {
 export interface TakeoffResult {
   value: number;
   method: string;
+  /** What was counted or measured, as a plural noun phrase, e.g. "rooms labelled 'Bad'". */
+  subject?: string;
   /** The shapes the value was derived from, in drawing coordinates. */
   highlights: Polygon[];
   /** Per highlight, the rings that are not part of it. */
   cutouts?: Polygon[][];
+}
+
+/** Narrows the rooms of a plan; a filter that is left out keeps every room. */
+export interface RoomFilter {
+  labels?: string[];
+  numbers?: string[];
+  unit?: string;
 }
 
 export class Plan {
@@ -182,27 +191,58 @@ export class Plan {
     return this.rooms.filter((r) => outlines.some((o) => contains(o, r.point)) && !holes.some((h) => contains(h, r.point)));
   }
 
+  /** The apartment each room lies in. */
+  unitOf(): Map<Room, string> {
+    const units = new Map<Room, string>();
+    for (const letter of [...this.unitLabels.keys()].sort()) for (const room of this.unitRooms(letter)) units.set(room, letter);
+    return units;
+  }
+
+  /** What this plan can be asked about, in its own words: its room labels with their room counts, room numbers and apartments. */
+  vocabulary(): { labels: [string, number][]; numbers: string[]; units: string[] } {
+    const labels = new Map<string, number>();
+    for (const room of this.rooms) if (room.name) labels.set(room.name, (labels.get(room.name) ?? 0) + 1);
+    return {
+      labels: [...labels].sort((a, b) => b[1] - a[1]),
+      numbers: this.rooms.flatMap((r) => (r.number ? [r.number] : [])),
+      units: [...this.unitLabels.keys()].sort(),
+    };
+  }
+
+  select({ labels, numbers, unit }: RoomFilter): Room[] {
+    const names = labels && new Set(labels.map((l) => l.toLowerCase()));
+    const inUnit = unit === undefined ? null : new Set(this.unitRooms(unit));
+    return this.rooms.filter(
+      (r) => (!names || names.has((r.name ?? "").toLowerCase())) && (!numbers || (r.number !== null && numbers.includes(r.number))) && (!inUnit || inUnit.has(r)),
+    );
+  }
+
+  /** The number of `rooms`, or their summed area; null when an area is missing or nothing was selected to add up. */
+  measure(rooms: Room[], quantity: "count" | "area", method: string): TakeoffResult | null {
+    return quantity === "count" ? { value: rooms.length, method, ...shapes(rooms) } : totalArea(rooms, method);
+  }
+
   answer(intent: Intent): TakeoffResult | null {
     const { kind } = intent;
     if (kind === "count_rooms_labelled" && intent.name) {
       const rooms = this.labelled(intent.name);
-      return { value: rooms.length, method: `room labels equal to '${intent.name}'`, ...shapes(rooms) };
+      return { value: rooms.length, method: `room labels equal to '${intent.name}'`, subject: `rooms labelled '${intent.name}'`, ...shapes(rooms) };
     }
     if (kind === "count_apartments") {
       const labels = [...this.unitLabels.values()];
-      return { value: labels.length, method: "unit labels", highlights: this.unitOutlines.filter((o) => labels.some((p) => contains(o, p))) };
+      return { value: labels.length, method: "unit labels", subject: "apartments", highlights: this.unitOutlines.filter((o) => labels.some((p) => contains(o, p))) };
     }
-    const symbols: Record<string, [Polygon[], string]> = {
-      count_doors: [this.doors, "door symbols on layer DOOR"],
-      count_windows: [this.windows, "window symbols on layer WINDOW"],
-      count_toilets: [this.toilets, "bowl symbols with a cistern stroke"],
-      count_washbasins: [this.washbasins, "bowl symbols with a tap"],
-      count_bathtubs: [this.bathtubs, "bathtub symbols"],
-      count_showers: [this.showers, "shower tray symbols"],
+    const symbols: Record<string, [Polygon[], string, string]> = {
+      count_doors: [this.doors, "door symbols on layer DOOR", "doors"],
+      count_windows: [this.windows, "window symbols on layer WINDOW", "windows"],
+      count_toilets: [this.toilets, "bowl symbols with a cistern stroke", "toilets"],
+      count_washbasins: [this.washbasins, "bowl symbols with a tap", "washbasins"],
+      count_bathtubs: [this.bathtubs, "bathtub symbols", "bathtubs"],
+      count_showers: [this.showers, "shower tray symbols", "showers"],
     };
     if (kind in symbols) {
-      const [shapes, method] = symbols[kind];
-      return { value: shapes.length, method, highlights: shapes };
+      const [shapes, method, subject] = symbols[kind];
+      return { value: shapes.length, method, subject, highlights: shapes };
     }
     if (kind === "area_room" && intent.number) {
       const rooms = this.rooms.filter((r) => r.number === intent.number);
@@ -217,7 +257,7 @@ export class Plan {
   }
 }
 
-function isIndoor(room: Room): boolean {
+export function isIndoor(room: Room): boolean {
   return !OUTDOOR.has((room.name ?? "").toLowerCase());
 }
 

@@ -1,0 +1,4 @@
+[
+ {"name": "symrun", "weights": "yolo11l.pt", "imgsz": 1280, "epochs": 60, "batch": 16, "data": "/data/sweep/data/yolo_symrun", "train": ["fliplr=0.5", "flipud=0.5"], "export": "floorplan-symrun-yolo11l-1280-sweep"},
+ {"name": "symrun_do", "weights": "yolo11l.pt", "imgsz": 1280, "epochs": 60, "batch": 16, "data": "/data/sweep/data/yolo_symrun_do", "train": ["fliplr=0.5", "flipud=0.5"], "export": "floorplan-symrun-do-yolo11l-1280-sweep"}
+]
