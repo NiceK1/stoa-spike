@@ -30,41 +30,50 @@
     a { color: inherit; }
     :focus-visible { outline: 3px solid #9ec0ff; outline-offset: 3px; border-radius: 4px; }
 
-    /* The hero is a drawing sheet: blueprint ground, drafting grid, a border with zone marks and a title block. */
+    /* The hero is a drawing sheet: blueprint ground, drafting grid, a border with zone marks and a title block.
+       It is laid out once at 1440 x 900 and scales like a slide: --px is one design pixel, set by whichever of the
+       window's width or height is tighter, so the sheet fills any window with the same proportions. */
     .sheet {
-      position: relative; min-height: 100vh; padding: 34px; color: var(--line);
+      --px: min(calc(100vw / 1440), calc(100vh / 900));
+      --px: min(calc(100vw / 1440), calc(100svh / 900));
+      position: relative; height: 100vh; height: 100svh; padding: calc(34 * var(--px)); color: var(--line);
       background-color: var(--ground);
       background-image:
         radial-gradient(ellipse at 70% 40%, rgba(255, 255, 255, 0.06), transparent 60%),
         linear-gradient(var(--grid-major) 1px, transparent 1px), linear-gradient(90deg, var(--grid-major) 1px, transparent 1px),
         linear-gradient(var(--grid-fine) 1px, transparent 1px), linear-gradient(90deg, var(--grid-fine) 1px, transparent 1px);
-      background-size: auto, 120px 120px, 120px 120px, 24px 24px, 24px 24px;
+      background-size: auto, calc(120 * var(--px)) calc(120 * var(--px)), calc(120 * var(--px)) calc(120 * var(--px)), calc(24 * var(--px)) calc(24 * var(--px)), calc(24 * var(--px)) calc(24 * var(--px));
       background-position: center, -1px -1px, -1px -1px, -1px -1px, -1px -1px;
     }
-    .frame { position: relative; min-height: calc(100vh - 68px); border: 1.5px solid rgba(255, 255, 255, 0.7); display: flex; flex-direction: column; }
-    .zones { position: absolute; display: flex; justify-content: space-around; font: 500 12px/1 var(--display); color: rgba(255, 255, 255, 0.55); pointer-events: none; }
-    .zones.top { left: 0; right: 0; top: -22px; }
-    .zones.bottom { left: 0; right: 0; bottom: -22px; }
-    .zones.left, .zones.right { top: 0; bottom: 0; flex-direction: column; align-items: center; width: 20px; }
-    .zones.left { left: -27px; }
-    .zones.right { right: -27px; }
+    .frame { position: relative; height: 100%; border: 1.5px solid rgba(255, 255, 255, 0.7); display: flex; flex-direction: column; }
+    .zones { position: absolute; display: flex; justify-content: space-around; font: 500 calc(12 * var(--px))/1 var(--display); color: rgba(255, 255, 255, 0.55); pointer-events: none; }
+    .zones.top { left: 0; right: 0; top: calc(-22 * var(--px)); }
+    .zones.bottom { left: 0; right: 0; bottom: calc(-22 * var(--px)); }
+    .zones.left, .zones.right { top: 0; bottom: 0; flex-direction: column; align-items: center; width: calc(20 * var(--px)); }
+    .zones.left { left: calc(-27 * var(--px)); }
+    .zones.right { right: calc(-27 * var(--px)); }
 
-    .bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 22px 32px; }
-    .brand { display: flex; align-items: center; gap: 12px; text-decoration: none; }
-    .brand svg { width: 36px; height: 36px; }
-    .brand span { font: 600 28px/1 var(--display); letter-spacing: 0.01em; }
-    .bar nav { display: flex; gap: 26px; font-weight: 500; }
+    .bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: calc(22 * var(--px)) calc(32 * var(--px)); }
+    .brand { display: flex; align-items: center; gap: calc(12 * var(--px)); text-decoration: none; }
+    .brand svg { width: calc(36 * var(--px)); height: calc(36 * var(--px)); }
+    .brand span { font: 600 calc(28 * var(--px))/1 var(--display); letter-spacing: 0.01em; }
+    .bar nav { display: flex; gap: calc(26 * var(--px)); font-weight: 500; font-size: max(14px, calc(17 * var(--px))); }
     .bar nav a { text-decoration: none; opacity: 0.85; }
     .bar nav a:hover { opacity: 1; text-decoration: underline; text-underline-offset: 5px; }
 
-    .hero { flex: 1; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); align-items: center; gap: 40px; padding: 8px 32px 24px; }
-    .ask h1 { margin: 0; font: 600 clamp(40px, 4.4vw, 70px)/0.98 var(--display); letter-spacing: -0.005em; max-width: 12ch; }
-    .answer { display: flex; align-items: flex-end; gap: 18px; margin: 14px 0 4px; }
-    .count { font: 700 clamp(92px, 9.5vw, 150px)/0.8 var(--display); font-variant-numeric: tabular-nums; min-width: 1ch; }
-    .answer p { margin: 0 0 4px; max-width: 24ch; font: 500 clamp(19px, 1.6vw, 23px)/1.25 var(--display); color: rgba(255, 255, 255, 0.85); }
-    .lede { max-width: 46ch; margin: 18px 0 26px; color: rgba(255, 255, 255, 0.82); font-size: 18px; }
-    .actions { display: flex; flex-wrap: wrap; gap: 12px; }
-    .button { display: inline-block; padding: 13px 24px; border-radius: 6px; font-weight: 600; text-decoration: none; }
+    /* The composition keeps its design width; on a wider window it stays centred and the sheet around it stretches. */
+    .hero {
+      flex: 1; min-height: 0; width: 100%; max-width: calc(1308 * var(--px)); margin-inline: auto;
+      display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); align-items: center; gap: calc(40 * var(--px));
+      padding: calc(8 * var(--px)) calc(32 * var(--px)) calc(24 * var(--px));
+    }
+    .ask h1 { margin: 0; font: 600 calc(63 * var(--px))/0.98 var(--display); letter-spacing: -0.005em; max-width: 12ch; }
+    .answer { display: flex; align-items: flex-end; gap: calc(18 * var(--px)); margin: calc(14 * var(--px)) 0 calc(4 * var(--px)); }
+    .count { font: 700 calc(137 * var(--px))/0.8 var(--display); font-variant-numeric: tabular-nums; min-width: 1ch; }
+    .answer p { margin: 0 0 calc(4 * var(--px)); max-width: 24ch; font: 500 max(15px, calc(23 * var(--px)))/1.25 var(--display); color: rgba(255, 255, 255, 0.85); }
+    .lede { max-width: 46ch; margin: calc(18 * var(--px)) 0 calc(26 * var(--px)); color: rgba(255, 255, 255, 0.82); font-size: max(15px, calc(18 * var(--px))); }
+    .actions { display: flex; flex-wrap: wrap; gap: calc(12 * var(--px)); }
+    .button { display: inline-block; padding: calc(13 * var(--px)) calc(24 * var(--px)); border-radius: calc(6 * var(--px)); font-weight: 600; font-size: max(15px, calc(17 * var(--px))); text-decoration: none; }
     .button.solid { background: var(--line); color: var(--brand); }
     .button.solid:hover { background: #e3ebff; }
     .button.ghost { border: 1.5px solid rgba(255, 255, 255, 0.75); }
@@ -90,10 +99,10 @@
       @keyframes mark { from { opacity: 0; transform: scale(1.35); } to { opacity: 1; transform: scale(1); } }
     }
 
-    .titleblock { align-self: flex-end; display: grid; grid-template-columns: auto auto; margin: 0 -1.5px -1.5px 0; border: 1.5px solid rgba(255, 255, 255, 0.7); font-size: 13px; background: rgba(10, 39, 102, 0.55); }
-    .titleblock div { padding: 7px 14px; border: 0.75px solid rgba(255, 255, 255, 0.35); }
-    .titleblock dt { color: rgba(255, 255, 255, 0.6); font-size: 11.5px; }
-    .titleblock dd { margin: 0; font: 600 16px/1.2 var(--display); }
+    .titleblock { align-self: flex-end; display: grid; grid-template-columns: auto auto; margin: 0 -1.5px -1.5px 0; border: 1.5px solid rgba(255, 255, 255, 0.7); background: rgba(10, 39, 102, 0.55); }
+    .titleblock div { padding: calc(7 * var(--px)) calc(14 * var(--px)); border: 0.75px solid rgba(255, 255, 255, 0.35); }
+    .titleblock dt { color: rgba(255, 255, 255, 0.6); font-size: max(10px, calc(11.5 * var(--px))); }
+    .titleblock dd { margin: 0; font: 600 max(13px, calc(16 * var(--px)))/1.2 var(--display); }
     .titleblock .wide { grid-column: span 2; }
     .titleblock dl { margin: 0; }
 
@@ -119,16 +128,21 @@
     footer p { margin: 0 0 8px; }
     footer a { color: var(--ink); }
 
-    @media (max-width: 900px) {
-      .sheet { padding: 14px; }
-      .frame { min-height: calc(100vh - 28px); }
+    /* Portrait windows (tablets upright, phones): the plan goes under the text, sized by the window's width,
+       and the sheet grows with its content instead of being cut to the window. */
+    @media (max-width: 900px), (max-aspect-ratio: 4/5) {
+      .sheet { --px: clamp(0.62px, min(calc(100vw / 700), calc(100svh / 1180)), 1.6px); height: auto; min-height: 100vh; min-height: 100svh; padding: calc(22 * var(--px)); }
+      .frame { height: auto; min-height: calc(100svh - 44 * var(--px)); }
       .zones { display: none; }
-      .bar { padding: 16px 18px; }
-      .bar nav { gap: 16px; font-size: 15px; white-space: nowrap; }
+      .bar nav { white-space: nowrap; }
+      .hero { grid-template-columns: 1fr; max-width: none; gap: calc(26 * var(--px)); padding: calc(4 * var(--px)) calc(26 * var(--px)) calc(20 * var(--px)); }
+      .plan svg { width: auto; max-width: 100%; max-height: 31svh; margin: 0 auto; }
+    }
+    @media (max-width: 600px) { .titleblock { align-self: stretch; } }
+
+    @media (max-width: 900px) {
       .bar nav a[href="#schedule"] { display: none; }
       caption { display: block; padding: 0 0 8px; }
-      .hero { grid-template-columns: 1fr; padding: 4px 18px 22px; gap: 26px; }
-      .titleblock { align-self: stretch; }
       .schedule { padding: 64px 18px 48px; }
       table, thead, tbody, tr, th, td { display: block; }
       thead { display: none; }
