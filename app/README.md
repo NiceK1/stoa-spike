@@ -231,7 +231,14 @@ Finnish questions map to the same targets):
 |---|---|---|---|---|
 | Our trained detectors for all 13 kinds (default) | 773 | 757 | 1,530, 85.9% | 0 |
 | Optional, `RASTER_DETECTOR_TARGETS=symbols`: detectors for drawn symbols, one Sonnet 5.5 reading for room types and storeys | 791 | 757 | 1,548, 86.9% | none for a symbol question; 1 once a room type or storey is asked |
+| The same with Gemini 4 Hydrogen reading the room types (`VISION_PROVIDER=gemini-api`) | 797 | 765 | 1,562, 87.7% | none for a symbol question; 1 once a room type or storey is asked |
 | Sonnet 5.5 alone (`--no-detector`) | 713 | 660 | 1,373, 77.1% | 1 |
+| Gemini 4 Hydrogen alone (`--no-detector`) | 791 | 725 | 1,516, 85.1% | 1 |
+| Gemma 4 31B alone, hosted (`--no-detector`, sample A only, 12 failed calls) | 537 | | 58.6% | 1 |
+
+Gemini 4 Hydrogen is the best outside reader of room types measured here (822 of 844 on both samples, against 808 for
+Sonnet 5.5 and 790 for our detectors), while our detectors are ahead of it on the drawn symbols (740 of 937 against 694).
+The public demo therefore uses our detectors for symbols and Gemini for room types until our own models match it there.
 
 All 200 drawings pass the detectors' in-domain guard, so the default made no vision call on these samples. What the
 optional setting buys, per room kind on both samples (exact counts; the symbols are the same in both rows above):
