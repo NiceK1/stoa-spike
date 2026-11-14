@@ -1,0 +1,140 @@
+{
+ "model": "floorplan-yolo11m-1280.onnx",
+ "source": "Ultralytics YOLO (AGPL-3.0), trained on CubiCasa5k annotations (CC BY-NC-SA 4.0)",
+ "input": {
+  "name": "images",
+  "shape": [
+   1,
+   3,
+   1280,
+   1280
+  ],
+  "dtype": "float32",
+  "layout": "NCHW",
+  "channels": "RGB",
+  "range": "0..1",
+  "preprocess": "letterbox: scale = min(1280/width, 1280/height); resize (bilinear) to round(width*scale) x round(height*scale); paste centred on a 1280x1280 canvas filled with 114; left = (size - w) // 2, top = (size - h) // 2"
+ },
+ "output": {
+  "name": "output0",
+  "shape": [
+   1,
+   1000,
+   6
+  ],
+  "nms_in_graph": true,
+  "row": "[x1, y1, x2, y2, confidence, class_index] in canvas pixels; rows with confidence 0 are padding",
+  "to_image": "x_image = (x - left) / scale, y_image = (y - top) / scale"
+ },
+ "classes": [
+  "window",
+  "door",
+  "toilet",
+  "sink",
+  "shower",
+  "bathtub",
+  "sauna",
+  "kitchen",
+  "bedroom",
+  "wc_room",
+  "bathroom",
+  "balcony",
+  "floor"
+ ],
+ "thresholds": {
+  "window": 0.5,
+  "door": 0.4,
+  "toilet": 0.4,
+  "sink": 0.425,
+  "shower": 0.325,
+  "bathtub": 0.6,
+  "sauna": 0.75,
+  "kitchen": 0.325,
+  "bedroom": 0.225,
+  "wc_room": 0.2,
+  "bathroom": 0.275,
+  "balcony": 0.2,
+  "floor": 0.375
+ },
+ "question_kinds": {
+  "windows": [
+   "window"
+  ],
+  "doors": [
+   "door"
+  ],
+  "toilets": [
+   "toilet"
+  ],
+  "sinks": [
+   "sink"
+  ],
+  "showers_bathtubs": [
+   "shower",
+   "bathtub"
+  ],
+  "saunas": [
+   "sauna"
+  ],
+  "kitchens": [
+   "kitchen"
+  ],
+  "bedrooms": [
+   "bedroom"
+  ],
+  "wc_rooms": [
+   "wc_room"
+  ],
+  "bathrooms": [
+   "bathroom"
+  ],
+  "balconies": [
+   "balcony"
+  ],
+  "floors": [
+   "floor"
+  ]
+ },
+ "onnx_vs_pytorch_count_agreement_on_sample": "374/390",
+ "cpu_seconds_per_drawing_on_instance": 1.381,
+ "measured_with": "thresholds: tuned on validation with Ultralytics preprocessing (the values the app was verified with). thresholds_onnx_path: tuned on validation with onnxruntime + PIL bilinear letterbox.",
+ "thresholds_onnx_path": {
+  "window": 0.475,
+  "door": 0.525,
+  "toilet": 0.4,
+  "sink": 0.425,
+  "shower": 0.325,
+  "bathtub": 0.5,
+  "sauna": 0.65,
+  "kitchen": 0.275,
+  "bedroom": 0.65,
+  "wc_room": 0.15,
+  "bathroom": 0.25,
+  "balcony": 0.2,
+  "floor": 0.25
+ },
+ "measured_onnx_path": {
+  "val": {
+   "correct": 1761,
+   "total": 2087
+  },
+  "test": {
+   "correct": 3514,
+   "total": 4243
+  },
+  "sample30": {
+   "correct": 221,
+   "total": 280
+  }
+ },
+ "measured": {
+  "test": {
+   "correct": 3520,
+   "total": 4243
+  },
+  "sample30": {
+   "correct": 224,
+   "total": 280
+  }
+ }
+}

@@ -1,0 +1,162 @@
+{
+ "model": "floorplan-symbols-yolo11l-1280.onnx",
+ "source": "Ultralytics YOLO (AGPL-3.0), trained on CubiCasa5k annotations (CC BY-NC-SA 4.0)",
+ "input": {
+  "name": "images",
+  "shape": [
+   1,
+   3,
+   1280,
+   1280
+  ],
+  "dtype": "float32",
+  "layout": "NCHW",
+  "channels": "RGB",
+  "range": "0..1",
+  "preprocess": "letterbox: scale = min(1280/width, 1280/height); resize (bilinear) to round(width*scale) x round(height*scale); paste centred on a 1280x1280 canvas filled with 114; left = (size - w) // 2, top = (size - h) // 2"
+ },
+ "output": {
+  "name": "output0",
+  "shape": [
+   1,
+   1000,
+   6
+  ],
+  "nms_in_graph": true,
+  "row": "[x1, y1, x2, y2, confidence, class_index] in canvas pixels; rows with confidence 0 are padding",
+  "to_image": "x_image = (x - left) / scale, y_image = (y - top) / scale"
+ },
+ "classes": [
+  "window",
+  "door",
+  "toilet",
+  "sink",
+  "shower",
+  "bathtub",
+  "doorway"
+ ],
+ "thresholds": {
+  "window": 0.45,
+  "door": 0.525,
+  "toilet": 0.425,
+  "sink": 0.5,
+  "shower": 0.325,
+  "bathtub": 0.8,
+  "doorway": 0.4
+ },
+ "question_kinds": {
+  "windows": [
+   "window"
+  ],
+  "doors": [
+   "door"
+  ],
+  "toilets": [
+   "toilet"
+  ],
+  "sinks": [
+   "sink"
+  ],
+  "showers_bathtubs": [
+   "shower",
+   "bathtub"
+  ]
+ },
+ "measured": {
+  "val": {
+   "correct": 857,
+   "total": 1107,
+   "per_kind": {
+    "windows": [
+     118,
+     239,
+     164
+    ],
+    "doors": [
+     120,
+     168,
+     150
+    ],
+    "toilets": [
+     228,
+     239,
+     238
+    ],
+    "sinks": [
+     199,
+     233,
+     227
+    ],
+    "showers_bathtubs": [
+     192,
+     228,
+     224
+    ]
+   }
+  },
+  "test": {
+   "correct": 1687,
+   "total": 2220,
+   "per_kind": {
+    "windows": [
+     218,
+     479,
+     325
+    ],
+    "doors": [
+     242,
+     354,
+     310
+    ],
+    "toilets": [
+     452,
+     479,
+     477
+    ],
+    "sinks": [
+     410,
+     478,
+     462
+    ],
+    "showers_bathtubs": [
+     365,
+     430,
+     420
+    ]
+   }
+  },
+  "sample30": {
+   "correct": 102,
+   "total": 142,
+   "per_kind": {
+    "windows": [
+     12,
+     30,
+     20
+    ],
+    "doors": [
+     13,
+     23,
+     18
+    ],
+    "toilets": [
+     28,
+     30,
+     30
+    ],
+    "sinks": [
+     24,
+     30,
+     28
+    ],
+    "showers_bathtubs": [
+     25,
+     29,
+     29
+    ]
+   }
+  }
+ },
+ "onnx_vs_pytorch_count_agreement_on_sample": "198/210",
+ "cpu_seconds_per_drawing_on_instance": 1.158
+}
