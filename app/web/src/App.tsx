@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import * as api from "./api";
+import type { Drawing } from "./api";
 
 interface Mark { n: number; x: number; y: number; w?: number; h?: number; label?: string }
 type Evidence =
@@ -78,7 +80,6 @@ const isEnglish = (q: string) =>
 
 const kindOf = (type: string) => (KINDS.some((k) => k.type === type) ? type : "text");
 
-type Drawing = { kind: "dataset"; path: string } | { kind: "upload"; id: string; name: string };
 const drawingKey = (d: Drawing) => (d.kind === "dataset" ? d.path : `upload:${d.id}`);
 
 export function App() {
@@ -104,8 +105,8 @@ export function App() {
   const composer = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    fetch("/api/health").then((r) => r.json()).then((d) => setHasVision(d.vision !== "none")).catch(() => {});
-    fetch("/api/dataset").then((r) => r.json()).then((d) => { setSources(d.sources); setListed(true); }).catch(() => setError("The server is not reachable."));
+    api.health().then((d) => setHasVision(d.vision !== "none")).catch(() => {});
+    api.dataset().then((d) => { setSources(d.sources); setListed(true); }).catch(() => setError("The server is not reachable."));
   }, []);
 
   // "/" jumps to the drawing search, as in most file browsers.
@@ -122,13 +123,10 @@ export function App() {
     setKnown([]);
     setPreview(null);
     if (!drawing) return;
-    const query = drawing.kind === "dataset" ? `path=${encodeURIComponent(drawing.path)}` : `upload=${encodeURIComponent(drawing.id)}`;
-    if (drawing.kind === "dataset") {
-      fetch(`/api/questions?${query}`).then((r) => r.json()).then((d) => setKnown(d.questions));
-    }
     let current = true;
+    if (drawing.kind === "dataset") api.questions(drawing).then((d) => current && setKnown(d.questions)).catch(() => {});
     setPreview("loading");
-    fetch(`/api/preview?${query}`).then((r) => r.json()).then((d) => current && setPreview(d.evidence ?? null)).catch(() => current && setPreview(null));
+    api.preview(drawing).then((d) => current && setPreview(d.evidence ?? null)).catch(() => current && setPreview(null));
     return () => { current = false; };
   }, [drawing]);
 
@@ -175,14 +173,8 @@ export function App() {
     setPending(text);
     setError(null);
     try {
-      const response = await fetch("/api/ask", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(target.kind === "dataset" ? { path: target.path, question: text } : { upload: target.id, question: text }),
-      });
-      const body = await response.json();
+      const body = await api.ask(target, text);
       if (request !== latest.current) return;
-      if (!response.ok) throw new Error(body.error ?? "The question could not be answered.");
       const k = drawingKey(target);
       setHistory((h) => {
         const list = [...(h[k] ?? []), { ...body, question: text }];
@@ -215,12 +207,12 @@ export function App() {
 
   async function chooseUpload(file: File | undefined) {
     if (!file) return;
-    const form = new FormData();
-    form.append("file", file);
-    const response = await fetch("/api/upload", { method: "POST", body: form });
-    if (!response.ok) return setError("The upload failed.");
-    const body = await response.json();
-    choose({ kind: "upload", id: body.upload, name: body.name });
+    try {
+      const body = await api.upload(file);
+      choose({ kind: "upload", id: body.upload, name: body.name });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
   }
 
   const evidence = reply?.answer.evidence ?? (preview === "loading" ? null : preview);
@@ -229,13 +221,13 @@ export function App() {
     <div className="layout">
       <aside className="browser">
         <header className="brand">
-          <div className="wordmark">
-            <Logo />
-            <div>
-              <h1>Blueline</h1>
-              <span className="tagline">Take-off check</span>
-            </div>
-          </div>
+          {/* In the online demo the wordmark leads back to the landing page. */}
+          {(() => {
+            const inner = (<><Logo /><div><h1>Blueline</h1><span className="tagline">Take-off check</span></div></>);
+            return api.STATIC
+              ? <a className="wordmark" href="index.html" title="Back to the Blueline home page">{inner}</a>
+              : <div className="wordmark">{inner}</div>;
+          })()}
           <p className="lede">Pick a drawing, ask how many or how much. Every counted item is marked so you can check it.</p>
         </header>
         <div className="search">
@@ -286,11 +278,18 @@ export function App() {
           {!listed && !error && <p className="hint">Loading drawings…</p>}
           {listed && sources.length === 0 && <p className="hint">No drawings in the dataset folder yet.</p>}
         </div>
-        <label className="upload">
-          <input type="file" accept=".png,.jpg,.jpeg,.pdf,.dxf,.ifc,.svg" onChange={(e) => chooseUpload(e.target.files?.[0])} />
-          <span>＋ Upload your own drawing</span>
-          <small>PDF, PNG, JPG, DXF, IFC</small>
-        </label>
+        {api.STATIC ? (
+          <p className="demo-note">
+            Online demo: answers to each drawing's listed questions, computed in advance.{" "}
+            <a href="https://github.com/NiceK1/stoa-spike" target="_blank" rel="noreferrer">Run it yourself</a> to upload drawings and ask your own.
+          </p>
+        ) : (
+          <label className="upload">
+            <input type="file" accept=".png,.jpg,.jpeg,.pdf,.dxf,.ifc,.svg" onChange={(e) => chooseUpload(e.target.files?.[0])} />
+            <span>＋ Upload your own drawing</span>
+            <small>PDF, PNG, JPG, DXF, IFC</small>
+          </label>
+        )}
       </aside>
 
       <main className="stage">
@@ -298,7 +297,7 @@ export function App() {
           <div className="empty">
             <div>
               <p className="big">Choose a drawing to start</p>
-              <p>Search on the left by site, building or file name, or upload your own.</p>
+              <p>Search on the left by site, building or file name{api.STATIC ? ", then pick one of its questions." : ", or upload your own."}</p>
             </div>
           </div>
         ) : (

@@ -108,5 +108,6 @@ const webDist = join(APP_ROOT, "web", "dist");
 if (existsSync(webDist)) await app.register(fastifyStatic, { root: webDist });
 
 const port = Number(process.env.PORT ?? 8787);
-await app.listen({ port, host: "127.0.0.1" });
+// HOST=0.0.0.0 in a container (the Hugging Face Space); the default keeps a local run private to this machine.
+await app.listen({ port, host: process.env.HOST ?? "127.0.0.1" });
 console.log(`Stoa take-off server on http://127.0.0.1:${port} (vision ${deps.vision.id}, detector ${deps.detector?.id ?? "none"})`);
