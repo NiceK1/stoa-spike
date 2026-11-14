@@ -15,6 +15,8 @@ to exact geometry (IFC, DXF), to the sheet's text layer, or to trained detectors
 and returns the answer with every counted item numbered on the drawing. Its README has the current measurements.
 The detector training code is in [training/](training/README.md). The Python files below are the first spike.
 
+How the detectors were trained, run by run: [training history](docs/training-history.png).
+
 ## Run
 
 #### 🪟 Windows

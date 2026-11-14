@@ -1,0 +1,111 @@
+{
+ "name": "drawsafe",
+ "spec": {
+  "name": "drawsafe",
+  "weights": "yolo11l.pt",
+  "imgsz": 1280,
+  "epochs": 60,
+  "batch": 16,
+  "data": "/data/sweep/data/yolo_sym",
+  "train": [
+   "fliplr=0.5",
+   "flipud=0.5",
+   "mosaic=0.0",
+   "scale=0.2",
+   "translate=0.05",
+   "hsv_h=0.0",
+   "hsv_s=0.0",
+   "hsv_v=0.2"
+  ],
+  "export": null,
+  "submitted": 1000.0
+ },
+ "gpu": 0,
+ "host": "stoa-train",
+ "batch_used": 16,
+ "epochs_planned": 60,
+ "epochs_run": 60,
+ "train_exit": 0,
+ "minutes": {
+  "total": 75.9,
+  "train": 74.8
+ },
+ "weights": "/data/sweep/runs/drawsafe/weights/best.pt",
+ "detections": {
+  "val": "/data/sweep/eval/drawsafe/val.json",
+  "dev": "/data/sweep/eval/drawsafe/dev.json"
+ },
+ "best_epoch": {
+  "epoch": 41,
+  "mAP50": 0.79818,
+  "mAP50-95": 0.55835
+ },
+ "status": "ok",
+ "thresholds": {
+  "window": 0.45,
+  "door": 0.375,
+  "toilet": 0.25,
+  "sink": 0.35,
+  "shower": 0.325,
+  "bathtub": 0.75,
+  "doorway": 0.65
+ },
+ "dev": {
+  "windows": {
+   "exact": 229,
+   "asked": 480,
+   "within_one": 345
+  },
+  "doors": {
+   "exact": 258,
+   "asked": 350,
+   "within_one": 329
+  },
+  "toilets": {
+   "exact": 448,
+   "asked": 480,
+   "within_one": 476
+  },
+  "sinks": {
+   "exact": 411,
+   "asked": 475,
+   "within_one": 461
+  },
+  "showers_bathtubs": {
+   "exact": 363,
+   "asked": 450,
+   "within_one": 432
+  },
+  "correct": 1709,
+  "total": 2235
+ },
+ "val": {
+  "windows": {
+   "exact": 111,
+   "asked": 239,
+   "within_one": 154
+  },
+  "doors": {
+   "exact": 122,
+   "asked": 168,
+   "within_one": 152
+  },
+  "toilets": {
+   "exact": 230,
+   "asked": 239,
+   "within_one": 238
+  },
+  "sinks": {
+   "exact": 191,
+   "asked": 233,
+   "within_one": 228
+  },
+  "showers_bathtubs": {
+   "exact": 193,
+   "asked": 228,
+   "within_one": 224
+  },
+  "correct": 847,
+  "total": 1107
+ }
+}

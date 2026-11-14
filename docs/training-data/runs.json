@@ -1,0 +1,352 @@
+{
+ "about": "Detector training runs of 14 Nov 2026 on one Nvidia A100: Ultralytics results.csv per run (run<N>.csv), its args.yaml, and the exact-count report of each run. kinds: [exact, asked] per question kind.",
+ "copied_utc": "2026-11-14T15:44:39Z",
+ "local_utc_offset_hours": 2,
+ "symbol_kinds": [
+  "windows",
+  "doors",
+  "toilets",
+  "sinks",
+  "showers_bathtubs"
+ ],
+ "drawings": {
+  "all": 5000,
+  "train": 4282,
+  "validation": 239,
+  "test": 479,
+  "train_after_dev_split": 3802,
+  "dev": 480
+ },
+ "runs": [
+  {
+   "run": 1,
+   "csv": "run1.csv",
+   "weights": "yolo11m.pt",
+   "classes": 13,
+   "imgsz": 1280,
+   "epochs_planned": 60,
+   "epochs_run": 60,
+   "batch": 16,
+   "augmentation": {
+    "fliplr": 0.0,
+    "flipud": 0.0,
+    "mosaic": 0.5,
+    "scale": 0.4,
+    "translate": 0.1,
+    "hsv_h": 0.0,
+    "hsv_s": 0.3,
+    "hsv_v": 0.2
+   },
+   "train_drawings": 4282,
+   "start_utc": "2026-11-14T00:58:31Z",
+   "last_epoch_utc": "2026-11-14T02:04:26Z",
+   "train_seconds": 3927,
+   "scored_on": "test",
+   "status": "scored",
+   "all_kinds": [
+    3520,
+    4243
+   ],
+   "kinds": {
+    "windows": [
+     200,
+     479
+    ],
+    "doors": [
+     253,
+     354
+    ],
+    "toilets": [
+     453,
+     479
+    ],
+    "sinks": [
+     402,
+     478
+    ],
+    "showers_bathtubs": [
+     358,
+     430
+    ],
+    "saunas": [
+     298,
+     320
+    ],
+    "kitchens": [
+     279,
+     317
+    ],
+    "bedrooms": [
+     262,
+     291
+    ],
+    "wc_rooms": [
+     224,
+     230
+    ],
+    "bathrooms": [
+     209,
+     234
+    ],
+    "balconies": [
+     133,
+     152
+    ],
+    "floors": [
+     449,
+     479
+    ]
+   }
+  },
+  {
+   "run": 2,
+   "csv": "run2.csv",
+   "weights": "yolo11l.pt",
+   "classes": 7,
+   "imgsz": 1280,
+   "epochs_planned": 60,
+   "epochs_run": 60,
+   "batch": 16,
+   "augmentation": {
+    "fliplr": 0.5,
+    "flipud": 0.5,
+    "mosaic": 0.5,
+    "scale": 0.4,
+    "translate": 0.1,
+    "hsv_h": 0.0,
+    "hsv_s": 0.3,
+    "hsv_v": 0.2
+   },
+   "train_drawings": 4282,
+   "start_utc": "2026-11-14T02:15:52Z",
+   "last_epoch_utc": "2026-11-14T03:40:36Z",
+   "train_seconds": 5039,
+   "scored_on": "test",
+   "status": "scored",
+   "all_kinds": [
+    1687,
+    2220
+   ],
+   "kinds": {
+    "windows": [
+     218,
+     479
+    ],
+    "doors": [
+     242,
+     354
+    ],
+    "toilets": [
+     452,
+     479
+    ],
+    "sinks": [
+     410,
+     478
+    ],
+    "showers_bathtubs": [
+     365,
+     430
+    ]
+   }
+  },
+  {
+   "run": 3,
+   "csv": "run3.csv",
+   "weights": "yolo11x.pt",
+   "classes": 6,
+   "imgsz": 1536,
+   "epochs_planned": 42,
+   "epochs_run": 42,
+   "batch": 8,
+   "augmentation": {
+    "fliplr": 0.5,
+    "flipud": 0.5,
+    "mosaic": 0.5,
+    "scale": 0.4,
+    "translate": 0.1,
+    "hsv_h": 0.0,
+    "hsv_s": 0.3,
+    "hsv_v": 0.2
+   },
+   "train_drawings": 4282,
+   "start_utc": "2026-11-14T05:05:25Z",
+   "last_epoch_utc": "2026-11-14T07:02:15Z",
+   "train_seconds": 6971,
+   "scored_on": "test",
+   "status": "scored",
+   "all_kinds": [
+    1616,
+    2220
+   ],
+   "kinds": {
+    "windows": [
+     199,
+     479
+    ],
+    "doors": [
+     234,
+     354
+    ],
+    "toilets": [
+     441,
+     479
+    ],
+    "sinks": [
+     392,
+     478
+    ],
+    "showers_bathtubs": [
+     350,
+     430
+    ]
+   }
+  },
+  {
+   "run": 4,
+   "csv": "run4.csv",
+   "weights": "yolo11l.pt",
+   "classes": 7,
+   "imgsz": 1280,
+   "epochs_planned": 60,
+   "epochs_run": 60,
+   "batch": 16,
+   "augmentation": {
+    "fliplr": 0.5,
+    "flipud": 0.5,
+    "mosaic": 0.5,
+    "scale": 0.4,
+    "translate": 0.1,
+    "hsv_h": 0.0,
+    "hsv_s": 0.3,
+    "hsv_v": 0.2
+   },
+   "train_drawings": 3802,
+   "start_utc": "2026-11-14T11:53:34Z",
+   "last_epoch_utc": "2026-11-14T13:07:58Z",
+   "train_seconds": 4437,
+   "scored_on": "dev",
+   "status": "scored",
+   "all_kinds": [
+    1723,
+    2235
+   ],
+   "kinds": {
+    "windows": [
+     236,
+     480
+    ],
+    "doors": [
+     263,
+     350
+    ],
+    "toilets": [
+     450,
+     480
+    ],
+    "sinks": [
+     410,
+     475
+    ],
+    "showers_bathtubs": [
+     364,
+     450
+    ]
+   }
+  },
+  {
+   "run": 5,
+   "csv": "run5.csv",
+   "weights": "yolo11l.pt",
+   "classes": 7,
+   "imgsz": 1280,
+   "epochs_planned": 60,
+   "epochs_run": 60,
+   "batch": 16,
+   "augmentation": {
+    "fliplr": 0.5,
+    "flipud": 0.5,
+    "mosaic": 0.0,
+    "scale": 0.2,
+    "translate": 0.05,
+    "hsv_h": 0.0,
+    "hsv_s": 0.0,
+    "hsv_v": 0.2
+   },
+   "train_drawings": 3802,
+   "start_utc": "2026-11-14T13:08:45Z",
+   "last_epoch_utc": "2026-11-14T14:23:53Z",
+   "train_seconds": 4486,
+   "scored_on": "dev",
+   "status": "scored",
+   "all_kinds": [
+    1709,
+    2235
+   ],
+   "kinds": {
+    "windows": [
+     229,
+     480
+    ],
+    "doors": [
+     258,
+     350
+    ],
+    "toilets": [
+     448,
+     480
+    ],
+    "sinks": [
+     411,
+     475
+    ],
+    "showers_bathtubs": [
+     363,
+     450
+    ]
+   }
+  },
+  {
+   "run": 6,
+   "csv": "run6.csv",
+   "weights": "yolo26l.pt",
+   "classes": 7,
+   "imgsz": 1280,
+   "epochs_planned": 60,
+   "epochs_run": 51,
+   "batch": 16,
+   "augmentation": {
+    "fliplr": 0.5,
+    "flipud": 0.5,
+    "mosaic": 0.5,
+    "scale": 0.4,
+    "translate": 0.1,
+    "hsv_h": 0.0,
+    "hsv_s": 0.3,
+    "hsv_v": 0.2
+   },
+   "train_drawings": 3802,
+   "start_utc": "2026-11-14T14:24:41Z",
+   "last_epoch_utc": "2026-11-14T15:43:32Z",
+   "train_seconds": 4709,
+   "scored_on": "dev",
+   "status": "training"
+  }
+ ],
+ "error_analysis": {
+  "scope": "wrong window objects on validation drawings, after run 3, no training",
+  "percent": {
+   "pane granularity differs between drawings": 42,
+   "found but under the confidence threshold": 32,
+   "not found": 12,
+   "false positives": 12
+  },
+  "window_counts_exact_on_training_drawings_percent": 55
+ },
+ "queued": [
+  "relabelled windows and doors",
+  "room-type model",
+  "thicker boxes for thin windows",
+  "RT-DETR"
+ ]
+}

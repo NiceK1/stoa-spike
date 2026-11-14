@@ -1,0 +1,218 @@
+{
+ "weights": "runs/m1280/weights/best.pt",
+ "imgsz": 1280,
+ "iou": 0.6,
+ "thresholds": {
+  "window": 0.5,
+  "door": 0.4,
+  "toilet": 0.4,
+  "sink": 0.425,
+  "shower": 0.325,
+  "bathtub": 0.6,
+  "sauna": 0.75,
+  "kitchen": 0.325,
+  "bedroom": 0.225,
+  "wc_room": 0.2,
+  "bathroom": 0.275,
+  "balcony": 0.2,
+  "floor": 0.375
+ },
+ "val": {
+  "correct": 1757,
+  "total": 2087,
+  "per_kind": {
+   "windows": [
+    114,
+    239,
+    157
+   ],
+   "doors": [
+    124,
+    168,
+    151
+   ],
+   "toilets": [
+    223,
+    239,
+    237
+   ],
+   "sinks": [
+    189,
+    233,
+    225
+   ],
+   "showers_bathtubs": [
+    195,
+    228,
+    225
+   ],
+   "saunas": [
+    151,
+    156,
+    156
+   ],
+   "kitchens": [
+    142,
+    154,
+    153
+   ],
+   "bedrooms": [
+    127,
+    145,
+    140
+   ],
+   "wc_rooms": [
+    107,
+    110,
+    110
+   ],
+   "bathrooms": [
+    100,
+    112,
+    111
+   ],
+   "balconies": [
+    56,
+    64,
+    64
+   ],
+   "floors": [
+    229,
+    239,
+    239
+   ]
+  }
+ },
+ "test": {
+  "correct": 3520,
+  "total": 4243,
+  "per_kind": {
+   "windows": [
+    200,
+    479,
+    326
+   ],
+   "doors": [
+    253,
+    354,
+    324
+   ],
+   "toilets": [
+    453,
+    479,
+    477
+   ],
+   "sinks": [
+    402,
+    478,
+    467
+   ],
+   "showers_bathtubs": [
+    358,
+    430,
+    421
+   ],
+   "saunas": [
+    298,
+    320,
+    320
+   ],
+   "kitchens": [
+    279,
+    317,
+    310
+   ],
+   "bedrooms": [
+    262,
+    291,
+    285
+   ],
+   "wc_rooms": [
+    224,
+    230,
+    230
+   ],
+   "bathrooms": [
+    209,
+    234,
+    234
+   ],
+   "balconies": [
+    133,
+    152,
+    151
+   ],
+   "floors": [
+    449,
+    479,
+    477
+   ]
+  }
+ },
+ "sample30": {
+  "correct": 224,
+  "total": 280,
+  "per_kind": {
+   "windows": [
+    13,
+    30,
+    23
+   ],
+   "doors": [
+    12,
+    23,
+    22
+   ],
+   "toilets": [
+    26,
+    30,
+    30
+   ],
+   "sinks": [
+    25,
+    30,
+    29
+   ],
+   "showers_bathtubs": [
+    26,
+    29,
+    29
+   ],
+   "saunas": [
+    20,
+    23,
+    23
+   ],
+   "kitchens": [
+    15,
+    19,
+    18
+   ],
+   "bedrooms": [
+    21,
+    24,
+    23
+   ],
+   "wc_rooms": [
+    16,
+    18,
+    18
+   ],
+   "bathrooms": [
+    15,
+    17,
+    17
+   ],
+   "balconies": [
+    6,
+    7,
+    7
+   ],
+   "floors": [
+    29,
+    30,
+    30
+   ]
+  }
+ }
+}

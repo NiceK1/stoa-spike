@@ -1,0 +1,381 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1230" viewBox="0 0 1400 1230" font-family="'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif">
+<rect width="1400" height="1230" fill="#fcfcfb"/>
+<text x="20.0" y="40.0" font-size="23" fill="#0b0b0b" font-weight="700" text-anchor="start">A bigger model and gentler augmentation did not improve window and door counts: the labels set the ceiling</text>
+<text x="20.0" y="66.0" font-size="14" fill="#52514e" font-weight="400" text-anchor="start">History of the detector training for raster floor plans, 14 Nov 2026 (local time). The score is the number of questions answered with exactly the right count per drawing.</text>
+<rect x="20.0" y="128.0" width="254.0" height="260.0" rx="8" fill="#f1efe8" stroke="none"/>
+<text x="34.0" y="151.0" font-size="13" fill="#52514e" font-weight="400" text-anchor="start">Input</text>
+<text x="34.0" y="177.0" font-size="15.5" fill="#0b0b0b" font-weight="700" text-anchor="start">5,000 public floor plans</text>
+<text x="34.0" y="211.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">CubiCasa5k drawings. Boxes are</text>
+<text x="34.0" y="228.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">derived from its SVG annotations so</text>
+<text x="34.0" y="245.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">that counts equal the challenge&#x27;s</text>
+<text x="34.0" y="262.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">answers.</text>
+<text x="34.0" y="284.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">Split by drawing: 4,282 train, 239</text>
+<text x="34.0" y="301.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">validation (thresholds are tuned there),</text>
+<text x="34.0" y="318.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">479 test (held out).</text>
+<text x="34.0" y="340.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">Every run starts from</text>
+<text x="34.0" y="357.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">COCO-pretrained weights and trains</text>
+<text x="34.0" y="374.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">on one Nvidia A100.</text>
+<rect x="297.0" y="128.5" width="253.0" height="259.0" rx="8" fill="#ffffff" stroke="#cfcdc4"/>
+<circle cx="321.5" cy="147.0" r="11" fill="#2a78d6"/>
+<text x="321.5" y="151.4" font-size="13" fill="#ffffff" font-weight="700" text-anchor="middle">1</text>
+<text x="340.5" y="151.0" font-size="13" fill="#52514e" font-weight="400" text-anchor="start">Run 1 · 02:58–04:04</text>
+<text x="310.5" y="177.0" font-size="15.5" fill="#0b0b0b" font-weight="700" text-anchor="start">YOLO11m, all 13 classes</text>
+<line x1="310.5" y1="189.0" x2="536.5" y2="189.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="310.5" y="208.0" font-size="11.5" fill="#52514e" font-weight="700" text-anchor="start" letter-spacing="0.6">IN</text>
+<text x="346.5" y="208.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">symbols, rooms and storeys</text>
+<text x="346.5" y="225.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">1280 px · 60 epochs · 1.1 h GPU</text>
+<text x="346.5" y="242.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">4,282 train drawings</text>
+<text x="346.5" y="259.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">not mirrored (rooms are read</text>
+<text x="346.5" y="276.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">from their label text)</text>
+<line x1="310.5" y1="285.0" x2="536.5" y2="285.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="310.5" y="304.0" font-size="11.5" fill="#52514e" font-weight="700" text-anchor="start" letter-spacing="0.6">OUT</text>
+<text x="346.5" y="304.0" font-size="13" fill="#0b0b0b" font-weight="700" text-anchor="start">5 symbol kinds: 1,666 of 2,220</text>
+<text x="346.5" y="321.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">windows 200 of 479</text>
+<text x="346.5" y="338.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">doors 253 of 354</text>
+<text x="346.5" y="355.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">all 12 kinds: 3,520 of 4,243</text>
+<text x="346.5" y="372.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">(83.0% of all questions)</text>
+<rect x="573.5" y="128.5" width="253.0" height="259.0" rx="8" fill="#ffffff" stroke="#cfcdc4"/>
+<circle cx="598.0" cy="147.0" r="11" fill="#eb6834"/>
+<text x="598.0" y="151.4" font-size="13" fill="#ffffff" font-weight="700" text-anchor="middle">2</text>
+<text x="617.0" y="151.0" font-size="13" fill="#52514e" font-weight="400" text-anchor="start">Run 2 · 04:15–05:40</text>
+<text x="587.0" y="177.0" font-size="15.5" fill="#0b0b0b" font-weight="700" text-anchor="start">YOLO11l, symbols only</text>
+<line x1="587.0" y1="189.0" x2="813.0" y2="189.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="587.0" y="208.0" font-size="11.5" fill="#52514e" font-weight="700" text-anchor="start" letter-spacing="0.6">IN</text>
+<text x="623.0" y="208.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">6 symbol classes + open</text>
+<text x="623.0" y="225.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">doorway (not counted)</text>
+<text x="623.0" y="242.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">1280 px · 60 epochs · 1.4 h GPU</text>
+<text x="623.0" y="259.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">4,282 train drawings, mirrored</text>
+<line x1="587.0" y1="268.0" x2="813.0" y2="268.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="587.0" y="287.0" font-size="11.5" fill="#52514e" font-weight="700" text-anchor="start" letter-spacing="0.6">OUT</text>
+<text x="623.0" y="287.0" font-size="13" fill="#0b0b0b" font-weight="700" text-anchor="start">5 symbol kinds: 1,687 of 2,220</text>
+<text x="623.0" y="304.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">windows 218 of 479</text>
+<text x="623.0" y="321.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">doors 242 of 354</text>
+<rect x="850.0" y="128.5" width="253.0" height="259.0" rx="8" fill="#ffffff" stroke="#cfcdc4"/>
+<circle cx="874.5" cy="147.0" r="11" fill="#1baf7a"/>
+<text x="874.5" y="151.4" font-size="13" fill="#ffffff" font-weight="700" text-anchor="middle">3</text>
+<text x="893.5" y="151.0" font-size="13" fill="#52514e" font-weight="400" text-anchor="start">Run 3 · 07:05–09:02</text>
+<text x="863.5" y="177.0" font-size="15.5" fill="#0b0b0b" font-weight="700" text-anchor="start">YOLO11x at 1536 px</text>
+<line x1="863.5" y1="189.0" x2="1089.5" y2="189.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="863.5" y="208.0" font-size="11.5" fill="#52514e" font-weight="700" text-anchor="start" letter-spacing="0.6">IN</text>
+<text x="899.5" y="208.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">6 symbol classes, without the</text>
+<text x="899.5" y="225.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">open-doorway class</text>
+<text x="899.5" y="242.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">1536 px · 42 epochs · 1.9 h GPU</text>
+<text x="899.5" y="259.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">4,282 train drawings, mirrored</text>
+<line x1="863.5" y1="268.0" x2="1089.5" y2="268.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="863.5" y="287.0" font-size="11.5" fill="#52514e" font-weight="700" text-anchor="start" letter-spacing="0.6">OUT</text>
+<text x="899.5" y="287.0" font-size="13" fill="#0b0b0b" font-weight="700" text-anchor="start">5 symbol kinds: 1,616 of 2,220</text>
+<text x="899.5" y="304.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">windows 199 of 479</text>
+<text x="899.5" y="321.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">doors 234 of 354</text>
+<rect x="1126.0" y="128.0" width="254.0" height="260.0" rx="8" fill="#f1efe8" stroke="none"/>
+<text x="1140.0" y="151.0" font-size="13" fill="#52514e" font-weight="400" text-anchor="start">No training · validation drawings</text>
+<text x="1140.0" y="177.0" font-size="15.5" fill="#0b0b0b" font-weight="700" text-anchor="start">Error analysis</text>
+<text x="1140.0" y="211.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">Wrong window objects: 42% pane</text>
+<text x="1140.0" y="228.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">granularity differs between drawings,</text>
+<text x="1140.0" y="245.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">32% found but under the confidence</text>
+<text x="1140.0" y="262.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">threshold, 12% not found, 12% false</text>
+<text x="1140.0" y="279.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">positives.</text>
+<text x="1140.0" y="301.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">On drawings the model trained on, still</text>
+<text x="1140.0" y="318.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">only 55% of window counts are exact.</text>
+<text x="1140.0" y="340.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">A web research pass agreed.</text>
+<path d="M244.0,127.0 V116 H326.5 V120.0" stroke="#52514e" stroke-width="1.5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M321.5,119.0 L331.5,119.0 L326.5,127.0 Z" fill="#52514e"/>
+<text x="285.2" y="108.0" font-size="13" fill="#52514e" font-weight="400" text-anchor="middle" font-style="italic">start: one detector for everything</text>
+<path d="M520.5,127.0 V116 H603.0 V120.0" stroke="#52514e" stroke-width="1.5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M598.0,119.0 L608.0,119.0 L603.0,127.0 Z" fill="#52514e"/>
+<text x="561.8" y="92.0" font-size="13" fill="#52514e" font-weight="400" text-anchor="middle" font-style="italic">symbols read the same mirrored:</text>
+<text x="561.8" y="108.0" font-size="13" fill="#52514e" font-weight="400" text-anchor="middle" font-style="italic">specialise on them</text>
+<path d="M797.0,127.0 V116 H879.5 V120.0" stroke="#52514e" stroke-width="1.5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M874.5,119.0 L884.5,119.0 L879.5,127.0 Z" fill="#52514e"/>
+<text x="838.2" y="108.0" font-size="13" fill="#52514e" font-weight="400" text-anchor="middle" font-style="italic">try more capacity and resolution</text>
+<path d="M1073.5,127.0 V116 H1156.0 V120.0" stroke="#52514e" stroke-width="1.5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M1151.0,119.0 L1161.0,119.0 L1156.0,127.0 Z" fill="#52514e"/>
+<text x="1114.8" y="92.0" font-size="13" fill="#52514e" font-weight="400" text-anchor="middle" font-style="italic">bigger was worse on every kind, so</text>
+<text x="1114.8" y="108.0" font-size="13" fill="#52514e" font-weight="400" text-anchor="middle" font-style="italic">study the errors</text>
+<path d="M296.5,394.0 V400 H1103.5 V394.0" stroke="#c3c2b7" stroke-width="1.5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="700.0" y="419.0" font-size="13.5" fill="#0b0b0b" font-weight="600" text-anchor="middle">Runs 1–3 are scored on the 479 held-out test drawings</text>
+<path d="M1253.0,389.0 V446 H991.1" stroke="#52514e" stroke-width="1.5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="700.0" y="450.5" font-size="13" fill="#52514e" font-weight="400" text-anchor="middle" font-style="italic">the labels, not the model size, set the ceiling: compare recipes on drawings kept apart from test</text>
+<rect x="20.0" y="514.0" width="254.0" height="248.0" rx="8" fill="#f1efe8" stroke="none"/>
+<text x="34.0" y="537.0" font-size="13" fill="#52514e" font-weight="400" text-anchor="start">No training · data</text>
+<text x="34.0" y="563.0" font-size="15.5" fill="#0b0b0b" font-weight="700" text-anchor="start">New selection split</text>
+<text x="34.0" y="597.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">480 &quot;dev&quot; drawings moved out of</text>
+<text x="34.0" y="614.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">train, so recipes can be compared</text>
+<text x="34.0" y="631.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">without touching test.</text>
+<text x="34.0" y="653.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">Now: train 3,802 · dev 480 · validation</text>
+<text x="34.0" y="670.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">239 · test 479 (untouched).</text>
+<text x="34.0" y="692.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">Thresholds are still tuned on</text>
+<text x="34.0" y="709.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">validation.</text>
+<rect x="297.0" y="514.5" width="253.0" height="247.0" rx="8" fill="#ffffff" stroke="#cfcdc4"/>
+<circle cx="321.5" cy="533.0" r="11" fill="#eda100"/>
+<text x="321.5" y="537.4" font-size="13" fill="#0b0b0b" font-weight="700" text-anchor="middle">4</text>
+<text x="340.5" y="537.0" font-size="13" fill="#52514e" font-weight="400" text-anchor="start">Run 4 · 13:53–15:07</text>
+<text x="310.5" y="563.0" font-size="15.5" fill="#0b0b0b" font-weight="700" text-anchor="start">YOLO11l, the reference</text>
+<line x1="310.5" y1="575.0" x2="536.5" y2="575.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="310.5" y="594.0" font-size="11.5" fill="#52514e" font-weight="700" text-anchor="start" letter-spacing="0.6">IN</text>
+<text x="346.5" y="594.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">run 2&#x27;s recipe on the new split</text>
+<text x="346.5" y="611.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">1280 px · 60 epochs · 1.2 h GPU</text>
+<text x="346.5" y="628.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">3,802 train drawings, mirrored</text>
+<line x1="310.5" y1="637.0" x2="536.5" y2="637.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="310.5" y="656.0" font-size="11.5" fill="#52514e" font-weight="700" text-anchor="start" letter-spacing="0.6">OUT</text>
+<text x="346.5" y="656.0" font-size="13" fill="#0b0b0b" font-weight="700" text-anchor="start">5 symbol kinds: 1,723 of 2,235</text>
+<text x="346.5" y="673.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">windows 236 of 480</text>
+<text x="346.5" y="690.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">doors 263 of 350</text>
+<rect x="573.5" y="514.5" width="253.0" height="247.0" rx="8" fill="#ffffff" stroke="#cfcdc4"/>
+<circle cx="598.0" cy="533.0" r="11" fill="#e87ba4"/>
+<text x="598.0" y="537.4" font-size="13" fill="#ffffff" font-weight="700" text-anchor="middle">5</text>
+<text x="617.0" y="537.0" font-size="13" fill="#52514e" font-weight="400" text-anchor="start">Run 5 · 15:08–16:23</text>
+<text x="587.0" y="563.0" font-size="15.5" fill="#0b0b0b" font-weight="700" text-anchor="start">Drawing-safe augmentation</text>
+<line x1="587.0" y1="575.0" x2="813.0" y2="575.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="587.0" y="594.0" font-size="11.5" fill="#52514e" font-weight="700" text-anchor="start" letter-spacing="0.6">IN</text>
+<text x="623.0" y="594.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">run 4 with mosaic off, scale 0.2,</text>
+<text x="623.0" y="611.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">shift 0.05, no hue or saturation</text>
+<text x="623.0" y="628.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">jitter</text>
+<text x="623.0" y="645.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">1280 px · 60 epochs · 1.2 h GPU</text>
+<text x="623.0" y="662.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">3,802 train drawings, mirrored</text>
+<line x1="587.0" y1="671.0" x2="813.0" y2="671.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="587.0" y="690.0" font-size="11.5" fill="#52514e" font-weight="700" text-anchor="start" letter-spacing="0.6">OUT</text>
+<text x="623.0" y="690.0" font-size="13" fill="#0b0b0b" font-weight="700" text-anchor="start">5 symbol kinds: 1,709 of 2,235</text>
+<text x="623.0" y="707.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">windows 229 of 480</text>
+<text x="623.0" y="724.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">doors 258 of 350</text>
+<rect x="850.0" y="514.5" width="253.0" height="247.0" rx="8" fill="#ffffff" stroke="#cfcdc4"/>
+<circle cx="874.5" cy="533.0" r="10" fill="#fcfcfb" stroke="#008300" stroke-width="2"/>
+<text x="874.5" y="537.4" font-size="13" fill="#0b0b0b" font-weight="700" text-anchor="middle">6</text>
+<text x="893.5" y="537.0" font-size="13" fill="#52514e" font-weight="400" text-anchor="start">Run 6 · started 16:24</text>
+<text x="863.5" y="563.0" font-size="15.5" fill="#0b0b0b" font-weight="700" text-anchor="start">YOLO26l, newer model</text>
+<line x1="863.5" y1="575.0" x2="1089.5" y2="575.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="863.5" y="594.0" font-size="11.5" fill="#52514e" font-weight="700" text-anchor="start" letter-spacing="0.6">IN</text>
+<text x="899.5" y="594.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">run 4&#x27;s recipe, other model</text>
+<text x="899.5" y="611.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">1280 px · 60 epochs</text>
+<text x="899.5" y="628.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">3,802 train drawings, mirrored</text>
+<line x1="863.5" y1="637.0" x2="1089.5" y2="637.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="863.5" y="656.0" font-size="11.5" fill="#52514e" font-weight="700" text-anchor="start" letter-spacing="0.6">OUT</text>
+<text x="899.5" y="656.0" font-size="13" fill="#0b0b0b" font-weight="700" text-anchor="start">still training</text>
+<text x="899.5" y="673.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">epoch 51 of 60 at 17:43</text>
+<text x="899.5" y="690.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">not scored yet</text>
+<text x="1128.0" y="530.0" font-size="13" fill="#52514e" font-weight="600" text-anchor="start">Queued, not started</text>
+<rect x="1126.5" y="542.0" width="253.0" height="100.0" rx="8" fill="none" stroke="#77756f" stroke-dasharray="4 4"/>
+<text x="1140.0" y="563.0" font-size="13.5" fill="#52514e" font-weight="600" text-anchor="start">Relabelled windows and doors</text>
+<text x="1140.0" y="581.0" font-size="12.5" fill="#52514e" font-weight="400" text-anchor="start">windows as consistent runs plus a</text>
+<text x="1140.0" y="597.0" font-size="12.5" fill="#52514e" font-weight="400" text-anchor="start">panes-per-run classifier; three door</text>
+<text x="1140.0" y="613.0" font-size="12.5" fill="#52514e" font-weight="400" text-anchor="start">classes. Follows from the error</text>
+<text x="1140.0" y="629.0" font-size="12.5" fill="#52514e" font-weight="400" text-anchor="start">analysis.</text>
+<rect x="1126.5" y="650.0" width="253.0" height="32.0" rx="8" fill="none" stroke="#77756f" stroke-dasharray="4 4"/>
+<text x="1140.0" y="671.0" font-size="13.5" fill="#52514e" font-weight="600" text-anchor="start">Room-type model</text>
+<rect x="1126.5" y="690.0" width="253.0" height="32.0" rx="8" fill="none" stroke="#77756f" stroke-dasharray="4 4"/>
+<text x="1140.0" y="711.0" font-size="13.5" fill="#52514e" font-weight="600" text-anchor="start">Thicker boxes for thin windows</text>
+<rect x="1126.5" y="730.0" width="253.0" height="32.0" rx="8" fill="none" stroke="#77756f" stroke-dasharray="4 4"/>
+<text x="1140.0" y="751.0" font-size="13.5" fill="#52514e" font-weight="600" text-anchor="start">RT-DETR</text>
+<path d="M244.0,513.0 V502 H326.5 V506.0" stroke="#52514e" stroke-width="1.5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M321.5,505.0 L331.5,505.0 L326.5,513.0 Z" fill="#52514e"/>
+<text x="285.2" y="494.0" font-size="13" fill="#52514e" font-weight="400" text-anchor="middle" font-style="italic">retrain run 2&#x27;s recipe as the yardstick</text>
+<path d="M520.5,513.0 V502 H603.0 V506.0" stroke="#52514e" stroke-width="1.5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M598.0,505.0 L608.0,505.0 L603.0,513.0 Z" fill="#52514e"/>
+<text x="561.8" y="494.0" font-size="13" fill="#52514e" font-weight="400" text-anchor="middle" font-style="italic">try drawing-safe augmentation</text>
+<path d="M797.0,513.0 V502 H879.5 V506.0" stroke="#52514e" stroke-width="1.5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M874.5,505.0 L884.5,505.0 L879.5,513.0 Z" fill="#52514e"/>
+<text x="838.2" y="494.0" font-size="13" fill="#52514e" font-weight="400" text-anchor="middle" font-style="italic">same recipe on a newer architecture</text>
+<path d="M1073.5,513.0 V502 H1156.0 V506.0" stroke="#52514e" stroke-width="1.5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M1151.0,505.0 L1161.0,505.0 L1156.0,513.0 Z" fill="#52514e"/>
+<text x="1114.8" y="494.0" font-size="13" fill="#52514e" font-weight="400" text-anchor="middle" font-style="italic">next in the queue</text>
+<path d="M296.5,768.0 V774 H1103.5 V768.0" stroke="#c3c2b7" stroke-width="1.5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="700.0" y="793.0" font-size="13.5" fill="#0b0b0b" font-weight="600" text-anchor="middle">Runs 4–6 are scored on the 480 dev drawings: other drawings, not comparable with runs 1–3</text>
+<path d="M408.9,446 H147.0 V506.0" stroke="#52514e" stroke-width="1.5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M142.0,505.0 L152.0,505.0 L147.0,513.0 Z" fill="#52514e"/>
+<text x="20.0" y="838.0" font-size="15.5" fill="#0b0b0b" font-weight="700" text-anchor="start">Learning curves: validation mAP50-95 after each epoch</text>
+<text x="20.0" y="859.0" font-size="13" fill="#52514e" font-weight="400" text-anchor="start">Higher is better, on the 239 validation drawings. Each run averages over its own classes</text>
+<text x="20.0" y="876.0" font-size="13" fill="#52514e" font-weight="400" text-anchor="start">(run 1: 13, run 3: 6, the others: 7), so heights compare only among runs 2, 4, 5 and 6.</text>
+<line x1="60.0" y1="1160.0" x2="482.0" y2="1160.0" stroke="#c3c2b7" stroke-width="1"/>
+<text x="52.0" y="1164.0" font-size="12.5" fill="#77756f" font-weight="400" text-anchor="end">0.3</text>
+<line x1="60.0" y1="1104.0" x2="482.0" y2="1104.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="52.0" y="1108.0" font-size="12.5" fill="#77756f" font-weight="400" text-anchor="end">0.4</text>
+<line x1="60.0" y1="1048.0" x2="482.0" y2="1048.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="52.0" y="1052.0" font-size="12.5" fill="#77756f" font-weight="400" text-anchor="end">0.5</text>
+<line x1="60.0" y1="992.0" x2="482.0" y2="992.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="52.0" y="996.0" font-size="12.5" fill="#77756f" font-weight="400" text-anchor="end">0.6</text>
+<line x1="60.0" y1="936.0" x2="482.0" y2="936.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="52.0" y="940.0" font-size="12.5" fill="#77756f" font-weight="400" text-anchor="end">0.7</text>
+<line x1="60.0" y1="1160.0" x2="60.0" y2="1164.0" stroke="#c3c2b7" stroke-width="1"/>
+<text x="60.0" y="1179.0" font-size="12.5" fill="#77756f" font-weight="400" text-anchor="middle">1</text>
+<line x1="124.4" y1="1160.0" x2="124.4" y2="1164.0" stroke="#c3c2b7" stroke-width="1"/>
+<text x="124.4" y="1179.0" font-size="12.5" fill="#77756f" font-weight="400" text-anchor="middle">10</text>
+<line x1="195.9" y1="1160.0" x2="195.9" y2="1164.0" stroke="#c3c2b7" stroke-width="1"/>
+<text x="195.9" y="1179.0" font-size="12.5" fill="#77756f" font-weight="400" text-anchor="middle">20</text>
+<line x1="267.4" y1="1160.0" x2="267.4" y2="1164.0" stroke="#c3c2b7" stroke-width="1"/>
+<text x="267.4" y="1179.0" font-size="12.5" fill="#77756f" font-weight="400" text-anchor="middle">30</text>
+<line x1="338.9" y1="1160.0" x2="338.9" y2="1164.0" stroke="#c3c2b7" stroke-width="1"/>
+<text x="338.9" y="1179.0" font-size="12.5" fill="#77756f" font-weight="400" text-anchor="middle">40</text>
+<line x1="410.5" y1="1160.0" x2="410.5" y2="1164.0" stroke="#c3c2b7" stroke-width="1"/>
+<text x="410.5" y="1179.0" font-size="12.5" fill="#77756f" font-weight="400" text-anchor="middle">50</text>
+<line x1="482.0" y1="1160.0" x2="482.0" y2="1164.0" stroke="#c3c2b7" stroke-width="1"/>
+<text x="482.0" y="1179.0" font-size="12.5" fill="#77756f" font-weight="400" text-anchor="middle">60</text>
+<text x="494.0" y="1179.0" font-size="12.5" fill="#77756f" font-weight="400" text-anchor="start">epoch</text>
+<polyline points="60.0,1051.7 67.2,1037.6 74.3,1017.6 81.5,1004.6 88.6,993.1 95.8,973.0 102.9,976.0 110.1,954.1 117.2,964.2 124.4,957.2 131.5,953.5 138.7,951.0 145.8,972.8 153.0,945.9 160.1,949.2 167.3,941.1 174.4,943.7 181.6,946.6 188.7,942.6 195.9,939.6 203.1,941.6 210.2,935.5 217.4,940.1 224.5,936.7 231.7,940.2 238.8,937.2 246.0,933.8 253.1,931.4 260.3,933.0 267.4,933.2 274.6,932.3 281.7,934.3 288.9,929.3 296.0,928.1 303.2,931.3 310.3,930.6 317.5,926.4 324.6,931.4 331.8,929.7 338.9,928.7 346.1,930.1 353.3,930.5 360.4,932.1 367.6,928.0 374.7,926.4 381.9,926.3 389.0,927.0 396.2,927.8 403.3,927.6 410.5,928.0 417.6,929.5 424.8,928.4 431.9,928.6 439.1,929.0 446.2,929.2 453.4,929.2 460.5,931.0 467.7,931.1 474.8,930.0 482.0,930.5" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="60.0,1142.7 67.2,1137.7 74.3,1097.8 81.5,1108.6 88.6,1110.8 95.8,1077.0 102.9,1077.9 110.1,1067.6 117.2,1070.5 124.4,1059.0 131.5,1060.1 138.7,1057.1 145.8,1064.0 153.0,1056.7 160.1,1050.2 167.3,1051.7 174.4,1053.0 181.6,1046.2 188.7,1050.2 195.9,1047.3 203.1,1036.5 210.2,1038.8 217.4,1031.2 224.5,1031.9 231.7,1030.0 238.8,1035.9 246.0,1040.2 253.1,1043.0 260.3,1033.3 267.4,1029.3 274.6,1021.5 281.7,1030.2 288.9,1021.1 296.0,1025.3 303.2,1024.1 310.3,1025.0 317.5,1021.2 324.6,1021.3 331.8,1026.6 338.9,1026.2 346.1,1022.8 353.3,1025.3 360.4,1018.3 367.6,1013.3 374.7,1016.9 381.9,1007.9 389.0,1010.1 396.2,1012.9 403.3,1013.3 410.5,1013.3 417.6,1008.9 424.8,1010.7 431.9,1011.7 439.1,1012.0 446.2,1009.2 453.4,1010.9 460.5,1009.4 467.7,1010.4 474.8,1009.8 482.0,1009.4" fill="none" stroke="#eb6834" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="60.0,1118.2 67.2,1123.6 74.3,1104.4 81.5,1091.3 88.6,1064.5 95.8,1072.5 102.9,1056.0 110.1,1054.7 117.2,1048.7 124.4,1029.1 131.5,1043.4 138.7,1037.3 145.8,1024.6 153.0,1035.6 160.1,1037.7 167.3,1029.8 174.4,1031.0 181.6,1015.4 188.7,1012.8 195.9,1013.0 203.1,1012.0 210.2,1009.9 217.4,1015.3 224.5,1019.5 231.7,1003.3 238.8,1002.1 246.0,1006.2 253.1,992.2 260.3,998.2 267.4,990.4 274.6,985.8 281.7,994.0 288.9,994.6 296.0,992.1 303.2,994.7 310.3,994.9 317.5,991.2 324.6,996.5 331.8,994.7 338.9,993.5 346.1,997.9 353.3,997.0" fill="none" stroke="#1baf7a" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="60.0,1144.9 67.2,1124.2 74.3,1115.0 81.5,1109.2 88.6,1120.3 95.8,1093.8 102.9,1088.6 110.1,1081.3 117.2,1070.9 124.4,1073.3 131.5,1068.5 138.7,1058.1 145.8,1058.7 153.0,1057.8 160.1,1055.3 167.3,1060.9 174.4,1053.5 181.6,1055.4 188.7,1042.0 195.9,1044.6 203.1,1047.5 210.2,1050.0 217.4,1044.1 224.5,1045.8 231.7,1056.2 238.8,1039.5 246.0,1043.5 253.1,1041.3 260.3,1041.9 267.4,1030.7 274.6,1035.4 281.7,1033.9 288.9,1035.1 296.0,1029.4 303.2,1032.3 310.3,1027.8 317.5,1027.8 324.6,1026.5 331.8,1024.5 338.9,1024.1 346.1,1023.7 353.3,1012.9 360.4,1022.6 367.6,1025.1 374.7,1013.7 381.9,1020.2 389.0,1024.1 396.2,1019.5 403.3,1011.9 410.5,1017.9 417.6,1016.4 424.8,1013.4 431.9,1013.3 439.1,1015.5 446.2,1013.5 453.4,1015.2 460.5,1015.7 467.7,1014.8 474.8,1013.1 482.0,1012.6" fill="none" stroke="#eda100" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="60.0,1130.4 67.2,1121.0 74.3,1120.9 81.5,1102.0 88.6,1087.0 95.8,1082.5 102.9,1070.7 110.1,1070.9 117.2,1066.6 124.4,1054.1 131.5,1052.2 138.7,1057.0 145.8,1071.4 153.0,1058.0 160.1,1047.9 167.3,1051.3 174.4,1055.3 181.6,1050.4 188.7,1053.4 195.9,1051.1 203.1,1044.7 210.2,1072.6 217.4,1048.0 224.5,1037.0 231.7,1040.8 238.8,1050.8 246.0,1034.9 253.1,1038.1 260.3,1039.0 267.4,1027.6 274.6,1033.4 281.7,1027.4 288.9,1030.0 296.0,1021.0 303.2,1017.0 310.3,1020.2 317.5,1020.6 324.6,1031.2 331.8,1019.9 338.9,1026.9 346.1,1015.3 353.3,1018.7 360.4,1020.9 367.6,1021.5 374.7,1022.6 381.9,1021.2 389.0,1020.0 396.2,1019.3 403.3,1021.1 410.5,1022.7 417.6,1018.4 424.8,1019.6 431.9,1020.6 439.1,1020.6 446.2,1020.7 453.4,1020.3 460.5,1021.1 467.7,1020.6 474.8,1021.9 482.0,1018.9" fill="none" stroke="#e87ba4" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="60.0,1133.3 67.2,1120.7 74.3,1101.2 81.5,1073.9 88.6,1074.9 95.8,1075.3 102.9,1073.0 110.1,1068.9 117.2,1067.6 124.4,1056.1 131.5,1060.2 138.7,1052.6 145.8,1062.8 153.0,1049.6 160.1,1040.6 167.3,1054.8 174.4,1041.9 181.6,1047.9 188.7,1040.6 195.9,1043.2 203.1,1040.5 210.2,1038.5 217.4,1041.5 224.5,1029.5 231.7,1028.9 238.8,1032.2 246.0,1031.2 253.1,1020.3 260.3,1024.4 267.4,1028.4 274.6,1033.5 281.7,1022.8 288.9,1021.0 296.0,1020.5 303.2,1023.5 310.3,1022.2 317.5,1019.9 324.6,1018.4 331.8,1018.0 338.9,1022.2 346.1,1017.4 353.3,1010.7 360.4,1018.5 367.6,1019.7 374.7,1016.3 381.9,1014.6 389.0,1018.9 396.2,1013.2 403.3,1014.5 410.5,1013.9 417.6,1014.0" fill="none" stroke="#008300" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<line x1="482.0" y1="930.5" x2="502.0" y2="915.7" stroke="#2a78d6" stroke-width="1"/>
+<circle cx="482.0" cy="930.5" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="512.0" cy="915.7" r="10" fill="#2a78d6"/>
+<text x="512.0" y="919.7" font-size="12" fill="#ffffff" font-weight="700" text-anchor="middle">1</text>
+<text x="527.0" y="920.2" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">0.71</text>
+<line x1="482.0" y1="1009.4" x2="502.0" y2="994.6" stroke="#eb6834" stroke-width="1"/>
+<circle cx="482.0" cy="1009.4" r="4" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="512.0" cy="994.6" r="10" fill="#eb6834"/>
+<text x="512.0" y="998.6" font-size="12" fill="#ffffff" font-weight="700" text-anchor="middle">2</text>
+<text x="527.0" y="999.1" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">0.57</text>
+<line x1="482.0" y1="1012.6" x2="502.0" y2="1018.6" stroke="#eda100" stroke-width="1"/>
+<circle cx="482.0" cy="1012.6" r="4" fill="#eda100" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="512.0" cy="1018.6" r="10" fill="#eda100"/>
+<text x="512.0" y="1022.6" font-size="12" fill="#0b0b0b" font-weight="700" text-anchor="middle">4</text>
+<text x="527.0" y="1023.1" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">0.56</text>
+<line x1="482.0" y1="1018.9" x2="502.0" y2="1042.6" stroke="#e87ba4" stroke-width="1"/>
+<circle cx="482.0" cy="1018.9" r="4" fill="#e87ba4" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="512.0" cy="1042.6" r="10" fill="#e87ba4"/>
+<text x="512.0" y="1046.6" font-size="12" fill="#ffffff" font-weight="700" text-anchor="middle">5</text>
+<text x="527.0" y="1047.1" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="start">0.55</text>
+<line x1="353.3" y1="997.0" x2="353.3" y2="967.0" stroke="#1baf7a" stroke-width="1"/>
+<circle cx="353.3" cy="997.0" r="4" fill="#1baf7a" stroke="#1baf7a" stroke-width="2"/>
+<circle cx="353.3" cy="967.0" r="10" fill="#1baf7a"/>
+<text x="353.3" y="971.0" font-size="12" fill="#ffffff" font-weight="700" text-anchor="middle">3</text>
+<text x="338.3" y="971.5" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="end">0.59 after its 42 epochs</text>
+<line x1="417.6" y1="1014.0" x2="417.6" y2="1092.0" stroke="#008300" stroke-width="1"/>
+<circle cx="417.6" cy="1014.0" r="4" fill="#fcfcfb" stroke="#008300" stroke-width="2"/>
+<circle cx="417.6" cy="1092.0" r="9" fill="#fcfcfb" stroke="#008300" stroke-width="2"/>
+<text x="417.6" y="1096.0" font-size="12" fill="#0b0b0b" font-weight="700" text-anchor="middle">6</text>
+<text x="402.6" y="1096.5" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="end">still training: 0.56 at epoch 51</text>
+<text x="600.0" y="838.0" font-size="15.5" fill="#0b0b0b" font-weight="700" text-anchor="start">What came out, per symbol kind</text>
+<text x="600.0" y="859.0" font-size="13" fill="#52514e" font-weight="400" text-anchor="start">Bar: share of the questions of that kind answered with exactly the right count; the figure is that count. The two panels use different</text>
+<text x="600.0" y="876.0" font-size="13" fill="#52514e" font-weight="400" text-anchor="start">drawings: compare within a panel, never across.</text>
+<rect x="600.5" y="894.5" width="379.0" height="291.0" rx="8" fill="#ffffff" stroke="#cfcdc4"/>
+<text x="614.0" y="919.0" font-size="14.5" fill="#0b0b0b" font-weight="700" text-anchor="start">479 test drawings · runs 1–3</text>
+<circle cx="623.0" cy="940.0" r="9" fill="#2a78d6"/>
+<text x="623.0" y="943.6" font-size="10" fill="#ffffff" font-weight="700" text-anchor="middle">1</text>
+<text x="637.0" y="944.5" font-size="12.5" fill="#52514e" font-weight="400" text-anchor="start">all classes</text>
+<circle cx="716.6" cy="940.0" r="9" fill="#eb6834"/>
+<text x="716.6" y="943.6" font-size="10" fill="#ffffff" font-weight="700" text-anchor="middle">2</text>
+<text x="730.6" y="944.5" font-size="12.5" fill="#52514e" font-weight="400" text-anchor="start">symbols</text>
+<circle cx="797.8" cy="940.0" r="9" fill="#1baf7a"/>
+<text x="797.8" y="943.6" font-size="10" fill="#ffffff" font-weight="700" text-anchor="middle">3</text>
+<text x="811.8" y="944.5" font-size="12.5" fill="#52514e" font-weight="400" text-anchor="start">bigger model</text>
+<line x1="736.0" y1="960.0" x2="736.0" y2="1158.0" stroke="#c3c2b7" stroke-width="1"/>
+<text x="736.0" y="1174.0" font-size="12" fill="#77756f" font-weight="400" text-anchor="middle">0%</text>
+<line x1="817.0" y1="960.0" x2="817.0" y2="1158.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="817.0" y="1174.0" font-size="12" fill="#77756f" font-weight="400" text-anchor="middle">50%</text>
+<line x1="898.0" y1="960.0" x2="898.0" y2="1158.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="898.0" y="1174.0" font-size="12" fill="#77756f" font-weight="400" text-anchor="middle">100%</text>
+<text x="726.0" y="978.8" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="end">windows</text>
+<text x="726.0" y="993.8" font-size="12" fill="#52514e" font-weight="400" text-anchor="end">of 479</text>
+<path d="M736.0,961.8 H799.6 a4,4 0 0 1 4,4 v2 a4,4 0 0 1 -4,4 H736.0 Z" fill="#2a78d6"/>
+<text x="809.6" y="971.3" font-size="12.5" fill="#0b0b0b" font-weight="600" text-anchor="start">200</text>
+<text x="836.7" y="971.3" font-size="12" fill="#52514e" font-weight="400" text-anchor="start">42%</text>
+<path d="M736.0,974.8 H805.7 a4,4 0 0 1 4,4 v2 a4,4 0 0 1 -4,4 H736.0 Z" fill="#eb6834"/>
+<text x="815.7" y="984.3" font-size="12.5" fill="#0b0b0b" font-weight="600" text-anchor="start">218</text>
+<text x="842.8" y="984.3" font-size="12" fill="#52514e" font-weight="400" text-anchor="start">46%</text>
+<path d="M736.0,987.8 H799.3 a4,4 0 0 1 4,4 v2 a4,4 0 0 1 -4,4 H736.0 Z" fill="#1baf7a"/>
+<text x="809.3" y="997.3" font-size="12.5" fill="#0b0b0b" font-weight="600" text-anchor="start">199</text>
+<text x="836.4" y="997.3" font-size="12" fill="#52514e" font-weight="400" text-anchor="start">42%</text>
+<text x="726.0" y="1018.4" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="end">doors</text>
+<text x="726.0" y="1033.4" font-size="12" fill="#52514e" font-weight="400" text-anchor="end">of 354</text>
+<path d="M736.0,1001.4 H847.8 a4,4 0 0 1 4,4 v2 a4,4 0 0 1 -4,4 H736.0 Z" fill="#2a78d6"/>
+<text x="857.8" y="1010.9" font-size="12.5" fill="#0b0b0b" font-weight="600" text-anchor="start">253</text>
+<text x="884.8" y="1010.9" font-size="12" fill="#52514e" font-weight="400" text-anchor="start">71%</text>
+<path d="M736.0,1014.4 H842.7 a4,4 0 0 1 4,4 v2 a4,4 0 0 1 -4,4 H736.0 Z" fill="#eb6834"/>
+<text x="852.7" y="1023.9" font-size="12.5" fill="#0b0b0b" font-weight="600" text-anchor="start">242</text>
+<text x="879.8" y="1023.9" font-size="12" fill="#52514e" font-weight="400" text-anchor="start">68%</text>
+<path d="M736.0,1027.4 H839.1 a4,4 0 0 1 4,4 v2 a4,4 0 0 1 -4,4 H736.0 Z" fill="#1baf7a"/>
+<text x="849.1" y="1036.9" font-size="12.5" fill="#0b0b0b" font-weight="600" text-anchor="start">234</text>
+<text x="876.2" y="1036.9" font-size="12" fill="#52514e" font-weight="400" text-anchor="start">66%</text>
+<text x="726.0" y="1058.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="end">toilet bowls</text>
+<text x="726.0" y="1073.0" font-size="12" fill="#52514e" font-weight="400" text-anchor="end">of 479</text>
+<path d="M736.0,1041.0 H885.2 a4,4 0 0 1 4,4 v2 a4,4 0 0 1 -4,4 H736.0 Z" fill="#2a78d6"/>
+<text x="895.2" y="1050.5" font-size="12.5" fill="#0b0b0b" font-weight="600" text-anchor="start">453</text>
+<text x="922.3" y="1050.5" font-size="12" fill="#52514e" font-weight="400" text-anchor="start">95%</text>
+<path d="M736.0,1054.0 H884.9 a4,4 0 0 1 4,4 v2 a4,4 0 0 1 -4,4 H736.0 Z" fill="#eb6834"/>
+<text x="894.9" y="1063.5" font-size="12.5" fill="#0b0b0b" font-weight="600" text-anchor="start">452</text>
+<text x="921.9" y="1063.5" font-size="12" fill="#52514e" font-weight="400" text-anchor="start">94%</text>
+<path d="M736.0,1067.0 H881.1 a4,4 0 0 1 4,4 v2 a4,4 0 0 1 -4,4 H736.0 Z" fill="#1baf7a"/>
+<text x="891.1" y="1076.5" font-size="12.5" fill="#0b0b0b" font-weight="600" text-anchor="start">441</text>
+<text x="918.2" y="1076.5" font-size="12" fill="#52514e" font-weight="400" text-anchor="start">92%</text>
+<text x="726.0" y="1097.6" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="end">sinks</text>
+<text x="726.0" y="1112.6" font-size="12" fill="#52514e" font-weight="400" text-anchor="end">of 478</text>
+<path d="M736.0,1080.6 H868.2 a4,4 0 0 1 4,4 v2 a4,4 0 0 1 -4,4 H736.0 Z" fill="#2a78d6"/>
+<text x="878.2" y="1090.1" font-size="12.5" fill="#0b0b0b" font-weight="600" text-anchor="start">402</text>
+<text x="905.3" y="1090.1" font-size="12" fill="#52514e" font-weight="400" text-anchor="start">84%</text>
+<path d="M736.0,1093.6 H871.0 a4,4 0 0 1 4,4 v2 a4,4 0 0 1 -4,4 H736.0 Z" fill="#eb6834"/>
+<text x="881.0" y="1103.1" font-size="12.5" fill="#0b0b0b" font-weight="600" text-anchor="start">410</text>
+<text x="908.0" y="1103.1" font-size="12" fill="#52514e" font-weight="400" text-anchor="start">86%</text>
+<path d="M736.0,1106.6 H864.9 a4,4 0 0 1 4,4 v2 a4,4 0 0 1 -4,4 H736.0 Z" fill="#1baf7a"/>
+<text x="874.9" y="1116.1" font-size="12.5" fill="#0b0b0b" font-weight="600" text-anchor="start">392</text>
+<text x="901.9" y="1116.1" font-size="12" fill="#52514e" font-weight="400" text-anchor="start">82%</text>
+<text x="726.0" y="1137.2" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="end">showers, bathtubs</text>
+<text x="726.0" y="1152.2" font-size="12" fill="#52514e" font-weight="400" text-anchor="end">of 430</text>
+<path d="M736.0,1120.2 H866.9 a4,4 0 0 1 4,4 v2 a4,4 0 0 1 -4,4 H736.0 Z" fill="#2a78d6"/>
+<text x="876.9" y="1129.7" font-size="12.5" fill="#0b0b0b" font-weight="600" text-anchor="start">358</text>
+<text x="903.9" y="1129.7" font-size="12" fill="#52514e" font-weight="400" text-anchor="start">83%</text>
+<path d="M736.0,1133.2 H869.5 a4,4 0 0 1 4,4 v2 a4,4 0 0 1 -4,4 H736.0 Z" fill="#eb6834"/>
+<text x="879.5" y="1142.7" font-size="12.5" fill="#0b0b0b" font-weight="600" text-anchor="start">365</text>
+<text x="906.6" y="1142.7" font-size="12" fill="#52514e" font-weight="400" text-anchor="start">85%</text>
+<path d="M736.0,1146.2 H863.9 a4,4 0 0 1 4,4 v2 a4,4 0 0 1 -4,4 H736.0 Z" fill="#1baf7a"/>
+<text x="873.9" y="1155.7" font-size="12.5" fill="#0b0b0b" font-weight="600" text-anchor="start">350</text>
+<text x="900.9" y="1155.7" font-size="12" fill="#52514e" font-weight="400" text-anchor="start">81%</text>
+<rect x="1000.5" y="894.5" width="379.0" height="291.0" rx="8" fill="#ffffff" stroke="#cfcdc4"/>
+<text x="1014.0" y="919.0" font-size="14.5" fill="#0b0b0b" font-weight="700" text-anchor="start">480 dev drawings · runs 4–6</text>
+<circle cx="1023.0" cy="940.0" r="9" fill="#eda100"/>
+<text x="1023.0" y="943.6" font-size="10" fill="#0b0b0b" font-weight="700" text-anchor="middle">4</text>
+<text x="1037.0" y="944.5" font-size="12.5" fill="#52514e" font-weight="400" text-anchor="start">reference</text>
+<circle cx="1110.2" cy="940.0" r="9" fill="#e87ba4"/>
+<text x="1110.2" y="943.6" font-size="10" fill="#ffffff" font-weight="700" text-anchor="middle">5</text>
+<text x="1124.2" y="944.5" font-size="12.5" fill="#52514e" font-weight="400" text-anchor="start">drawing-safe</text>
+<circle cx="1218.1" cy="940.0" r="8" fill="#fcfcfb" stroke="#008300" stroke-width="2"/>
+<text x="1218.1" y="943.6" font-size="10" fill="#0b0b0b" font-weight="700" text-anchor="middle">6</text>
+<text x="1232.1" y="944.5" font-size="12.5" fill="#52514e" font-weight="400" text-anchor="start">not scored yet</text>
+<line x1="1136.0" y1="960.0" x2="1136.0" y2="1158.0" stroke="#c3c2b7" stroke-width="1"/>
+<text x="1136.0" y="1174.0" font-size="12" fill="#77756f" font-weight="400" text-anchor="middle">0%</text>
+<line x1="1217.0" y1="960.0" x2="1217.0" y2="1158.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="1217.0" y="1174.0" font-size="12" fill="#77756f" font-weight="400" text-anchor="middle">50%</text>
+<line x1="1298.0" y1="960.0" x2="1298.0" y2="1158.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="1298.0" y="1174.0" font-size="12" fill="#77756f" font-weight="400" text-anchor="middle">100%</text>
+<text x="1126.0" y="978.8" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="end">windows</text>
+<text x="1126.0" y="993.8" font-size="12" fill="#52514e" font-weight="400" text-anchor="end">of 480</text>
+<path d="M1136.0,968.3 H1211.7 a4,4 0 0 1 4,4 v2 a4,4 0 0 1 -4,4 H1136.0 Z" fill="#eda100"/>
+<text x="1221.7" y="977.8" font-size="12.5" fill="#0b0b0b" font-weight="600" text-anchor="start">236</text>
+<text x="1248.7" y="977.8" font-size="12" fill="#52514e" font-weight="400" text-anchor="start">49%</text>
+<path d="M1136.0,981.3 H1209.3 a4,4 0 0 1 4,4 v2 a4,4 0 0 1 -4,4 H1136.0 Z" fill="#e87ba4"/>
+<text x="1219.3" y="990.8" font-size="12.5" fill="#0b0b0b" font-weight="600" text-anchor="start">229</text>
+<text x="1246.4" y="990.8" font-size="12" fill="#52514e" font-weight="400" text-anchor="start">48%</text>
+<text x="1126.0" y="1018.4" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="end">doors</text>
+<text x="1126.0" y="1033.4" font-size="12" fill="#52514e" font-weight="400" text-anchor="end">of 350</text>
+<path d="M1136.0,1007.9 H1253.7 a4,4 0 0 1 4,4 v2 a4,4 0 0 1 -4,4 H1136.0 Z" fill="#eda100"/>
+<text x="1263.7" y="1017.4" font-size="12.5" fill="#0b0b0b" font-weight="600" text-anchor="start">263</text>
+<text x="1290.8" y="1017.4" font-size="12" fill="#52514e" font-weight="400" text-anchor="start">75%</text>
+<path d="M1136.0,1020.9 H1251.4 a4,4 0 0 1 4,4 v2 a4,4 0 0 1 -4,4 H1136.0 Z" fill="#e87ba4"/>
+<text x="1261.4" y="1030.4" font-size="12.5" fill="#0b0b0b" font-weight="600" text-anchor="start">258</text>
+<text x="1288.5" y="1030.4" font-size="12" fill="#52514e" font-weight="400" text-anchor="start">74%</text>
+<text x="1126.0" y="1058.0" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="end">toilet bowls</text>
+<text x="1126.0" y="1073.0" font-size="12" fill="#52514e" font-weight="400" text-anchor="end">of 480</text>
+<path d="M1136.0,1047.5 H1283.9 a4,4 0 0 1 4,4 v2 a4,4 0 0 1 -4,4 H1136.0 Z" fill="#eda100"/>
+<text x="1293.9" y="1057.0" font-size="12.5" fill="#0b0b0b" font-weight="600" text-anchor="start">450</text>
+<text x="1320.9" y="1057.0" font-size="12" fill="#52514e" font-weight="400" text-anchor="start">94%</text>
+<path d="M1136.0,1060.5 H1283.2 a4,4 0 0 1 4,4 v2 a4,4 0 0 1 -4,4 H1136.0 Z" fill="#e87ba4"/>
+<text x="1293.2" y="1070.0" font-size="12.5" fill="#0b0b0b" font-weight="600" text-anchor="start">448</text>
+<text x="1320.3" y="1070.0" font-size="12" fill="#52514e" font-weight="400" text-anchor="start">93%</text>
+<text x="1126.0" y="1097.6" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="end">sinks</text>
+<text x="1126.0" y="1112.6" font-size="12" fill="#52514e" font-weight="400" text-anchor="end">of 475</text>
+<path d="M1136.0,1087.1 H1271.8 a4,4 0 0 1 4,4 v2 a4,4 0 0 1 -4,4 H1136.0 Z" fill="#eda100"/>
+<text x="1281.8" y="1096.6" font-size="12.5" fill="#0b0b0b" font-weight="600" text-anchor="start">410</text>
+<text x="1308.9" y="1096.6" font-size="12" fill="#52514e" font-weight="400" text-anchor="start">86%</text>
+<path d="M1136.0,1100.1 H1272.2 a4,4 0 0 1 4,4 v2 a4,4 0 0 1 -4,4 H1136.0 Z" fill="#e87ba4"/>
+<text x="1282.2" y="1109.6" font-size="12.5" fill="#0b0b0b" font-weight="600" text-anchor="start">411</text>
+<text x="1309.2" y="1109.6" font-size="12" fill="#52514e" font-weight="400" text-anchor="start">87%</text>
+<text x="1126.0" y="1137.2" font-size="13" fill="#0b0b0b" font-weight="400" text-anchor="end">showers, bathtubs</text>
+<text x="1126.0" y="1152.2" font-size="12" fill="#52514e" font-weight="400" text-anchor="end">of 450</text>
+<path d="M1136.0,1126.7 H1263.0 a4,4 0 0 1 4,4 v2 a4,4 0 0 1 -4,4 H1136.0 Z" fill="#eda100"/>
+<text x="1273.0" y="1136.2" font-size="12.5" fill="#0b0b0b" font-weight="600" text-anchor="start">364</text>
+<text x="1300.1" y="1136.2" font-size="12" fill="#52514e" font-weight="400" text-anchor="start">81%</text>
+<path d="M1136.0,1139.7 H1262.7 a4,4 0 0 1 4,4 v2 a4,4 0 0 1 -4,4 H1136.0 Z" fill="#e87ba4"/>
+<text x="1272.7" y="1149.2" font-size="12.5" fill="#0b0b0b" font-weight="600" text-anchor="start">363</text>
+<text x="1299.7" y="1149.2" font-size="12" fill="#52514e" font-weight="400" text-anchor="start">81%</text>
+<text x="20.0" y="1214.0" font-size="12.5" fill="#77756f" font-weight="400" text-anchor="start">Source: Ultralytics results.csv and the exact-count report of each run (docs/training-data). Thresholds are tuned on the validation drawings.</text>
+</svg>

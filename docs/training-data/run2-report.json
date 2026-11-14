@@ -1,0 +1,108 @@
+{
+ "weights": "runs/sym_l1280/weights/best.pt",
+ "imgsz": 1280,
+ "iou": 0.6,
+ "augment": false,
+ "thresholds": {
+  "window": 0.45,
+  "door": 0.525,
+  "toilet": 0.425,
+  "sink": 0.5,
+  "shower": 0.325,
+  "bathtub": 0.8,
+  "doorway": 0.4
+ },
+ "val": {
+  "correct": 857,
+  "total": 1107,
+  "per_kind": {
+   "windows": [
+    118,
+    239,
+    164
+   ],
+   "doors": [
+    120,
+    168,
+    150
+   ],
+   "toilets": [
+    228,
+    239,
+    238
+   ],
+   "sinks": [
+    199,
+    233,
+    227
+   ],
+   "showers_bathtubs": [
+    192,
+    228,
+    224
+   ]
+  }
+ },
+ "test": {
+  "correct": 1687,
+  "total": 2220,
+  "per_kind": {
+   "windows": [
+    218,
+    479,
+    325
+   ],
+   "doors": [
+    242,
+    354,
+    310
+   ],
+   "toilets": [
+    452,
+    479,
+    477
+   ],
+   "sinks": [
+    410,
+    478,
+    462
+   ],
+   "showers_bathtubs": [
+    365,
+    430,
+    420
+   ]
+  }
+ },
+ "sample30": {
+  "correct": 102,
+  "total": 142,
+  "per_kind": {
+   "windows": [
+    12,
+    30,
+    20
+   ],
+   "doors": [
+    13,
+    23,
+    18
+   ],
+   "toilets": [
+    28,
+    30,
+    30
+   ],
+   "sinks": [
+    24,
+    30,
+    28
+   ],
+   "showers_bathtubs": [
+    25,
+    29,
+    29
+   ]
+  }
+ }
+}

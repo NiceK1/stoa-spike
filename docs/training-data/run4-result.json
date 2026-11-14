@@ -1,0 +1,104 @@
+{
+ "name": "base",
+ "spec": {
+  "name": "base",
+  "weights": "yolo11l.pt",
+  "imgsz": 1280,
+  "epochs": 60,
+  "batch": 16,
+  "data": "/data/sweep/data/yolo_sym",
+  "train": [
+   "fliplr=0.5",
+   "flipud=0.5"
+  ],
+  "submitted": 1794657211.6239214
+ },
+ "gpu": 0,
+ "host": "stoa-train",
+ "batch_used": 16,
+ "epochs_planned": 60,
+ "epochs_run": 60,
+ "train_exit": 0,
+ "minutes": {
+  "total": 75.2,
+  "train": 74.0
+ },
+ "weights": "/data/sweep/runs/base/weights/best.pt",
+ "detections": {
+  "val": "/data/sweep/eval/base/val.json",
+  "dev": "/data/sweep/eval/base/dev.json"
+ },
+ "best_epoch": {
+  "epoch": 49,
+  "mAP50": 0.80126,
+  "mAP50-95": 0.56447
+ },
+ "status": "ok",
+ "thresholds": {
+  "window": 0.45,
+  "door": 0.35,
+  "toilet": 0.3,
+  "sink": 0.5,
+  "shower": 0.425,
+  "bathtub": 0.65,
+  "doorway": 0.475
+ },
+ "dev": {
+  "windows": {
+   "exact": 236,
+   "asked": 480,
+   "within_one": 333
+  },
+  "doors": {
+   "exact": 263,
+   "asked": 350,
+   "within_one": 323
+  },
+  "toilets": {
+   "exact": 450,
+   "asked": 480,
+   "within_one": 480
+  },
+  "sinks": {
+   "exact": 410,
+   "asked": 475,
+   "within_one": 460
+  },
+  "showers_bathtubs": {
+   "exact": 364,
+   "asked": 450,
+   "within_one": 437
+  },
+  "correct": 1723,
+  "total": 2235
+ },
+ "val": {
+  "windows": {
+   "exact": 110,
+   "asked": 239,
+   "within_one": 161
+  },
+  "doors": {
+   "exact": 122,
+   "asked": 168,
+   "within_one": 152
+  },
+  "toilets": {
+   "exact": 224,
+   "asked": 239,
+   "within_one": 236
+  },
+  "sinks": {
+   "exact": 195,
+   "asked": 233,
+   "within_one": 228
+  },
+  "showers_bathtubs": {
+   "exact": 192,
+   "asked": 228,
+   "within_one": 221
+  },
+  "correct": 843,
+  "total": 1107
+ }
+}
