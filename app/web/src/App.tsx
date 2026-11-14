@@ -102,12 +102,26 @@ export function App() {
   const [kind, setKind] = useState<string | null>(null);
   const [translations, setTranslations] = useState(false);
   const search = useRef<HTMLInputElement>(null);
+  const list = useRef<HTMLDivElement>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     api.health().then((d) => setHasVision(d.vision !== "none")).catch(() => {});
     api.dataset().then((d) => { setSources(d.sources); setListed(true); }).catch(() => setError("The server is not reachable."));
   }, []);
+
+  // Keep the chosen drawing in view in the list (it may be far down, e.g. when opened from a link).
+  // Only the list scrolls, not the page, so on a phone the answer stays where the reader is.
+  useEffect(() => {
+    const box = list.current;
+    const chosen = box?.querySelector<HTMLElement>(".file.chosen");
+    if (!box || !chosen) return;
+    const header = box.querySelector<HTMLElement>(".group")?.offsetHeight ?? 0;
+    const top = chosen.offsetTop - box.offsetTop;
+    if (top < box.scrollTop + header || top + chosen.offsetHeight > box.scrollTop + box.clientHeight) {
+      box.scrollTop = top - header - box.clientHeight / 3;
+    }
+  }, [drawing, sources]);
 
   // "/" jumps to the drawing search, as in most file browsers.
   useEffect(() => {
@@ -237,7 +251,7 @@ export function App() {
           />
           {!filter && <kbd>/</kbd>}
         </div>
-        <div className="files" role="listbox" aria-label="Drawings">
+        <div className="files" role="listbox" aria-label="Drawings" ref={list}>
           {drawing?.kind === "upload" && (
             <div>
               <div className="group">Your upload</div>
@@ -336,7 +350,12 @@ export function App() {
             ) : reply && <Result reply={reply} />}
 
             {evidence ? (
-              <Viewer evidence={evidence} />
+              <Viewer
+                evidence={evidence}
+                title={drawing.kind === "dataset" ? title(drawing.path) : drawing.name}
+                file={drawing.kind === "dataset" ? fileName(drawing.path) : drawing.name}
+                type={extension(drawing.kind === "dataset" ? drawing.path : drawing.name)}
+              />
             ) : (
               <div className="empty">
                 <p>{preview === "loading" ? "Loading the drawing…" : "No flat preview for this file. Ask a question and the matching plan appears here."}</p>
@@ -446,7 +465,8 @@ function Result({ reply }: { reply: Reply }) {
   );
 }
 
-function Viewer({ evidence }: { evidence: Evidence }) {
+/** The drawing on its sheet, with a title block in the corner as on a real drawing: what it is and what is marked. */
+function Viewer({ evidence, title, file, type }: { evidence: Evidence; title: string; file: string; type: string }) {
   const [view, setView] = useState({ x: 0, y: 0, k: 1 });
   const drag = useRef<{ x: number; y: number } | null>(null);
   useEffect(() => setView({ x: 0, y: 0, k: 1 }), [evidence]);
@@ -468,7 +488,7 @@ function Viewer({ evidence }: { evidence: Evidence }) {
   return (
     <figure className="viewer">
       <div
-        ref={canvas} className="canvas"
+        ref={canvas} className="canvas" title="Scroll or double-click to zoom, drag to move"
         onWheel={(e) => { const box = e.currentTarget.getBoundingClientRect(); zoomAt(e.clientX - box.left, e.clientY - box.top, wheelFactor(e)); }}
         onDoubleClick={(e) => { const box = e.currentTarget.getBoundingClientRect(); zoomAt(e.clientX - box.left, e.clientY - box.top, 1.6); }}
         onPointerDown={(e) => { drag.current = { x: e.clientX - view.x, y: e.clientY - view.y }; e.currentTarget.setPointerCapture(e.pointerId); }}
@@ -492,7 +512,14 @@ function Viewer({ evidence }: { evidence: Evidence }) {
           <button onClick={() => setView({ x: 0, y: 0, k: 1 })} aria-label="Fit to screen" disabled={view.k === 1 && view.x === 0 && view.y === 0}>⤢</button>
         </div>
       </div>
-      <figcaption>{evidence.caption}. Scroll or double-click to zoom, drag to move.</figcaption>
+      <figcaption className="titleblock">
+        <div className="tb-title"><span>Drawing</span><b>{title}</b></div>
+        <div className="tb-cells">
+          <div><span>File</span>{file}</div>
+          <div><span>Type</span>{type}</div>
+        </div>
+        <div className="tb-shown"><span>Shown</span>{evidence.caption}</div>
+      </figcaption>
     </figure>
   );
 }
