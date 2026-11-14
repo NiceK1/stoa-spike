@@ -17,6 +17,8 @@ The detector training code is in [training/](training/README.md). The Python fil
 
 ## Run
 
+#### 🪟 Windows
+
 ```
 python -m venv .venv
 .venv\Scripts\pip install ifcopenshell
@@ -25,17 +27,36 @@ python -m venv .venv
 .venv\Scripts\python -I tests\test_core.py
 ```
 
+#### 🐧 Linux / macOS
+
+```
+python -m venv .venv
+.venv/bin/pip install ifcopenshell
+.venv/bin/python -I fetch_preview.py dataset README.md questions.jsonl "data/*/LICENSE.md" "data/swiss_dwellings/*.dxf" "data/ifc_models/*.ifc"
+.venv/bin/python -I evaluate.py dataset --svg out
+.venv/bin/python -I tests/test_core.py
+```
+
 `fetch_preview.py` reads the preview zip over HTTP range requests, so only the listed files are downloaded.
 `--svg out` writes one evidence overlay per question kind: the plan with the counted or measured shapes highlighted.
 Without `ifcopenshell` the IFC questions are skipped and everything else still runs.
 
 ### Raster floor plans
 
-Needs the `claude` CLI on PATH, signed in. PowerShell:
+Needs the `claude` CLI on PATH, signed in.
+
+#### 🪟 Windows (PowerShell)
 
 ```
 .venv\Scripts\python -I fetch_preview.py dataset (Get-Content raster-sample.txt)
 .venv\Scripts\python -I evaluate_raster.py dataset --models claude-sonnet-5-5 claude-haiku-5-5
+```
+
+#### 🐧 Linux / macOS
+
+```
+.venv/bin/python -I fetch_preview.py dataset $(cat raster-sample.txt)
+.venv/bin/python -I evaluate_raster.py dataset --models claude-sonnet-5-5 claude-haiku-5-5
 ```
 
 `raster-sample.txt` lists the 30 drawings behind the raster figures above. Answers are cached under
