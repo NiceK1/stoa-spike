@@ -3,3 +3,12 @@ out/
 .venv/
 .env
 __pycache__/
+
+models/
+training/.instance_ip
+training/runs/
+training/data/
+
+app/node_modules/
+app/.cache/
+app/web/dist/
