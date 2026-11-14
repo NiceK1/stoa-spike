@@ -12,7 +12,7 @@ on a laptop CPU (i7-11800H) unless a line says otherwise.
   with no call to an outside model. A hosted vision model alone gets 77.1% (Claude Sonnet 5.5) or 85.1% (Gemini 4
   Hydrogen) on the same questions and costs $0.009 or about $0.07 per drawing.
 - The best line-up we measured adds one Gemini reading per drawing to our detectors: 89.0%, for about $0.07 and
-  half a minute per drawing.
+  half a minute per drawing. With Gemini's thinking turned down to low it is 88.5% for $0.018 and 8 seconds.
 - Questions in any wording are turned into a structured call by a small Gemma we fine-tuned. It runs on the CPU in
   0.9 seconds, costs nothing, and gives the same end results as Claude Haiku 5.5 on 536 of 556 test questions
   against Haiku's 539.
@@ -42,10 +42,12 @@ models alone do not answer those two parts (884 questions, 0.7% of the dataset).
 |---|---|---|---|
 | Blueline detectors alone | 1,530 (85.9%) | 0 | $0 |
 | Best line-up: symbols by the middle count of the two detectors and Gemini's reading; room types by Gemini | 1,585 (89.0%) | 1 | about $0.07 |
+| The same line-up with Gemini's thinking set to low | 1,576 (88.5%) | 1 | $0.018 |
 | Detectors for drawn symbols, Gemini 4 Hydrogen for room types | 1,562 (87.7%) | 1 once a room type is asked | about $0.07 |
 | Detectors for drawn symbols, Claude Sonnet 5.5 for room types | 1,548 (86.9%) | 1 once a room type is asked | $0.009 |
 | Detectors and Sonnet vote on symbols, Sonnet for room types (removed from the app on 14 November) | 1,569 (88.1%) | 1 | $0.009 |
 | Gemini 4 Hydrogen alone | 1,516 (85.1%) | 1 | about $0.07 |
+| Gemini 4 Hydrogen alone, thinking set to low | 1,507 (84.6%) | 1 | $0.018 |
 | Claude Sonnet 5.5 alone | 1,373 (77.1%) | 1 | $0.009 |
 | Gemma 4 31B alone, hosted (first sample only, 916 questions, 12 failed calls) | 537 (58.6%) | 1 | not priced |
 
@@ -54,7 +56,11 @@ on its own; it is not yet one setting in the app. The app is getting a switch be
 only", the default, and "Best accuracy") and a third position to pick the engines by hand; this page will carry the
 numbers measured through that switch when it ships.
 
-Per kind of question (right answers out of the number asked):
+Gemini 4 Hydrogen thinks at its "high" level unless told otherwise, and that thinking is most of what a reading
+costs. At "low" it reads the same 200 drawings 9 questions worse alone and 9 worse in the best line-up, a
+difference inside the noise of these samples, for a quarter of the price and of the wait.
+
+Per kind of question (right answers out of the number asked; Gemini at its default thinking level):
 
 | Kind | Asked | Blueline detectors | Best line-up | Gemini alone | Sonnet alone |
 |---|---|---|---|---|---|
@@ -125,6 +131,7 @@ avoid the words show, mark and where.
 | Blueline interpreter (tuned Gemma) | our server, CPU | $0 | 0.9 s | once per question |
 | Claude Haiku 5.5 as interpreter | Anthropic API | $0.0003 | 2.8 s | once per question |
 | Gemini 4 Hydrogen reading a drawing | Google API | $0.07 on average, $0.05 median, $0.015 to $0.27 | 38 s on average, 29 s median | once per raster drawing |
+| The same with thinking set to low | Google API | $0.018 | 8 s | once per raster drawing |
 | Claude Sonnet 5.5 reading a drawing | Anthropic API | $0.009 | 4.7 s | once per raster drawing |
 | Claude Sonnet 5.5 wording a sheet answer | Anthropic API | $0.018 | 3.6 s | once per sheet question |
 | Claude Sonnet 5.5 wording an IFC free-text answer | Anthropic API | $0.017, two calls per question | 3.4 s per call | every free-text IFC question |
@@ -133,7 +140,8 @@ How the outside prices were obtained: the Anthropic figures are what the API rep
 million input and output tokens for Sonnet 5.5 and $0.10 and $0.50 for Haiku 5.5. The Gemini figure is its token
 use on 20 held-out drawings (2,928 input tokens, 454 output tokens and 8,156 thinking tokens per reading on
 average) at Google's listed $1.50 and $7.50 per million input and output tokens; thinking tokens are billed as
-output and vary from 1,069 to 34,644 per drawing, which is where both the cost and the wait come from.
+output and vary from 1,069 to 34,644 per drawing, which is where both the cost and the wait come from. With
+thinking set to low, 197 readings used 1,244 thinking tokens on average.
 
 Put together, for one raster drawing and the questions asked about it:
 
@@ -141,6 +149,7 @@ Put together, for one raster drawing and the questions asked about it:
 |---|---|---|---|
 | Our own models only | $0 | about 3.6 s (detectors and interpreter) | about 0.9 s (interpreter) |
 | Best line-up, Haiku interpreting | about $0.07 per drawing and $0.0003 per question | about half a minute (Gemini's reading) | about 2.8 s (interpreter) |
+| Best line-up with Gemini's thinking set to low | $0.018 per drawing and $0.0003 per question | about 10 s | about 2.8 s (interpreter) |
 | Sonnet alone, for comparison | $0.009 per drawing | about 5 s | cached reading |
 
 And for the whole raster part of the dataset (85,514 questions on 4,787 drawings):
@@ -149,6 +158,7 @@ And for the whole raster part of the dataset (85,514 questions on 4,787 drawings
 |---|---|---|
 | Our own models only | 85.9% | $0 |
 | Best line-up | 89.0% | about $330 for the readings, about $27 if Haiku interprets every question |
+| Best line-up with Gemini's thinking set to low | 88.5% | about $87 for the readings, about $27 for Haiku |
 | Gemini 4 Hydrogen alone | 85.1% | about $330 |
 | Claude Sonnet 5.5 alone | 77.1% | about $43 |
 
@@ -167,8 +177,8 @@ the interpreter's three epochs took about 90 minutes. Details and the run-by-run
 
 The commands for the accuracy numbers are in [app/README.md](../app/README.md) under "Measure it yourself"; model
 calls are cached, so a repeated run costs nothing. The cost and time figures come from timing the app's own calls on
-samples: 20 drawing readings by Gemini, 40 interpretations by Haiku, 19 text calls by Sonnet, and 234 answers by the
-scripts and detectors.
+samples: 20 drawing readings by Gemini at its default thinking level and 197 at low, 40 interpretations by Haiku,
+19 text calls by Sonnet, and 234 answers by the scripts and detectors.
 
 - The raster numbers come from 200 drawings; three training runs of one recipe differ by about 13 questions in
   2,235, so differences of a few questions between lines are within noise. The gap between our detectors and the
