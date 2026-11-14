@@ -95,7 +95,11 @@ async function cacheKey(id: string, request: VisionRequest): Promise<string> {
 
 function run(command: string, args: string[], input: string, cwd: string, timeoutMs: number): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd, windowsHide: true });
+    const env = { ...process.env };
+    delete env.ANTHROPIC_API_KEY;
+    delete env.ANTHROPIC_AUTH_TOKEN;
+    delete env.ANTHROPIC_BASE_URL;
+    const child = spawn(command, args, { cwd, windowsHide: true, env });
     let stdout = "", stderr = "";
     const timer = setTimeout(() => {
       child.kill();
