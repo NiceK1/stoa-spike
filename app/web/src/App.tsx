@@ -451,8 +451,8 @@ function Viewer({ evidence }: { evidence: Evidence }) {
     <figure className="viewer">
       <div
         ref={canvas} className="canvas"
-        onWheel={(e) => { const box = e.currentTarget.getBoundingClientRect(); zoomAt(e.clientX - box.left, e.clientY - box.top, e.deltaY < 0 ? 1.2 : 1 / 1.2); }}
-        onDoubleClick={(e) => { const box = e.currentTarget.getBoundingClientRect(); zoomAt(e.clientX - box.left, e.clientY - box.top, 2); }}
+        onWheel={(e) => { const box = e.currentTarget.getBoundingClientRect(); zoomAt(e.clientX - box.left, e.clientY - box.top, wheelFactor(e)); }}
+        onDoubleClick={(e) => { const box = e.currentTarget.getBoundingClientRect(); zoomAt(e.clientX - box.left, e.clientY - box.top, 1.6); }}
         onPointerDown={(e) => { drag.current = { x: e.clientX - view.x, y: e.clientY - view.y }; e.currentTarget.setPointerCapture(e.pointerId); }}
         onPointerMove={(e) => {
           // Read the drag start now: by the time the state update runs, pointer-up may have cleared it.
@@ -469,14 +469,23 @@ function Viewer({ evidence }: { evidence: Evidence }) {
           </div>
         </div>
         <div className="zoom" onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
-          <button onClick={() => zoomCentre(1.4)} aria-label="Zoom in">＋</button>
-          <button onClick={() => zoomCentre(1 / 1.4)} aria-label="Zoom out">－</button>
+          <button onClick={() => zoomCentre(1.3)} aria-label="Zoom in">＋</button>
+          <button onClick={() => zoomCentre(1 / 1.3)} aria-label="Zoom out">－</button>
           <button onClick={() => setView({ x: 0, y: 0, k: 1 })} aria-label="Fit to screen" disabled={view.k === 1 && view.x === 0 && view.y === 0}>⤢</button>
         </div>
       </div>
       <figcaption>{evidence.caption}. Scroll or double-click to zoom, drag to move.</figcaption>
     </figure>
   );
+}
+
+/**
+ * Zoom step for one wheel event, in proportion to how far it scrolled: a mouse-wheel notch (about 100 px)
+ * zooms about 12%, and a trackpad's many small events add up smoothly instead of 20% each.
+ */
+function wheelFactor(e: React.WheelEvent): number {
+  const pixels = e.deltaY * (e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 800 : 1);
+  return Math.exp(-Math.max(-100, Math.min(100, pixels)) * 0.0012);
 }
 
 function aspect(evidence: Evidence): number {
