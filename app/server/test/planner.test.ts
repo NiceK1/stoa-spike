@@ -4,7 +4,7 @@ import { join } from "node:path";
 import sharp from "sharp";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { VisionModel, VisionRequest } from "../src/models/vision.js";
-import { isLocate } from "../src/questions.js";
+import { inferType, isLocate, isPlainRequest } from "../src/questions.js";
 import { ask, type Deps } from "../src/router.js";
 import type { Polygon } from "../src/types.js";
 
@@ -13,7 +13,8 @@ const polyline = (layer: string, points: Polygon) =>
   `0\nLWPOLYLINE\n8\n${layer}\n90\n${points.length}\n70\n1\n${points.map(([x, y]) => `10\n${x}\n20\n${y}\n`).join("")}`;
 const text = (value: string, x: number, y: number) => `0\nTEXT\n8\nROOM_TEXT\n10\n${x}\n20\n${y}\n1\n${value}\n`;
 
-// Two rooms 'Zimmer' (12 and 9 m²), a 'Bad' (4 m²) and a 'Balkon' (3 m²) in apartment A; one door, two windows.
+// Apartment A: 'Zimmer' 1.01 (12 m²) and 1.03 (9 m²), 'Bad' 1.02 (4 m²), 'Balkon' 1.04 (3 m²), one door, two windows.
+// Apartment B: 'Zimmer' 2.01 (9 m²), 'Bad' 2.02 (6 m²), one door, one window.
 const DXF =
   "0\nSECTION\n2\nENTITIES\n" +
   polyline("ROOM_OUTLINE", rect(0, 0, 4, 3)) + text("Zimmer", 2, 1.8) + text("1.01", 2, 1.5) +
@@ -21,7 +22,11 @@ const DXF =
   polyline("ROOM_OUTLINE", rect(0, 3, 3, 3)) + text("Zimmer", 1.5, 4.8) + text("1.03", 1.5, 4.5) +
   polyline("ROOM_OUTLINE", rect(3, 3, 3, 1)) + text("Balkon", 4.5, 3.7) + text("1.04", 4.5, 3.4) +
   polyline("UNIT_OUTLINE", rect(0, 0, 6, 6)) + text("App. A", 5, 5) +
-  polyline("DOOR", rect(3.9, 1, 0.2, 0.8)) + polyline("WINDOW", rect(1, -0.1, 1, 0.2)) + polyline("WINDOW", rect(1, 5.9, 1, 0.2)) +
+  polyline("ROOM_OUTLINE", rect(7, 0, 3, 3)) + text("Zimmer", 8.5, 1.8) + text("2.01", 8.5, 1.5) +
+  polyline("ROOM_OUTLINE", rect(7, 3, 3, 2)) + text("Bad", 8.5, 4.3) + text("2.02", 8.5, 4.0) +
+  polyline("UNIT_OUTLINE", rect(7, 0, 3, 6)) + text("App. B", 9.5, 5.5) +
+  polyline("DOOR", rect(3.9, 1, 0.2, 0.8)) + polyline("DOOR", rect(8, 2.9, 0.8, 0.2)) +
+  polyline("WINDOW", rect(1, -0.1, 1, 0.2)) + polyline("WINDOW", rect(1, 5.9, 1, 0.2)) + polyline("WINDOW", rect(9.9, 1, 0.2, 1)) +
   "0\nENDSEC\n0\nEOF\n";
 
 let plan = "", image = "";
@@ -47,131 +52,257 @@ function model(id: string, output: Record<string, unknown> | ((request: VisionRe
   };
 }
 
-const call = (fields: Record<string, unknown>) =>
-  ({ symbol: "none", labels: [], room_numbers: [], apartment: "", pick: "all", measure: "count", answer: "", locate: false, ...fields });
+const call = (fields: Record<string, unknown>) => ({
+  symbols: [], labels: [], room_numbers: [], apartments: [], pick: "all", measure: "count", missing: [], broader_label: false, reason: "", locate: false, answer_type: "count", ...fields,
+});
 const takeoff = (fields: Record<string, unknown>) => model("fake-planner", call(fields));
 const deps = (planner: VisionModel | null, vision: VisionModel = model("fake-vision", {})): Deps => ({ vision, planner, detector: null, fileUrl: () => "/plan.png" });
 const numbers = (svg: string) => [...svg.matchAll(/font-weight="600" fill="#ffffff">([^<]*)</g)].map((m) => m[1]);
 const svgOf = (answer: Awaited<ReturnType<typeof ask>>) => (answer.evidence?.kind === "svg" ? answer.evidence.svg : "");
+const onPlan = (question: string, fields: Record<string, unknown>) => ask({ file: plan, question }, deps(takeoff(fields)));
 
-describe("a free-form question about a layered DXF plan", () => {
-  it("maps the question's word onto the plan's own label and counts by geometry", async () => {
-    const planner = takeoff({ operation: "rooms", labels: ["Zimmer"], locate: true });
-    const answer = await ask({ file: plan, question: "show me the bedrooms" }, deps(planner));
-    expect(answer).toMatchObject({ value: 2, unit: "count", exact: true, pipeline: "dxf-geometry", note: "Rooms labelled 'Zimmer': 2 marked on the drawing." });
-    expect(answer.method).toContain(`understood as "count rooms labelled 'Zimmer'" by fake-planner`);
-    expect(numbers(svgOf(answer))).toEqual(["1", "2"]);
+describe("a question about a layered DXF plan, read by the interpreter", () => {
+  it("goes to the interpreter even when a template matches, with the template's reading as a hint", async () => {
+    const planner = takeoff({ operation: "count_symbols", symbols: ["doors"], apartments: ["B"] });
+    const answer = await ask({ file: plan, question: "How many doors are drawn on this floor plan in apartment B?" }, deps(planner));
+    expect(planner.requests).toHaveLength(1);
+    expect(planner.requests[0].prompt).toContain("Question: How many doors are drawn on this floor plan in apartment B?");
+    expect(planner.requests[0].prompt).toContain("A keyword parser reads this as: count all doors on the whole floor.");
+    expect(answer).toMatchObject({ value: 1, unit: "count", exact: true, pipeline: "dxf-geometry" });
+    expect(answer.method).toBe(`understood as "count doors in apartment B" by fake-planner; door symbols on layer DOOR; those lying in or reaching the outline of one of the 2 rooms in apartment B`);
   });
 
-  it("tells the planner the plan's labels, room numbers, apartments and symbol counts", async () => {
+  it("tells the interpreter which of the plan's room numbers a question without a template reading names", async () => {
+    const planner = takeoff({ operation: "rooms", room_numbers: ["1.02"], measure: "area", answer_type: "area" });
+    const answer = await ask({ file: plan, question: "1.02 Bad net floor area" }, deps(planner));
+    expect(planner.requests[0].prompt).toContain("A keyword parser reads this as: a question about room 1.02.");
+    expect(answer).toMatchObject({ value: 4, unit: "m2" });
+    expect(answer.method).toBe(`understood as "area of room 1.02" by fake-planner; outline of room 1.02`);
+  });
+
+  it("shows the interpreter a short menu in the plan's own words, not the room table", async () => {
     const planner = takeoff({ operation: "none" });
     await ask({ file: plan, question: "anything about bedrooms?" }, deps(planner));
-    const { prompt } = planner.requests[0];
-    expect(prompt).toContain("Question: anything about bedrooms?");
-    expect(prompt).toContain("Zimmer x2 (21.00 m²)");
-    expect(prompt).toContain("Bad x1");
-    expect(prompt).toContain("Apartments: A (4 rooms, 25.00 m² net without outdoor rooms)");
-    expect(prompt).toContain("1 doors, 2 windows");
-    expect(prompt).toContain("1.03; Zimmer; A; 9.00");
+    const { prompt, schema } = planner.requests[0];
+    expect(prompt).not.toContain("A keyword parser");
+    expect(prompt).toContain("Room labels on this plan (rooms carrying each): 'Zimmer' x3, 'Bad' x2, 'Balkon' x1");
+    expect(prompt).toContain("Apartments: A (4 rooms), B (2 rooms)");
+    expect(prompt).toContain("Room numbers (6): 1.01 1.02 1.03 1.04 2.01 2.02");
+    expect(prompt).toContain("Symbols drawn on the floor: 2 doors, 3 windows, 0 toilets");
+    expect(prompt).not.toContain("12.00");
+    expect((schema.properties as any).labels.items.enum).toEqual(["Zimmer", "Bad", "Balkon"]);
+    expect((schema.properties as any).apartments.items.enum).toEqual(["A", "B"]);
   });
 
-  it("adds up the rooms the planner selects, in code", async () => {
-    const planner = takeoff({ operation: "rooms", labels: ["Bad", "zimmer"], measure: "area" });
-    const answer = await ask({ file: plan, question: "combined area of the bedrooms and the bathroom?" }, deps(planner));
-    expect(answer).toMatchObject({ value: 25, unit: "m2", exact: true });
+  it("counts by geometry and says which label the question was matched to", async () => {
+    const answer = await onPlan("show me the bedrooms", { operation: "rooms", labels: ["Zimmer"], locate: true });
+    expect(answer).toMatchObject({ value: 3, unit: "count", exact: true, pipeline: "dxf-geometry" });
+    expect(answer.method).toContain(`understood as "count rooms labelled 'Zimmer'" by fake-planner`);
+    expect(answer.note).toBe("The question was matched to the plan's label 'Zimmer' by fake-planner. Rooms labelled 'Zimmer': 3 marked on the drawing.");
     expect(numbers(svgOf(answer))).toHaveLength(3);
   });
 
-  it("finds the largest room and names it", async () => {
-    const answer = await ask({ file: plan, question: "which room is the largest?" }, deps(takeoff({ operation: "rooms", pick: "largest", measure: "list" })));
-    expect(answer.value).toBe("1.01 Zimmer, 12.00 m²");
-    expect(numbers(svgOf(answer))).toEqual(["1 · 1.01 Zimmer"]);
+  it("labels an answer an estimate when the interpreter took a broader label for want of an exact one", async () => {
+    const answer = await onPlan("how big is the living room of apartment B?", { operation: "rooms", labels: ["Zimmer"], apartments: ["B"], pick: "largest", measure: "area", broader_label: true, answer_type: "area" });
+    expect(answer).toMatchObject({ value: 9, unit: "m2", exact: false });
+    expect(answer.note).toContain("The plan has no label for exactly what was asked; fake-planner took the rooms labelled 'Zimmer' as the nearest.");
   });
 
-  it("runs the dataset's operations for symbols, apartments and floor totals", async () => {
-    expect((await ask({ file: plan, question: "fenster?" }, deps(takeoff({ operation: "count_symbols", symbol: "windows" })))).value).toBe(2);
-    expect((await ask({ file: plan, question: "flat A size" }, deps(takeoff({ operation: "area_apartment", apartment: "a" })))).value).toBe(25);
-    expect((await ask({ file: plan, question: "whole floor, indoor" }, deps(takeoff({ operation: "area_floor" })))).value).toBe(25);
-    expect((await ask({ file: plan, question: "rooms of A" }, deps(takeoff({ operation: "rooms", apartment: "A" })))).value).toBe(4);
+  it("adds up, averages and compares in code what the interpreter selects", async () => {
+    const sum = await onPlan("area of room 1.01 and 1.02", { operation: "rooms", room_numbers: ["1.01", "1.02"], measure: "area", answer_type: "area" });
+    expect(sum).toMatchObject({ value: 16, unit: "m2", exact: true, note: "The total consists of 1.01 Zimmer 12.00 m² and 1.02 Bad 4.00 m²." });
+    expect(numbers(svgOf(sum))).toEqual(["1 · 1.01 Zimmer", "2 · 1.02 Bad"]);
+
+    const mean = await onPlan("average size of a 'Zimmer'?", { operation: "rooms", labels: ["zimmer"], measure: "average", answer_type: "area" });
+    expect(mean).toMatchObject({ value: 10, unit: "m2", exact: true });
+
+    const flats = await onPlan("how much bigger is apartment A than B?", { operation: "compare", apartments: ["A", "B"], measure: "area", answer_type: "text" });
+    expect(flats.value).toBe("Apartment A: 25.00 m²; Apartment B: 15.00 m². Largest: apartment A, 10.00 m² more than apartment B.");
+    expect(flats).toMatchObject({ exact: true, pipeline: "dxf-geometry" });
+    expect(numbers(svgOf(flats))).toHaveLength(5);
+
+    const symbols = await onPlan("more doors or windows?", { operation: "compare", symbols: ["doors", "windows"], answer_type: "text" });
+    expect(symbols.value).toBe("Doors: 2; Windows: 3. Most: windows, 1 more than doors.");
   });
 
-  it("highlights the rooms a free answer rests on and labels it an estimate", async () => {
-    const planner = takeoff({ operation: "answer", answer: "Yes, 1.01 is larger than 1.03.", room_numbers: ["1.01", "1.03", "9.99"] });
-    const answer = await ask({ file: plan, question: "is 1.01 bigger than 1.03?" }, deps(planner));
-    expect(answer).toMatchObject({ value: "Yes, 1.01 is larger than 1.03.", exact: false, pipeline: "dxf-facts" });
-    expect(numbers(svgOf(answer))).toEqual(["1 · 1.01 Zimmer", "2 · 1.03 Zimmer"]);
+  it("names the largest room, and every room of a tie", async () => {
+    const largest = await onPlan("which room is the largest?", { operation: "rooms", pick: "largest", measure: "list", answer_type: "text" });
+    expect(largest.value).toBe("1.01 Zimmer, 12.00 m²");
+    expect(numbers(svgOf(largest))).toEqual(["1 · 1.01 Zimmer"]);
+    const smallest = await onPlan("smallest 'Zimmer'?", { operation: "rooms", labels: ["Zimmer"], pick: "smallest", measure: "list", answer_type: "text" });
+    expect(smallest.value).toBe("1.03 Zimmer and 2.01 Zimmer: 9.00 m² each (a tie)");
+    expect(numbers(svgOf(smallest))).toHaveLength(2);
   });
 
-  it("answers a template question without asking the planner", async () => {
-    const planner = takeoff({ operation: "count_symbols", symbol: "windows" });
-    const counted = await ask({ file: plan, question: "How many rooms labelled 'Zimmer' are there on this floor?" }, deps(planner));
-    expect(counted).toMatchObject({ value: 2, method: "room labels equal to 'Zimmer'" });
-    expect(counted.note).toBeUndefined();
-    const shown = await ask({ file: plan, question: "Show me the doors" }, deps(planner));
-    expect(shown).toMatchObject({ value: 1, note: "Doors: 1 marked on the drawing." });
-    expect(planner.requests).toHaveLength(0);
+  it("counts several kinds in one answer, with the total, what it consists of and every item marked", async () => {
+    const answer = await onPlan("how many doors and windows?", { operation: "count_symbols", symbols: ["doors", "windows"] });
+    expect(answer).toMatchObject({ value: 5, unit: "count", exact: true, note: "The total of 5 consists of 2 doors and 3 windows." });
+    expect(numbers(svgOf(answer))).toEqual(["1 · door", "2 · door", "3 · window", "4 · window", "5 · window"]);
   });
 
-  it("leaves the question unanswered when the planner finds no call", async () => {
-    const answer = await ask({ file: plan, question: "who drew this?" }, deps(takeoff({ operation: "none" })));
-    expect(answer).toMatchObject({ value: null, pipeline: "none" });
+  it("counts the symbols of one apartment or room by containment", async () => {
+    expect((await onPlan("windows in apartment A", { operation: "count_symbols", symbols: ["windows"], apartments: ["A"] })).value).toBe(2);
+    expect((await onPlan("windows in apartment B", { operation: "count_symbols", symbols: ["windows"], apartments: ["B"] })).value).toBe(1);
+    const bath = await onPlan("doors of room 1.02", { operation: "count_symbols", symbols: ["doors"], room_numbers: ["1.02"] });
+    expect(bath).toMatchObject({ value: 1, exact: true });
+    expect(bath.method).toContain("those lying in or reaching the outline of one of the 1 room 1.02");
   });
 
-  it("does not widen a selection to every room when the planner names a label the plan lacks", async () => {
-    const answer = await ask({ file: plan, question: "how many saunas?" }, deps(takeoff({ operation: "rooms", labels: ["Sauna"] })));
-    expect(answer.value).toBeNull();
+  it("says that the drawing does not have a room, label or apartment instead of narrowing the selection", async () => {
+    const number = await onPlan("total area of rooms 1.01 and 9.99", { operation: "rooms", room_numbers: ["1.01", "9.99"], measure: "area", answer_type: "area" });
+    expect(number).toMatchObject({ value: null, pipeline: "none" });
+    expect(number.note).toBe("This drawing does not have room 9.99. It has room labels 'Zimmer', 'Bad', 'Balkon'; rooms numbered 1.01 to 2.02; apartments A and B.");
+    const word = await onPlan("how many saunas?", { operation: "rooms", missing: ["sauna"] });
+    expect(word.value).toBeNull();
+    expect(word.note).toContain("This drawing does not have 'sauna'.");
+    const flat = await onPlan("how big is apartment C?", { operation: "area_apartment", apartments: ["C"], answer_type: "area" });
+    expect(flat.note).toContain("does not have apartment C");
   });
 
-  it("stays with the fixed parser when the planner is switched off", async () => {
-    const answer = await ask({ file: plan, question: "window count" }, deps(null));
-    expect(answer.value).toBeNull();
+  it("answers a question the drawing cannot answer with the reason, not with 'not understood'", async () => {
+    const answer = await onPlan("what is the ceiling height in the stairwell?", { operation: "none", reason: "The plan holds no ceiling heights.", answer_type: "text" });
+    expect(answer).toMatchObject({ value: null, pipeline: "none", note: "The plan holds no ceiling heights." });
+    expect(answer.method).toContain(`understood as "a question this drawing's CAD data cannot answer" by fake-planner`);
+  });
+
+  it("runs the dataset's operations for apartments and floor totals", async () => {
+    expect((await onPlan("flats?", { operation: "count_apartments" })).value).toBe(2);
+    expect((await onPlan("flat A size", { operation: "area_apartment", apartments: ["a"], answer_type: "area" })).value).toBe(25);
+    const both = await onPlan("A and B together", { operation: "area_apartment", apartments: ["A", "B"], answer_type: "area" });
+    expect(both).toMatchObject({ value: 40, unit: "m2", note: "The total of 40.00 m² consists of apartment A 25.00 m² and apartment B 15.00 m²." });
+    expect((await onPlan("whole floor, indoor", { operation: "area_floor", answer_type: "area" })).value).toBe(40);
+    expect((await onPlan("rooms of A", { operation: "rooms", apartments: ["A"] })).value).toBe(4);
   });
 });
 
-describe("a free-form question about a raster drawing", () => {
-  const inventory = { floors: 1, bedrooms: [{ x: 100, y: 200 }, { x: 600, y: 200 }], toilet_bowls: [{ x: 500, y: 500 }] };
-  const vision = () => model("fake-vision", (request) => ("answer" in (request.schema.properties as object) ? { answer: "Scale 1:100", value: null, unit: null, explanation: "title block" } : inventory));
+describe("a question about a layered DXF plan, read by the keyword parser", () => {
+  const template = "How many rooms labelled 'Zimmer' are there on this floor?";
 
-  it("marks what a show-me question in a known wording asks for, without the planner", async () => {
-    const planner = model("fake-planner", { operation: "free", target: "none", items: "", locate: false });
-    const answer = await ask({ file: image, question: "näytä makuuhuoneet" }, deps(planner, vision()));
-    expect(answer).toMatchObject({ value: 2, kind: "bedroom", note: "Bedrooms: 2 marked on the drawing." });
-    expect(answer.evidence?.kind === "image" && answer.evidence.marks.map((m) => [m.n, m.x, m.y])).toEqual([[1, 20, 20], [2, 120, 20]]);
+  it("answers a template question without a model, and says who read it", async () => {
+    const answer = await ask({ file: plan, question: template }, deps(null));
+    expect(answer).toMatchObject({ value: 3, exact: true, method: "read by the keyword parser (no interpreter model is configured); room labels equal to 'Zimmer'" });
+    const free = await ask({ file: plan, question: "window count" }, deps(null));
+    expect(free.value).toBeNull();
+    expect(free.method).toContain("read by the keyword parser (no interpreter model is configured)");
+  });
+
+  it("does not ask the interpreter in bulk mode", async () => {
+    const planner = takeoff({ operation: "count_symbols", symbols: ["windows"] });
+    const answer = await ask({ file: plan, question: template }, { ...deps(planner), interpreter: "templates" });
+    expect(answer).toMatchObject({ value: 3, method: "read by the keyword parser (bulk mode, INTERPRETER=templates); room labels equal to 'Zimmer'" });
     expect(planner.requests).toHaveLength(0);
   });
 
-  it("lets the planner map loose wording onto a known kind", async () => {
-    const planner = model("fake-planner", { operation: "count_known", target: "toilet", items: "", locate: true });
-    const answer = await ask({ file: image, question: "where's the loo?" }, deps(planner, vision()));
-    expect(answer).toMatchObject({ value: 1, kind: "toilet", note: "Toilet bowls: 1 marked on the drawing." });
-    expect(answer.method).toContain(`understood as "count toilet bowls" by fake-planner`);
-    expect(answer.evidence?.kind === "image" && answer.evidence.marks).toHaveLength(1);
-    expect(planner.requests[0].prompt).toContain("- toilet: toilet bowls (the fixture");
-    expect(planner.requests[0].prompt).toContain("- wc_room: separate WC rooms");
+  it("takes over when the interpreter's call fails or cannot be run, and says so", async () => {
+    const failing: VisionModel = {
+      id: "broken-planner",
+      ask: async () => {
+        throw new Error("spawn claude ENOENT");
+      },
+    };
+    const failed = await ask({ file: plan, question: template }, deps(failing));
+    expect(failed.value).toBe(3);
+    expect(failed.method).toContain("read by the keyword parser (the interpreter broken-planner gave no usable call: spawn claude ENOENT)");
+    const unusable = await ask({ file: plan, question: template }, deps(takeoff({ operation: "count_symbols" })));
+    expect(unusable.value).toBe(3);
+    expect(unusable.method).toContain("gave no usable call: count_symbols without a symbol kind");
   });
 
-  it("reads the drawing freely when the planner finds nothing to count", async () => {
-    const planner = model("fake-planner", { operation: "free", target: "none", items: "", locate: false });
-    const answer = await ask({ file: image, question: "what scale is this drawn at?" }, deps(planner, vision()));
+  it("marks what a plain show-request names, and leaves a qualified one unanswered", async () => {
+    expect(await ask({ file: plan, question: "Show me the doors" }, deps(null))).toMatchObject({ value: 2, note: "Doors: 2 marked on the drawing." });
+    expect((await ask({ file: plan, question: "Show me the doors of apartment A" }, deps(null))).value).toBeNull();
+  });
+});
+
+describe("a question about a raster drawing", () => {
+  const inventory = { floors: 1, bedrooms: [{ x: 100, y: 200 }, { x: 600, y: 200 }], toilet_bowls: [{ x: 500, y: 500 }], showers: [{ x: 300, y: 300 }], bathtubs: [] };
+  const vision = () =>
+    model("fake-vision", (request) => {
+      const properties = request.schema.properties as object;
+      if ("answer" in properties) return { answer: "Scale 1:100", value: null, unit: null, explanation: "title block" };
+      return "items" in properties ? { items: [{ x: 250, y: 250 }], count: 1 } : inventory;
+    });
+  const reading = (fields: Record<string, unknown>) => model("fake-planner", { operation: "count_known", targets: [], whole_drawing: true, items: "", locate: false, answer_type: "count", ...fields });
+
+  it("goes to the interpreter even when a keyword matches, with the keyword's reading as a hint", async () => {
+    const planner = reading({ targets: ["sink"], whole_drawing: false, locate: true });
+    const eyes = vision();
+    const answer = await ask({ file: image, question: "show me the kitchen sink" }, deps(planner, eyes));
+    expect(planner.requests[0].prompt).toContain("A keyword parser reads this as: count the kitchens on the whole drawing.");
+    expect(planner.requests[0].prompt).toContain("- toilet: toilet bowls (the fixture");
+    expect(planner.requests[0].prompt).not.toContain("shower_bathtub");
+    // A count limited to part of the drawing is made by the vision model from the full question.
+    expect(eyes.requests[0].prompt).toBe("show me the kitchen sink");
+    expect(answer).toMatchObject({ value: 1, pipeline: "vision-model" });
+    expect(answer.method).toContain(`understood as "count sinks and wash basins in the part of the drawing the question names" by fake-planner`);
+    expect(answer.evidence?.kind === "image" && answer.evidence.marks).toHaveLength(1);
+  });
+
+  it("maps loose wording onto a known kind and marks it", async () => {
+    const answer = await ask({ file: image, question: "where's the loo?" }, deps(reading({ targets: ["toilet"], locate: true }), vision()));
+    expect(answer).toMatchObject({ value: 1, kind: "toilet", note: "Toilet bowls: 1 marked on the drawing." });
+    expect(answer.method).toContain(`understood as "count toilet bowls" by fake-planner`);
+  });
+
+  it("returns several kinds with the total and what it consists of", async () => {
+    const answer = await ask({ file: image, question: "bedrooms and toilets, how many?" }, deps(reading({ targets: ["bedroom", "toilet"] }), vision()));
+    expect(answer).toMatchObject({ value: 3, kind: "toilet+bedroom", note: "The total of 3 consists of 1 toilet bowls and 2 bedrooms." });
+    expect(answer.evidence?.kind === "image" && answer.evidence.marks.map((m) => [m.n, m.label])).toEqual([[1, "toilet bowls"], [2, "bedrooms"], [3, "bedrooms"]]);
+  });
+
+  it("counts showers and bathtubs named together as the dataset's combined kind", async () => {
+    const answer = await ask({ file: image, question: "showers plus tubs" }, deps(reading({ targets: ["shower", "bathtub"] }), vision()));
+    expect(answer).toMatchObject({ value: 1, kind: "shower_bathtub" });
+  });
+
+  it("reads the drawing freely when there is nothing to count, and says why nothing is marked", async () => {
+    const planner = reading({ operation: "read", locate: true, answer_type: "text" });
+    const answer = await ask({ file: image, question: "show me the scale" }, deps(planner, vision()));
     expect(answer).toMatchObject({ value: "Scale 1:100", pipeline: "vision-model" });
+    expect(answer.note).toContain("Nothing is marked");
     expect(answer.evidence?.kind === "image" && answer.evidence.marks).toEqual([]);
   });
 
-  it("does not ask the planner when the caller states that the question is not a count", async () => {
-    const planner = model("fake-planner", { operation: "count_known", target: "toilet", items: "", locate: false });
+  it("does not ask the interpreter when the caller states that the answer is not a count", async () => {
+    const planner = reading({ targets: ["toilet"] });
     const answer = await ask({ file: image, question: "what scale is this drawn at?", type: "text" }, deps(planner, vision()));
     expect(answer.value).toBe("Scale 1:100");
     expect(planner.requests).toHaveLength(0);
   });
+
+  it("falls back to the keyword patterns without an interpreter model", async () => {
+    const answer = await ask({ file: image, question: "näytä makuuhuoneet" }, deps(null, vision()));
+    expect(answer).toMatchObject({ value: 2, kind: "bedroom", note: "Bedrooms: 2 marked on the drawing." });
+    expect(answer.method).toContain("read by the keyword parser (no interpreter model is configured)");
+    expect(answer.evidence?.kind === "image" && answer.evidence.marks.map((m) => [m.n, m.x, m.y])).toEqual([[1, 20, 20], [2, 120, 20]]);
+    // A qualified request is not turned into the count of the first keyword.
+    const qualified = await ask({ file: image, question: "show me the bedroom door" }, deps(null, vision()));
+    expect(qualified.value).toBe("Scale 1:100");
+  });
 });
 
-describe("requests to be shown something", () => {
-  it("are told from quantity questions", () => {
-    for (const question of ["show me the bedrooms", "Where is the sauna?", "näytä makuuhuoneet", "Markiere alle Fenster", "Où sont les toilettes ?"]) {
+describe("keyword readings, for when no interpreter model is there", () => {
+  it("take a show-request only from the head of the question", () => {
+    for (const question of ["show me the bedrooms", "Where is the sauna?", "näytä makuuhuoneet", "Markiere alle Fenster", "Où sont les toilettes ?", "Please mark the windows"]) {
       expect(isLocate(question), question).toBe(true);
     }
-    for (const question of ["How many floors (storeys) does this floor plan show?", "rooms marked WC", "What is the net floor area of room 1.04 in m²?"]) {
+    for (const question of [
+      "How many floors (storeys) does this floor plan show?", "rooms marked WC", "What is the net floor area of room 1.04 in m²?",
+      "Which rooms show a window?", "What is the size of the room where the bathtub is?", "What does the mark 'KPH' mean?",
+    ]) {
       expect(isLocate(question), question).toBe(false);
     }
+  });
+
+  it("tell a plain show-request from one with a qualifier", () => {
+    expect(isPlainRequest("show me all the doors on this floor", /\bdoors\b/)).toBe(true);
+    expect(isPlainRequest("Zeig mir die Fenster im Dachgeschoss", /fenster/, ["Dachgeschoss"])).toBe(true);
+    expect(isPlainRequest("show me the doors of apartment A", /\bdoors\b/)).toBe(false);
+    expect(isPlainRequest("where is the living room?", /\brooms?\b/)).toBe(false);
+  });
+
+  it("read loose unit wording as the measure it names", () => {
+    expect(inferType("All walls in EG, total length is how many metre?")).toBe("length");
+    expect(inferType("How much room space is there on Level 1 in square metres?")).toBe("area");
   });
 });

@@ -29,7 +29,6 @@ const PIPELINES: Record<string, string> = {
   "dxf-facts": "Answered from the rooms measured in the CAD geometry",
   "ifc-geometry": "Measured from the building model",
   detector: "Counted by the symbol detector",
-  "symbol-vote": "Counted independently by the detectors and a vision model",
   "vision-model": "Read from the image by a vision model",
   "sheet-text": "Read from the text on the sheet",
   "ifc-facts": "Answered from facts in the building model",

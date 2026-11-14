@@ -20,6 +20,20 @@ export function contains(points: Polygon, [x, y]: Point): boolean {
   return inside;
 }
 
+/** Distance from a point to a polygon's outline; zero inside the polygon. */
+export function distanceTo(points: Polygon, [x, y]: Point): number {
+  if (contains(points, [x, y])) return 0;
+  let best = Infinity;
+  for (let i = 0; i < points.length; i++) {
+    const [x1, y1] = points[i];
+    const [x2, y2] = points[(i + 1) % points.length];
+    const dx = x2 - x1, dy = y2 - y1;
+    const along = dx === 0 && dy === 0 ? 0 : Math.max(0, Math.min(1, ((x - x1) * dx + (y - y1) * dy) / (dx * dx + dy * dy)));
+    best = Math.min(best, Math.hypot(x - (x1 + along * dx), y - (y1 + along * dy)));
+  }
+  return best;
+}
+
 export function bbox(points: Polygon): [number, number, number, number] {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const [x, y] of points) {

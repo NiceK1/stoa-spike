@@ -3,7 +3,7 @@
  * Layers: ROOM_OUTLINE, UNIT_OUTLINE, WALL, DOOR, WINDOW, FIXTURE, ROOM_TEXT.
  */
 import { readFile } from "node:fs/promises";
-import { contains, mid, polygonArea } from "../geometry.js";
+import { contains, distanceTo, mid, polygonArea } from "../geometry.js";
 import type { Intent } from "../questions.js";
 import type { Point, Polygon } from "../types.js";
 
@@ -64,6 +64,11 @@ const OUTDOOR = new Set(["balkon", "balcon", "balcone", "loggia", "terrasse", "t
 // Vertex counts the drawing generator uses for fixture symbols.
 const BOWL_VERTICES = 48, BATHTUB_VERTICES = 69, SHOWER_VERTICES = 5;
 const STACK_GAP = 0.6; // max vertical distance between the stacked name / number / area labels of one room
+// A door or window is drawn across the wall and reaches the outlines of the rooms it serves; a fixture lies inside its room.
+const TOUCH = 0.05;
+
+export const SYMBOL_KINDS = ["doors", "windows", "toilets", "washbasins", "bathtubs", "showers"] as const;
+export type SymbolKind = (typeof SYMBOL_KINDS)[number];
 
 export interface Room {
   name: string | null;
@@ -90,7 +95,7 @@ export interface TakeoffResult {
 export interface RoomFilter {
   labels?: string[];
   numbers?: string[];
-  unit?: string;
+  units?: string[];
 }
 
 export class Plan {
@@ -209,17 +214,35 @@ export class Plan {
     };
   }
 
-  select({ labels, numbers, unit }: RoomFilter): Room[] {
+  select({ labels, numbers, units }: RoomFilter): Room[] {
     const names = labels && new Set(labels.map((l) => l.toLowerCase()));
-    const inUnit = unit === undefined ? null : new Set(this.unitRooms(unit));
+    const inUnits = units && new Set(units.flatMap((unit) => this.unitRooms(unit)));
     return this.rooms.filter(
-      (r) => (!names || names.has((r.name ?? "").toLowerCase())) && (!numbers || (r.number !== null && numbers.includes(r.number))) && (!inUnit || inUnit.has(r)),
+      (r) => (!names || names.has((r.name ?? "").toLowerCase())) && (!numbers || (r.number !== null && numbers.includes(r.number))) && (!inUnits || inUnits.has(r)),
     );
   }
 
   /** The number of `rooms`, or their summed area; null when an area is missing or nothing was selected to add up. */
   measure(rooms: Room[], quantity: "count" | "area", method: string): TakeoffResult | null {
     return quantity === "count" ? { value: rooms.length, method, ...shapes(rooms) } : totalArea(rooms, method);
+  }
+
+  /** The drawn symbols of a kind, and what tells them apart on the drawing. */
+  symbols(kind: SymbolKind): { shapes: Polygon[]; method: string } {
+    switch (kind) {
+      case "doors": return { shapes: this.doors, method: "door symbols on layer DOOR" };
+      case "windows": return { shapes: this.windows, method: "window symbols on layer WINDOW" };
+      case "toilets": return { shapes: this.toilets, method: "bowl symbols with a cistern stroke" };
+      case "washbasins": return { shapes: this.washbasins, method: "bowl symbols with a tap" };
+      case "bathtubs": return { shapes: this.bathtubs, method: "bathtub symbols" };
+      case "showers": return { shapes: this.showers, method: "shower tray symbols" };
+    }
+  }
+
+  /** The symbols of a kind that lie in, or reach the outline of, one of `rooms`; an entrance door belongs to the room it opens into. */
+  symbolsIn(kind: SymbolKind, rooms: Room[]): Polygon[] {
+    const outlines = rooms.flatMap((r) => (r.polygon ? [r.polygon] : []));
+    return this.symbols(kind).shapes.filter((shape) => outlines.some((outline) => [...shape, mid(shape)].some((point) => distanceTo(outline, point) <= TOUCH)));
   }
 
   answer(intent: Intent): TakeoffResult | null {
@@ -232,17 +255,10 @@ export class Plan {
       const labels = [...this.unitLabels.values()];
       return { value: labels.length, method: "unit labels", subject: "apartments", highlights: this.unitOutlines.filter((o) => labels.some((p) => contains(o, p))) };
     }
-    const symbols: Record<string, [Polygon[], string, string]> = {
-      count_doors: [this.doors, "door symbols on layer DOOR", "doors"],
-      count_windows: [this.windows, "window symbols on layer WINDOW", "windows"],
-      count_toilets: [this.toilets, "bowl symbols with a cistern stroke", "toilets"],
-      count_washbasins: [this.washbasins, "bowl symbols with a tap", "washbasins"],
-      count_bathtubs: [this.bathtubs, "bathtub symbols", "bathtubs"],
-      count_showers: [this.showers, "shower tray symbols", "showers"],
-    };
-    if (kind in symbols) {
-      const [shapes, method, subject] = symbols[kind];
-      return { value: shapes.length, method, subject, highlights: shapes };
+    const symbol = SYMBOL_KINDS.find((each) => kind === `count_${each}`);
+    if (symbol) {
+      const { shapes, method } = this.symbols(symbol);
+      return { value: shapes.length, method, subject: symbol, highlights: shapes };
     }
     if (kind === "area_room" && intent.number) {
       const rooms = this.rooms.filter((r) => r.number === intent.number);

@@ -2,30 +2,69 @@
  * Picks the pipeline for a drawing: exact geometry when a vector twin exists, a model otherwise.
  * In the dataset, files with the same name and a different extension are the same drawing,
  * and `<model>_plan-<level>.pdf` was rendered from `<model>.ifc`.
+ *
+ * Every question is first read by the interpreter model (planner.ts), which returns one structured call that the
+ * pipelines then compute. The keyword parsers read a question on their own only in bulk mode (INTERPRETER=templates),
+ * without an interpreter model, or when its call fails; the method text of every answer says who read the question.
  */
 import { existsSync } from "node:fs";
 import { basename, extname } from "node:path";
 import { renderPlanSvg } from "./evidence.js";
 import type { Detector } from "./models/detector.js";
 import type { VisionModel } from "./models/vision.js";
-import { markedSentence, planTakeoff } from "./planner.js";
-import { inferType, isLocate, parseTakeoff } from "./questions.js";
+import { markedSentence, planIfc, planRaster, planTakeoff, type RasterReading } from "./planner.js";
+import { countKindPattern, describeIntent, inferType, isLocate, isPlainRequest, parseTakeoff } from "./questions.js";
 import { rasterize, upright } from "./rasterize.js";
 import { toEnglish } from "./rewrite.js";
 import { isLayeredPlan, loadPlan, type Plan, type TakeoffResult } from "./solvers/dxf.js";
-import { solveRaster } from "./solvers/raster.js";
+import { describeIfcIntent, elementWords, parseIfcQuestion } from "./solvers/ifc/question.js";
+import { RASTER_KINDS, TARGETS, rasterTarget, readByKeywords, solveRaster } from "./solvers/raster.js";
 import sharp from "sharp";
 import type { Answer, AskInput, Evidence } from "./types.js";
 
 export interface Deps {
   vision: VisionModel;
-  /** Understands questions the fixed parsers do not: the vision model when left out, nobody when null. */
+  /** Reads every question into a structured call: the vision model when left out, nobody when null. */
   planner?: VisionModel | null;
+  /**
+   * "templates" has the keyword parsers read the questions alone, which costs nothing: for scoring the dataset's own
+   * wording in bulk. Left out, INTERPRETER decides, and without it the interpreter model reads every question.
+   */
+  interpreter?: "model" | "templates";
   detector: Detector | null;
   /** URL the browser can load a file from, for image evidence. */
   fileUrl(path: string): string;
   useDetector?: boolean;
 }
+
+/** Who reads the question: the interpreter model, or the keyword parsers, with the reason the model is not asked. */
+interface Reader {
+  model: VisionModel | null;
+  why: string;
+}
+
+function readerOf(deps: Deps): Reader {
+  if ((deps.interpreter ?? process.env.INTERPRETER) === "templates") return { model: null, why: "bulk mode, INTERPRETER=templates" };
+  const planner = deps.planner === undefined ? deps.vision : deps.planner;
+  return planner && planner.id !== "none" ? { model: planner, why: "" } : { model: null, why: "no interpreter model is configured" };
+}
+
+/** The interpreter's call, or null when the keyword parsers have to read the question: no model, a failed call, an unusable answer. */
+async function interpret<T>(reader: Reader, run: (model: VisionModel) => Promise<T>): Promise<T | null> {
+  if (!reader.model) return null;
+  try {
+    return await run(reader.model);
+  } catch (error) {
+    reader.why = `the interpreter ${reader.model.id} gave no usable call: ${error instanceof Error ? error.message : String(error)}`.slice(0, 240);
+    reader.model = null;
+    return null;
+  }
+}
+
+const byModel = (reading: string, model: VisionModel) => `understood as "${reading}" by ${model.id}`;
+const byKeywords = (reader: Reader) => `read by the keyword parser (${reader.why})`;
+const joined = (...notes: (string | undefined | false)[]) => notes.filter(Boolean).join(" ") || undefined;
+const highlighted = (count: number) => `The ${count} counted item${count === 1 ? " is" : "s are"} highlighted on the drawing.`;
 
 const IMAGE = new Set([".png", ".jpg", ".jpeg", ".webp"]);
 const RENDERABLE = new Set([".pdf", ".svg"]);
@@ -78,91 +117,202 @@ export async function preview(file: string, deps: Pick<Deps, "fileUrl">): Promis
 }
 
 export async function ask(input: AskInput, deps: Deps): Promise<Answer> {
-  const asked = input.type ?? inferType(input.question);
-  // A request to be shown something is answered like the count of that thing, which comes with the marks.
-  const locate = input.type === undefined && isLocate(input.question);
-  const qtype = locate ? "count" : asked;
-  const planner = deps.planner === undefined ? deps.vision : deps.planner;
+  const reader = readerOf(deps);
   const extension = extname(input.file).toLowerCase();
+  // What a vector pipeline could not answer, said at the end when no later pipeline answers either.
+  let unanswered: Answer | null = null;
+  // A reading handed on to the image pipeline, so that one question costs one interpretation.
+  let carried: RasterReading | null = null;
 
   const ifc = extension === ".ifc" ? input.file : ifcModelOf(input.file);
   if (ifc) {
-    // Loaded on demand: the IFC engine is heavy and the other pipelines should not wait for it.
-    const { solveIfc } = await import("./solvers/ifc.js");
-    let answer = await solveIfc(ifc, input.question, qtype);
-    let numeric = qtype !== "text";
-    // A typed question that reads as free text may still be a take-off in loose wording, so the rewrite gets a try.
-    if (numeric ? !answer : input.type === undefined && planner) {
-      const english = await toEnglish(input.question, deps.vision);
-      const type = numeric ? qtype : english ? inferType(english) : "text";
-      const rewritten = english && type !== "text" ? await solveIfc(ifc, english, type) : null;
-      if (rewritten) {
-        answer = { ...rewritten, method: `understood as "${english}" by ${deps.vision.id}; ${rewritten.method}` };
-        numeric = true;
-      }
+    const outcome = (await askIfcByModel(ifc, input, deps, reader)) ?? (reader.model ? null : await askIfcByKeywords(ifc, input, deps, reader));
+    if (outcome && (outcome.value !== null || extension === ".ifc" || outcome.pipeline !== "none")) return outcome;
+    if (outcome) {
+      unanswered = outcome;
+      carried = { call: { operation: "read" }, locate: false, type: input.type ?? "text" };
     }
-    if (answer && numeric) {
-      const shown = locate && typeof answer.value === "number" && answer.evidence !== undefined;
-      return shown ? { ...answer, note: answer.note ?? `The ${answer.value} counted items are highlighted on the drawing.` } : answer;
-    }
-    if (extension === ".ifc") {
-      // A free-text question: the fixed rules give a fact sheet on the topic at best, so a language model
-      // writes the answer to the actual question from the model's extracted facts.
-      const { answerFromDigest } = await import("./solvers/ifc/digest.js");
-      const related = typeof answer?.value === "string" ? answer.value : undefined;
-      return { ...(await answerFromDigest(ifc, input.question, asked, deps.vision, related)), evidence: answer?.evidence };
-    }
-    if (answer) return answer;
   }
 
   const dxf = extension === ".dxf" ? input.file : twin(input.file, ".dxf");
   if (dxf) {
     const plan = await loadPlan(dxf);
     if (isLayeredPlan(plan)) {
-      const intent = parseTakeoff(input.question, qtype);
-      const result = intent ? plan.answer(intent) : null;
-      if (result) {
-        return {
-          value: result.value, unit: qtype === "area" ? "m2" : "count", pipeline: "dxf-geometry", exact: true, method: result.method,
-          note: locate && result.subject ? markedSentence(result.value, result.subject) : undefined,
-          evidence: planEvidence(plan, result, `Highlighted: ${result.method}`),
-        };
-      }
-      // The templates did not fit: a language model picks the call, and the geometry still gives the numbers.
-      const planned = planner ? await planTakeoff(input.question, plan, planner) : null;
+      const guess = parseTakeoff(input.question, input.type ?? inferType(input.question));
+      // Without a template reading, the keyword parser still spots the plan's room numbers in the question.
+      const named = guess ? [] : plan.vocabulary().numbers.filter((number) => new RegExp(String.raw`(?<![\w.])${number.replace(/\./g, "\\.")}(?![\w]|\.\d)`).test(input.question));
+      const hint = guess ? describeIntent(guess) : named.length > 0 ? `a question about room${named.length > 1 ? "s" : ""} ${named.join(", ")}` : null;
+      const planned = await interpret(reader, (model) => planTakeoff(input.question, plan, model, hint));
       if (planned) {
-        const marked = (locate || planned.locate) && typeof planned.value === "number" && planned.unit === "count" && planned.subject;
-        return {
-          value: planned.value, unit: planned.unit, pipeline: planned.exact ? "dxf-geometry" : "dxf-facts", exact: planned.exact,
-          method: `understood as "${planned.understood}" by ${planner!.id}; ${planned.method}`,
-          note: marked ? markedSentence(planned.value as number, marked) : undefined,
-          evidence: planEvidence(plan, planned, `Highlighted: ${planned.method}`),
-        };
+        const method = `${byModel(planned.understood, reader.model!)}; ${planned.method}`;
+        const shown =
+          !planned.locate ? undefined
+          : typeof planned.value === "number" && planned.unit === "count" && planned.subject ? markedSentence(planned.value, planned.subject)
+          : planned.highlights.length > 0 ? `${planned.highlights.length} marked on the drawing.`
+          : "Nothing is marked on the drawing.";
+        if (planned.value !== null) {
+          return {
+            value: planned.value, unit: planned.unit, pipeline: "dxf-geometry", exact: planned.exact, method, note: joined(planned.note, shown),
+            evidence: planEvidence(plan, planned, `Highlighted: ${planned.method}`),
+          };
+        }
+        unanswered = { value: null, pipeline: "none", exact: false, method, note: joined(planned.note, planned.locate && "Nothing is marked on the drawing.") };
+        carried = { call: { operation: "read" }, locate: planned.locate, type: input.type ?? planned.type };
+      } else {
+        const asked = input.type ?? inferType(input.question);
+        const requested = input.type === undefined && isLocate(input.question);
+        const counted = requested ? parseTakeoff(input.question, "count") : null;
+        // A show-request with a qualifier ("the doors of apartment A") is not the plain count the keywords would make of it.
+        const pattern = counted ? countKindPattern(counted.kind) : undefined;
+        const locate = counted !== null && (!pattern || isPlainRequest(input.question, pattern));
+        const intent = locate ? counted : parseTakeoff(input.question, asked);
+        const result = intent ? plan.answer(intent) : null;
+        if (result) {
+          return {
+            value: result.value, unit: (locate ? "count" : asked) === "area" ? "m2" : "count", pipeline: "dxf-geometry", exact: true,
+            method: `${byKeywords(reader)}; ${result.method}`,
+            note: locate && result.subject ? markedSentence(result.value, result.subject) : undefined,
+            evidence: planEvidence(plan, result, `Highlighted: ${result.method}`),
+          };
+        }
       }
     }
   }
 
-  if (extension === ".pdf" && existsSync(input.file)) {
-    // Schedules and notes are answered from the sheet's text layer; drawings without enough text go to the image pipeline.
-    const { solveDocument } = await import("./solvers/document.js");
-    const answer = await solveDocument(input.file, input.question, asked, { text: deps.vision, fileUrl: deps.fileUrl });
-    if (answer) return answer;
-  }
-
+  const pdf = extension === ".pdf" && existsSync(input.file);
   let image: string | null = null;
   if (IMAGE.has(extension) && existsSync(input.file)) image = input.file;
   else if (RENDERABLE.has(extension) && existsSync(input.file)) image = await rasterize(input.file);
   else image = twin(input.file, ".png") ?? twin(input.file, ".jpg") ?? (twin(input.file, ".pdf") ? await rasterize(twin(input.file, ".pdf")!) : null);
-  if (image) {
-    image = await upright(image);
-    // A caller who states that the question is not a count knows better than the planner.
-    const understands = input.type === undefined || input.type === "count" ? planner : null;
-    const raster = { vision: deps.vision, detector: deps.detector, imageUrl: deps.fileUrl(image), useDetector: deps.useDetector, planner: understands };
-    return solveRaster(image, input.question, qtype, raster, locate);
+
+  if (pdf || image) {
+    // A caller who states that the answer is not a count leaves one route, the free reading; the model that reads the
+    // drawing then reads the question as well.
+    const fixed: RasterReading | null = input.type !== undefined && input.type !== "count" ? { call: { operation: "read" }, locate: false, type: input.type } : null;
+    const target = rasterTarget(input.question);
+    const read = carried ?? fixed ?? (await interpret(reader, (model) => planRaster(input.question, RASTER_KINDS, model, target ? `count the ${target.plural} on the whole drawing` : null)));
+    let reading: RasterReading;
+    let how: string;
+    let asked = input.type ?? read?.type;
+    if (read && reader.model) {
+      reading = { ...read, type: input.type ?? read.type };
+      how = unanswered ? unanswered.method : read === fixed ? `read as a free question, the answer type '${input.type}' being stated` : byModel(describeReading(read), reader.model);
+    } else {
+      asked ??= inferType(input.question);
+      const requested = input.type === undefined && isLocate(input.question);
+      // A show-request with a qualifier ("the kitchen sink") is not the plain count the keywords would make of it.
+      const locate = requested && (!target || isPlainRequest(input.question, target.pattern));
+      reading = read ?? readByKeywords(input.question, locate ? "count" : asked, locate);
+      how = byKeywords(reader);
+    }
+
+    if (pdf) {
+      // Schedules and notes are answered from the sheet's text layer; drawings without enough text go to the image pipeline.
+      const { solveDocument } = await import("./solvers/document.js");
+      const answer = await solveDocument(input.file, input.question, asked ?? reading.type, { text: deps.vision, fileUrl: deps.fileUrl });
+      if (answer) return { ...answer, method: `${how}; ${answer.method}` };
+    }
+    if (image) {
+      image = await upright(image);
+      const raster = { vision: deps.vision, detector: deps.detector, imageUrl: deps.fileUrl(image), useDetector: deps.useDetector };
+      const answer = await solveRaster(image, input.question, reading, raster);
+      return { ...answer, method: `${how}; ${answer.method}` };
+    }
   }
 
-  return {
+  return unanswered ?? {
     value: null, pipeline: "none", exact: false,
-    method: ifc || dxf ? "the question was not understood for this vector drawing" : `no pipeline for ${extension || "this"} files`,
+    method: ifc || dxf ? `${byKeywords(reader)}; it does not know this wording for a vector drawing` : `no pipeline for ${extension || "this"} files`,
   };
+}
+
+function describeReading({ call }: RasterReading): string {
+  if (call.operation === "read") return "a question to read from the drawing";
+  if (call.operation === "count_other") return `count ${call.items}`;
+  const plurals = call.targets.map((id) => TARGETS.find((t) => t.id === id)?.plural ?? id).join(" and ");
+  return `count ${plurals}${call.whole ? "" : " in the part of the drawing the question names"}`;
+}
+
+/**
+ * The interpreter's call on a building model, computed. Null when the keyword parsers have to read the question.
+ * An answer with pipeline "none" says why the model cannot answer.
+ */
+async function askIfcByModel(ifc: string, input: AskInput, deps: Deps, reader: Reader): Promise<Answer | null> {
+  if (!reader.model) return null;
+  // Loaded on demand: the IFC engine is heavy and the other pipelines should not wait for it.
+  const { ifcMenu, solveIfc, solveIfcCall } = await import("./solvers/ifc.js");
+  const guess = parseIfcQuestion(input.question, input.type ?? inferType(input.question));
+  const read = await interpret(reader, async (model) => planIfc(input.question, await ifcMenu(ifc), model, guess ? describeIfcIntent(guess) : null));
+  if (!read) return null;
+  const how = byModel(read.understood, reader.model!);
+  const type = input.type ?? read.type;
+  const { call } = read;
+
+  if (call.operation === "none") return { value: null, pipeline: "none", exact: false, method: how, note: joined(call.reason, read.locate && "Nothing is marked on the drawing.") };
+  if (read.missing.length > 0 && call.operation !== "model_facts") {
+    const { storeys } = await ifcMenu(ifc);
+    return {
+      value: null, pipeline: "none", exact: false, method: how,
+      note: `The building model does not have ${read.missing.map((word) => `'${word}'`).join(", ")}. Its storeys are ${storeys.map((storey) => `'${storey.name}'`).join(", ") || "not named"}.`,
+    };
+  }
+
+  const answer = await solveIfcCall(ifc, call, type, input.question);
+  if (answer) {
+    const shown =
+      !read.locate ? undefined
+      : answer.evidence === undefined ? `Nothing is marked: ${answer.value === null ? "the question could not be answered" : "the model holds no plan geometry for these items"}.`
+      : typeof answer.value === "number" && answer.unit === "count" ? highlighted(answer.value)
+      : "The items behind the answer are highlighted on the drawing.";
+    return { ...answer, method: `${how}; ${answer.method}`, note: joined(answer.note, shown) };
+  }
+
+  // A question about the model's facts: a fixed rule gives a fact sheet on the topic at best, so a language model
+  // writes the answer to the actual question from the model's extracted facts.
+  const sheet = await solveIfc(ifc, input.question, "text");
+  // A sheet rendered from the model may hold the answer itself; the pipelines that read the sheet come next.
+  if (extname(input.file).toLowerCase() !== ".ifc" && existsSync(input.file)) {
+    return sheet ? { ...sheet, method: `${how}; ${sheet.method}` } : { value: null, pipeline: "none", exact: false, method: how };
+  }
+  const { answerFromDigest } = await import("./solvers/ifc/digest.js");
+  const written = await answerFromDigest(ifc, input.question, type, deps.vision, typeof sheet?.value === "string" ? sheet.value : undefined);
+  return {
+    ...written, method: `${how}; ${written.method}`, evidence: sheet?.evidence,
+    note: joined(written.note, read.locate && !sheet?.evidence && "Nothing is marked: the answer was written from the model's facts, not from items on a plan."),
+  };
+}
+
+/** The rule parser's reading of a question about a building model, with the rewrite into its English templates as second try. */
+async function askIfcByKeywords(ifc: string, input: AskInput, deps: Deps, reader: Reader): Promise<Answer | null> {
+  const { ifcMenu, solveIfc } = await import("./solvers/ifc.js");
+  const how = byKeywords(reader);
+  const asked = input.type ?? inferType(input.question);
+  let locate = input.type === undefined && isLocate(input.question);
+  if (locate) {
+    // "Where is the living room?" names one room; counting every room would answer another question.
+    const counted = parseIfcQuestion(input.question, "count");
+    const storeys = counted?.kind === "count" ? (await ifcMenu(ifc)).storeys.map((storey) => storey.name) : [];
+    locate = counted?.kind === "count" && isPlainRequest(input.question, elementWords(counted.element), storeys);
+  }
+  const qtype = locate ? "count" : asked;
+  let answer = await solveIfc(ifc, input.question, qtype);
+  const numeric = qtype !== "text";
+  if (numeric && !answer) {
+    const english = await toEnglish(input.question, deps.vision);
+    const rewritten = english ? await solveIfc(ifc, english, qtype) : null;
+    if (rewritten) answer = { ...rewritten, method: `rewritten as "${english}" by ${deps.vision.id}; ${rewritten.method}` };
+  }
+  if (answer && numeric) {
+    const shown = locate && typeof answer.value === "number" && answer.evidence !== undefined;
+    return { ...answer, method: `${how}; ${answer.method}`, note: shown ? (answer.note ?? highlighted(answer.value as number)) : answer.note };
+  }
+  if (extname(input.file).toLowerCase() === ".ifc") {
+    // A free-text question: the fixed rules give a fact sheet on the topic at best, so a language model
+    // writes the answer to the actual question from the model's extracted facts.
+    const { answerFromDigest } = await import("./solvers/ifc/digest.js");
+    const related = typeof answer?.value === "string" ? answer.value : undefined;
+    const written = await answerFromDigest(ifc, input.question, asked, deps.vision, related);
+    return { ...written, method: `${how}; ${written.method}`, evidence: answer?.evidence };
+  }
+  return answer ? { ...answer, method: `${how}; ${answer.method}` } : null;
 }

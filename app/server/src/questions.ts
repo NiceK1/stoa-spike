@@ -37,11 +37,12 @@ export function quotedName(question: string): string | undefined {
   return undefined;
 }
 
+// Area is checked before length: "square metres" holds a length word.
 const TYPE_WORDS: [QuestionType, RegExp][] = [
   ["count", /\b(how many|wie viele|combien|quant[ie]|kuinka monta|hvor mange|mitu|number of)\b/],
   ["volume", /\b(volume|volumen|nettovolumen|maht|tilavuus)\b|m³/],
-  ["length", /\b(length|länge|longueur|lunghezza|pituus|længde|pikkus|metres|meter)\b/],
-  ["area", /\b(area|fläche|nettofläche|surface|superficie|pinta-ala|areal|nettoareal|pindala)\b|m²|ft²/],
+  ["area", /\b(area|fläche|nettofläche|surface|superficie|pinta-ala|areal|nettoareal|pindala|square (?:metres?|meters?|feet)|sq\.? ?(?:m|ft)|m2)\b|m²|ft²/],
+  ["length", /\b(length|länge|longueur|lunghezza|pituus|længde|pikkus|metres?|meters?)\b/],
 ];
 
 const HOW_MANY = "(?:how many|wie viele|combien de|quant[ie]|kuinka monta)\\s+";
@@ -49,10 +50,10 @@ const HOW_MANY = "(?:how many|wie viele|combien de|quant[ie]|kuinka monta)\\s+";
 const UNIT_AFTER_HOW_MANY: [QuestionType, RegExp][] = [
   ["volume", new RegExp(`${HOW_MANY}(?:cubic\\s|m³|m3\\b|kubikmeter|mètres cubes|metri cubi|kuutiometri)`)],
   ["area", new RegExp(`${HOW_MANY}(?:square\\s|m²|m2\\b|sq\\.?\\s?(?:m|ft)\\b|quadratmeter|mètres carrés|metri quadr|neliömetri)`)],
-  ["length", new RegExp(`${HOW_MANY}(?:linear\\s+|running\\s+)?(?:metres|meters|meter|feet|foot|millimetres|millimeters|centimetres|centimeters|mètres|metri|metriä)\\b`)],
+  ["length", new RegExp(`${HOW_MANY}(?:linear\\s+|running\\s+)?(?:metres?|meters?|feet|foot|millimetres?|millimeters?|centimetres?|centimeters?|mètres?|metri|metriä)\\b`)],
 ];
 
-/** Guess the answer type of a free-form question, for questions that do not come from the dataset. */
+/** Guess the answer type from keywords. Used only when no interpreter model reads the question. */
 export function inferType(question: string): QuestionType {
   const lowered = question.toLowerCase();
   for (const [type, pattern] of UNIT_AFTER_HOW_MANY) if (pattern.test(lowered)) return type;
@@ -77,6 +78,19 @@ export function parseTakeoff(question: string, qtype: QuestionType): Intent | nu
   return null;
 }
 
+/** The keyword parser's reading in words, shown to the interpreter model to confirm or correct. */
+export function describeIntent(intent: Intent): string {
+  switch (intent.kind) {
+    case "count_rooms_labelled": return `count the rooms labelled '${intent.name}' on the whole floor`;
+    case "count_apartments": return "count the apartments on the floor";
+    case "area_room": return `the net floor area of room ${intent.number}`;
+    case "area_rooms_labelled": return `the total area of all rooms labelled '${intent.name}' on the floor`;
+    case "area_all_indoor": return "the total net floor area of all numbered indoor rooms on the floor";
+    case "area_apartment": return `the net floor area of apartment ${intent.unit}`;
+    default: return `count all ${intent.kind.replace("count_", "")} on the whole floor`;
+  }
+}
+
 // Verbs and question words that ask to be shown something, in the languages the dataset uses and a few neighbours.
 const LOCATE_WORDS = [
   "show", "mark", "highlight", "locate", "find", "point out", "pinpoint", "circle", "indicate", "where", "where's",
@@ -86,13 +100,45 @@ const LOCATE_WORDS = [
   "mostra", "mostrami", "segna", "evidenzia", "trova", "individua", "dove", "dov'è",
   "visa", "markera", "hitta", "muestra", "muéstrame", "señala", "resalta", "localiza", "dónde",
 ];
-const LOCATE = new RegExp(String.raw`(?<![\p{L}'])(?:${LOCATE_WORDS.join("|")})(?![\p{L}'-])`, "u");
+const POLITE = ["please", "pls", "can you", "could you", "would you", "bitte", "kannst du", "können sie", "s'il vous plaît", "per favore", "voisitko"];
+// Only at the head of the question: "which rooms show a window" and "the room where the bathtub is" are not requests.
+const LOCATE = new RegExp(String.raw`^\P{L}*(?:(?:${POLITE.join("|")})[\s,]+)*(?:${LOCATE_WORDS.join("|")})(?![\p{L}'-])`, "u");
 
 /**
  * True for a request to be shown something ("show me the bedrooms", "where is the sauna") rather than told a
- * quantity. Such a request is answered like the count of that thing, which comes with the marks on the drawing.
+ * quantity, judged by keywords. Used only when no interpreter model reads the question.
  */
 export function isLocate(question: string): boolean {
   const lowered = question.toLowerCase();
   return inferType(lowered) === "text" && LOCATE.test(lowered);
+}
+
+const FILLER = new Set([
+  "me", "us", "the", "a", "an", "all", "every", "each", "any", "of", "on", "in", "at", "this", "that", "these", "those", "there", "here", "is", "are",
+  "drawing", "plan", "floor", "floorplan", "model", "building", "storey", "level", "it", "them", "its", "s",
+  "mir", "uns", "die", "der", "das", "den", "dem", "alle", "allen", "im", "auf", "diesem", "dieser", "sind", "ist", "grundriss", "geschoss", "gebäude", "modell",
+  "moi", "nous", "les", "le", "la", "l", "tous", "toutes", "sur", "ce", "cet", "cette", "sont", "est", "étage", "du", "de", "des",
+  "mi", "tutti", "tutte", "i", "gli", "il", "lo", "su", "questo", "questa", "pianta", "piano", "sono", "è",
+  "kaikki", "tässä", "pohjapiirustuksessa", "ovat", "alla", "på", "här", "todos", "todas", "los", "las", "el", "en", "este", "esta",
+]);
+
+/**
+ * True when a show-request names nothing but the thing to show: once the request words, filler words, quoted names
+ * and the text matched by `target` are taken out, no word is left. A leftover word ("largest", "apartment") is a
+ * qualifier the keyword parsers would drop, so such a request is not theirs to answer as a plain count.
+ */
+export function isPlainRequest(question: string, target: RegExp, alsoAllowed: string[] = []): boolean {
+  const allowed = new Set(alsoAllowed.flatMap((name) => name.toLowerCase().split(/[^\p{L}\p{N}]+/u)));
+  let rest = question.toLowerCase().replace(/'[^']*'|"[^"]*"|«[^»]*»|„[^“”]*[“”]/g, " ");
+  // The whole word around the match: target patterns are often stems ("makuuhuone" in "makuuhuoneet").
+  rest = rest.replace(new RegExp(String.raw`[\p{L}-]*(?:${target.source})[\p{L}-]*`, "gu"), " ");
+  for (const phrase of [...POLITE, ...LOCATE_WORDS].sort((a, b) => b.length - a.length)) {
+    rest = rest.replace(new RegExp(String.raw`(?<![\p{L}'])${phrase}(?![\p{L}'-])`, "gu"), " ");
+  }
+  return rest.split(/[^\p{L}\p{N}]+/u).every((word) => word === "" || FILLER.has(word) || allowed.has(word));
+}
+
+/** The pattern of the symbol or apartment kind a count intent names, for `isPlainRequest`. */
+export function countKindPattern(kind: string): RegExp | undefined {
+  return COUNT_KINDS.find(([name]) => name === kind)?.[1];
 }

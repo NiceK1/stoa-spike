@@ -8,7 +8,9 @@
  *   npm run eval:paraphrase -- --source ifc_models --drawings 20 --per-file 2
  *
  * --styles picks the style set (default dev), --dump <file> keeps every question with how it was understood,
- * --original asks the same sample in the dataset's wording, as the reference.
+ * --original asks the same sample in the dataset's wording, as the reference,
+ * --interpreter templates has the keyword parsers read the questions instead of the interpreter model,
+ * --other-languages samples the dataset's questions that are not in English (to be used with --original).
  * Rewrites and answers are cached like every other model call, so a repeated run costs nothing.
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -36,19 +38,28 @@ if (!styles) throw new Error(`unknown style set '${styleSet}'; known: ${Object.k
 const sampleFile = option("sample");
 const only = sampleFile && existsSync(sampleFile) ? new Set(readFileSync(sampleFile, "utf8").split(/\s+/).filter(Boolean)) : null;
 
-/** Calls that reached the model, as opposed to the disk cache. */
-const calls = { made: 0, cached: 0 };
-function counted(model: VisionModel): VisionModel {
+/** Calls that reached the model, as opposed to the disk cache, and what the calls took, cached or not. */
+interface Calls {
+  made: number;
+  cached: number;
+  seconds: number;
+  costUsd: number;
+}
+function counted(model: VisionModel, tally: Calls): VisionModel {
   return {
     id: model.id,
     ask: async (request) => {
       const result = await model.ask(request);
-      if (result.cached) calls.cached++;
-      else calls.made++;
+      if (result.cached) tally.cached++;
+      else tally.made++;
+      tally.seconds += result.seconds;
+      tally.costUsd += result.costUsd;
       return result;
     },
   };
 }
+const calls: Calls = { made: 0, cached: 0, seconds: 0, costUsd: 0 };
+const interpretations: Calls = { made: 0, cached: 0, seconds: 0, costUsd: 0 };
 
 /** The question with its names and numbers blanked, which identifies the template it was generated from. */
 function template(question: string): string {
@@ -70,7 +81,7 @@ function sample(): QuestionRow[] {
   chosen.forEach((path, d) => {
     const groups = new Map<string, QuestionRow[]>();
     for (const row of questionsByPath().get(path)!) {
-      if (!/^(How|What) /.test(row.question) || isCorrect(row.type, row.answer, row.answer) === null) continue;
+      if (/^(How|What) /.test(row.question) === args.includes("--other-languages") || isCorrect(row.type, row.answer, row.answer) === null) continue;
       const key = template(row.question);
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(row);
@@ -84,15 +95,18 @@ function sample(): QuestionRow[] {
   return rows;
 }
 
-const vision = counted(createVision());
+const vision = counted(createVision(), calls);
 function fail(message: string): never {
   throw new Error(message);
 }
 
-const planner = counted(createPlanner() ?? fail("eval-paraphrase measures the planner, which VISION_PROVIDER=none turns off"));
-const deps: Deps = { vision, planner, detector: createDetector(), fileUrl: () => "" };
+const interpreter = option("interpreter", process.env.INTERPRETER === "templates" ? "templates" : "model");
+if (interpreter !== "templates" && interpreter !== "model") fail(`--interpreter is 'templates' or 'model', not '${interpreter}'`);
+const planner = interpreter === "templates" ? null : counted(createPlanner() ?? fail("eval-paraphrase measures the interpreter, which VISION_PROVIDER=none turns off"), interpretations);
+const deps: Deps = { vision, planner, interpreter, detector: createDetector(), fileUrl: () => "" };
 
-const rows = sample();
+// --limit N keeps the first N sampled questions: a short run whose calls a full run then finds in the cache.
+const rows = sample().slice(0, Number(option("limit", "0")) || undefined);
 // --original asks the sampled questions in the dataset's wording: the score free wording is measured against.
 const rewritten = args.includes("--original") ? rows.map((row) => ({ row, style: "original", question: row.question })) : await paraphrase(rows, styles, vision);
 const rewriteCalls = calls.made;
@@ -128,14 +142,18 @@ await Promise.all(Array.from({ length: concurrency }, worker));
 if (option("dump")) writeFileSync(option("dump")!, JSON.stringify(results, null, 1));
 
 const percent = (correct: number, n: number) => `${correct}/${n} (${n ? ((correct / n) * 100).toFixed(1) : "0.0"}%)`;
-console.log(`${source}, style set '${styleSet}': ${percent(correctTotal, rewritten.length)} correct; ${answered} answered; ${viaPlanner} understood by the planner`);
+console.log(`${source}, style set '${styleSet}': ${percent(correctTotal, rewritten.length)} correct; ${answered} answered; ${viaPlanner} understood by the interpreter`);
 console.log(`${new Set(rewritten.map((r) => r.row.path)).size} drawings, ${rows.length} questions sampled, ${rewritten.length} reworded`);
 for (const [name, table] of [["style", byStyle], ["pipeline", byPipeline]] as const) {
   console.log(`\nby ${name}`);
   for (const [key, s] of [...table].sort()) console.log(`  ${key.padEnd(16)} ${percent(s.correct, s.n)}`);
 }
 console.log(`\nmodel calls made: ${rewriteCalls} to reword, ${calls.made - rewriteCalls} to answer; ${calls.cached} served from the cache; ${((Date.now() - started) / 1000).toFixed(0)}s`);
-console.log(`vision ${vision.id}; planner ${planner.id}`);
+const interpreted = interpretations.made + interpretations.cached;
+if (interpreted > 0) {
+  console.log(`interpretation calls: ${interpretations.made} made, ${interpretations.cached} served from the cache; ${(interpretations.seconds / interpreted).toFixed(1)} s and $${(interpretations.costUsd / interpreted).toFixed(4)} per call on average`);
+}
+console.log(`vision ${vision.id}; questions read by ${planner ? `the interpreter ${planner.id}` : "the keyword parsers (bulk mode)"}`);
 const wrong = results.filter((r) => !r.correct).slice(0, Number(option("show", "12")));
 if (wrong.length) console.log("\nwrong:");
 for (const r of wrong) console.log(`  [${r.style}] ${r.question} | expected ${r.expected}, got ${String(r.value).slice(0, 60)} | ${r.pipeline}: ${String(r.method).slice(0, 90)}`);

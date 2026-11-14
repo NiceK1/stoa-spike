@@ -2,6 +2,8 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { VisionModel, VisionRequest } from "../src/models/vision.js";
+import { ask } from "../src/router.js";
 import { solveIfc } from "../src/solvers/ifc.js";
 
 /** A rectangle of w x d millimetres with its corner at (x, y), extruded to a height, as a product shape. */
@@ -21,7 +23,7 @@ const guid = (n: number) => String(n).padStart(22, "0");
 /**
  * A house in millimetres. Ground floor: kitchen 4 x 3 m, hall 2 x 3 m with a stored net floor area of 5.5 m²,
  * a wall with base quantities, a second wall without, and a stair exported as an IfcStair holding two IfcStair treads.
- * Upper floor: one bedroom 5 x 3 m.
+ * Upper floor: one bedroom 5 x 3 m, numbered 'Room no. 201'.
  */
 const HOUSE = `ISO-10303-21;
 HEADER;
@@ -63,7 +65,7 @@ ${box(120, 4000, 0, 2000, 3000, 2500)}
 #132=IFCELEMENTQUANTITY('${guid(12)}',#5,'BaseQuantities',$,$,(#131));
 #133=IFCRELDEFINESBYPROPERTIES('${guid(13)}',#5,$,$,(#130),#132);
 ${box(140, 0, 0, 5000, 3000, 2500)}
-#150=IFCSPACE('${guid(14)}',#5,'201',$,$,#22,#145,'Bedroom',.ELEMENT.,.INTERNAL.,$);
+#150=IFCSPACE('${guid(14)}',#5,'Room no. 201',$,$,#22,#145,'Bedroom',.ELEMENT.,.INTERNAL.,$);
 #151=IFCRELAGGREGATES('${guid(15)}',#5,$,$,#19,(#110,#130));
 #152=IFCRELAGGREGATES('${guid(16)}',#5,$,$,#23,(#150));
 ${box(200, 0, -200, 6000, 200, 2500)}
@@ -169,9 +171,96 @@ describe("solveIfc on a hand-written model", () => {
     const levels = await solveIfc(house, "What are the heights of each level?", "text");
     expect(levels?.value).toContain("Ground floor: elevation 0.00 m, 3.00 m up to Upper floor");
     const largest = await solveIfc(house, "Which room in the building is the largest?", "text");
-    expect(largest?.value).toContain("Bedroom (201)");
+    expect(largest?.value).toContain("Bedroom (Room no. 201)");
     const software = await solveIfc(house, "What software and ifc standards were used to create this model?", "text");
     expect(software?.value).toContain("IFC2X3");
     expect(software?.value).toContain("Test CAD 1.0");
+  });
+});
+
+describe("a question about a building model, read by the interpreter", () => {
+  type Recording = VisionModel & { requests: VisionRequest[] };
+  /** An interpreter that returns `fields` as its call and records what it was asked. */
+  function interpreter(fields: Record<string, unknown>): Recording {
+    const requests: VisionRequest[] = [];
+    const output = { elements: [], storey: "", rooms: [], pick: "all", measure: "count", quantity: "none", missing: [], reason: "", locate: false, answer_type: "count", ...fields };
+    return {
+      id: "fake-planner", requests,
+      ask: async (request) => {
+        requests.push(request);
+        return { output, seconds: 0, costUsd: 0, cached: false };
+      },
+    };
+  }
+  const writer: VisionModel = { id: "fake-writer", ask: async () => ({ output: { answer: "On the ground floor.", value: null, unit: null, sections: [], classes: [] }, seconds: 0, costUsd: 0, cached: false }) };
+  const about = (question: string, fields: Record<string, unknown>, planner = interpreter(fields)) =>
+    ask({ file: house, question }, { vision: writer, planner, detector: null, fileUrl: () => "" });
+  const highlights = (answer: Awaited<ReturnType<typeof ask>>) => (answer.evidence?.kind === "svg" ? (answer.evidence.svg.match(/fill="#2f6bff"/g) ?? []).length : 0);
+
+  it("sees the model's storeys, element classes and room names, and the rule parser's reading", async () => {
+    const planner = interpreter({ operation: "count_elements", elements: ["wall"], storey: "Ground floor" });
+    const answer = await about("How many walls are shown on the floor plan of 'Ground floor'?", {}, planner);
+    const { prompt, schema } = planner.requests[0];
+    expect(prompt).toContain("A keyword parser reads this as: count every wall on the storey or in the model named 'Ground floor'.");
+    expect(prompt).toContain("Storeys, lowest first: 'Ground floor' (elevation 0.00 m, 2 rooms), 'Upper floor' (elevation 3.00 m, 1 rooms)");
+    expect(prompt).toContain("space (rooms) 3, wall (walls) 2, stair (stairs) 1");
+    expect(prompt).toContain("Room names (rooms carrying each): 'Bedroom', 'Hall', 'Kitchen'");
+    expect((schema.properties as any).storey.enum).toEqual(["Ground floor", "Upper floor", ""]);
+    expect(answer).toMatchObject({ value: 2, kind: "count_wall_storey", exact: true });
+    expect(answer.method).toBe(`understood as "count walls on 'Ground floor'" by fake-planner; IfcWall elements on storey Ground floor`);
+  });
+
+  it("highlights the one room a where-question names, not every room of the model", async () => {
+    const answer = await about("where is the kitchen?", { operation: "rooms", rooms: ["Kitchen"], locate: true });
+    expect(answer).toMatchObject({ value: 1, unit: "count", note: "The 1 counted item is highlighted on the drawing." });
+    expect(highlights(answer)).toBe(1);
+  });
+
+  it("maps an everyday storey word through the interpreter's choice of storey name", async () => {
+    const answer = await about("how big is the bedroom upstairs?", { operation: "rooms", rooms: ["Bedroom"], storey: "Upper floor", measure: "area", answer_type: "area" });
+    expect(answer).toMatchObject({ value: 15, unit: "m2", kind: "area_room" });
+  });
+
+  it("finds a room by its name and the number inside a longer room number", async () => {
+    const answer = await about("area of Bedroom 201?", { operation: "rooms", rooms: ["Bedroom (201)"], measure: "area", answer_type: "area" });
+    expect(answer).toMatchObject({ value: 15, unit: "m2", kind: "area_room" });
+    expect(answer.method).toContain("room 'Bedroom (Room no. 201)' on Upper floor");
+  });
+
+  it("adds up several rooms and several element classes, and says what the total consists of", async () => {
+    const rooms = await about("area of the kitchen and the hall", { operation: "rooms", rooms: ["Kitchen (101)", "Hall"], measure: "area", answer_type: "area" });
+    expect(rooms).toMatchObject({ value: 17.5, unit: "m2", note: "The total consists of Kitchen (101) 12.00 m², Hall (102) 5.50 m²." });
+    expect(highlights(rooms)).toBe(2);
+    const elements = await about("walls and stairs downstairs", { operation: "count_elements", elements: ["wall", "stair"], storey: "Ground floor" });
+    expect(elements).toMatchObject({ value: 3, note: "The total of 3 consists of 2 walls and 1 stair." });
+  });
+
+  it("names the largest room and highlights it alone", async () => {
+    const answer = await about("Show me the largest room", { operation: "rooms", pick: "largest", locate: true });
+    expect(answer.value).toBe("'Bedroom (Room no. 201)' on Upper floor, 15.00 m²");
+    expect(answer.note).toBe("The items behind the answer are highlighted on the drawing.");
+    expect(highlights(answer)).toBe(1);
+  });
+
+  it("says that the model does not have a storey or a room instead of answering for another", async () => {
+    const storey = await about("doors in the attic?", { operation: "count_elements", elements: ["wall"], missing: ["attic"] });
+    expect(storey).toMatchObject({ value: null, pipeline: "none", note: "The building model does not have 'attic'. Its storeys are 'Ground floor', 'Upper floor'." });
+    const room = await about("area of the sauna and the kitchen", { operation: "rooms", rooms: ["Sauna", "Kitchen"], measure: "area", answer_type: "area" });
+    expect(room.value).toBeNull();
+    expect(room.method).toContain("the model has no room named 'Sauna' in the model");
+  });
+
+  it("hands a question about the model's facts to the fact-sheet writer", async () => {
+    const answer = await about("what are the walls made of?", { operation: "model_facts", answer_type: "text" });
+    expect(answer).toMatchObject({ value: "On the ground floor.", pipeline: "ifc-facts", exact: false });
+    expect(answer.method).toContain(`understood as "a question about facts in the building model" by fake-planner; answered by fake-writer`);
+  });
+
+  it("without an interpreter, does not turn a question about one room into a count of all rooms", async () => {
+    const answer = await ask({ file: house, question: "Where is the kitchen?" }, { vision: writer, planner: null, detector: null, fileUrl: () => "" });
+    expect(answer.value).toBe("On the ground floor.");
+    expect(answer.method).toContain("read by the keyword parser (no interpreter model is configured)");
+    const plain = await ask({ file: house, question: "Show me the walls" }, { vision: writer, planner: null, detector: null, fileUrl: () => "" });
+    expect(plain).toMatchObject({ value: 2, note: "The 2 counted items are highlighted on the drawing." });
   });
 });

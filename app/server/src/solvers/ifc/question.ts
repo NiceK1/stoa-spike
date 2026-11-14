@@ -146,6 +146,26 @@ export function parseTextQuestion(question: string): TextAsk | null {
   return { topic: "element_types", element, side };
 }
 
+/** The words that name an element kind, for telling a plain request from a qualified one. */
+export function elementWords(kind: ElementKind): RegExp {
+  return ELEMENT_WORDS.find(([name]) => name === kind)![1];
+}
+
+/** The rule parser's reading in words, shown to the interpreter model to confirm or correct. */
+export function describeIfcIntent(intent: IfcIntent): string {
+  const on = (storey: string | null) => (storey === null ? "a storey it did not find a name for" : `'${storey}'`);
+  switch (intent.kind) {
+    case "area_room": return `the net floor area of the room '${intent.room}'${intent.storey === null ? "" : ` on '${intent.storey}'`}`;
+    case "area_storey_rooms": return `the total net floor area of all rooms on ${on(intent.storey)}`;
+    case "wall_length": return `the total length of all walls on ${on(intent.storey)}`;
+    case "wall_side_area": return `the total net side area of all walls on ${on(intent.storey)}`;
+    case "wall_volume": return `the total net volume of all walls on ${on(intent.storey)}`;
+    case "slab_volume": return `the total net volume of all slabs on ${on(intent.storey)}`;
+    case "count": return `count every ${intent.element}${intent.scope === "model" ? " in the whole model" : intent.name === null ? "" : ` on the storey or in the model named '${intent.name}'`}`;
+    case "text": return `a fact sheet on the topic '${intent.ask.topic.replaceAll("_", " ")}'`;
+  }
+}
+
 /** Maps a question to what it asks of the model, or null when it is not one of the understood forms. */
 export function parseIfcQuestion(question: string, qtype: QuestionType): IfcIntent | null {
   const names = quotedNames(question);

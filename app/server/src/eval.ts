@@ -1,11 +1,15 @@
 /**
  * Scores the pipelines against questions.jsonl with the dataset's rules.
  *
- *   npm run eval -- --source swiss_dwellings
- *   npm run eval -- --source cubicasa5k --no-detector
- *   npm run eval -- --source swiss_dwellings --no-planner
+ *   npm run eval -- --source swiss_dwellings --interpreter templates
+ *   npm run eval -- --source cubicasa5k --interpreter templates --no-detector
+ *   npm run eval -- --source opening_design --interpreter model
  *   npm run eval -- --source ifc_bench --per-file 2 --judge
  *
+ * --interpreter templates is the bulk mode: the keyword parsers read the questions, which costs nothing and is how the
+ * dataset's own wording is scored (--no-planner means the same). --interpreter model has the interpreter model read
+ * every question, one call each; it is the default for a small run and has to be asked for on a large one.
+ * --untyped asks without the dataset's answer type, as a person would.
  * Raster drawings are limited to the list in raster-sample.txt and to English questions unless --all-languages is set,
  * because every raster answer costs a model call (answers are cached).
  * --judge has a language model grade free-text answers against the reference; --per-file N takes N evenly spaced questions of each file,
@@ -37,11 +41,13 @@ const shift = Number(option("shift", "0"));
 const sampleFile = option("sample", join(REPO_ROOT, "raster-sample.txt"))!;
 const rasterSample = new Set(existsSync(sampleFile) ? readFileSync(sampleFile, "utf8").split(/\s+/).filter(Boolean) : []);
 
-// --no-planner scores the fixed parsers alone: a question they do not recognise then stays unanswered and costs no model call.
-const deps: Deps = {
-  vision: createVision(), planner: flag("no-planner") ? null : createPlanner(), detector: createDetector(), fileUrl: () => "",
-  useDetector: !flag("no-detector"),
-};
+const planner = createPlanner();
+const stated = option("interpreter") ?? (flag("no-planner") ? "templates" : process.env.INTERPRETER);
+if (stated !== undefined && stated !== "templates" && stated !== "model") throw new Error(`--interpreter is 'templates' or 'model', not '${stated}'`);
+const interpreter: "templates" | "model" = stated === "templates" || !planner ? "templates" : "model";
+const deps: Deps = { vision: createVision(), planner, interpreter, detector: createDetector(), fileUrl: () => "", useDetector: !flag("no-detector") };
+// Above this many questions the interpreter is not asked unless the run names it: every question is a model call.
+const UNASKED_MODEL_LIMIT = 200;
 
 function kindOf(row: QuestionRow, sourceName: string): string {
   if (sourceName === "cubicasa5k") return rasterTarget(row.question)?.id ?? "other";
@@ -66,6 +72,10 @@ for (let i = 0; perDrawing.some((questions) => i < questions.length); i++) {
   for (const questions of perDrawing) if (i < questions.length) jobs.push(questions[i]);
 }
 if (limit) jobs.length = Math.min(jobs.length, limit);
+if (interpreter === "model" && stated !== "model" && jobs.length > UNASKED_MODEL_LIMIT) {
+  console.error(`${jobs.length} questions would each cost an interpretation call by ${planner!.id}. Add --interpreter templates for the free bulk mode, or --interpreter model to run them.`);
+  process.exit(1);
+}
 
 const dumped: { path: string; question: string; kind: string; expected: number | string; value: number | string | null }[] = [];
 const stats = new Map<string, { n: number; answered: number; correct: number; scorable: number; partly: number }>();
@@ -80,7 +90,7 @@ async function worker(): Promise<void> {
     let kind = kindOf(row, sourceName);
     let failure: string | null = null;
     try {
-      const answer = await ask({ file: join(datasetRoot(), row.path), question: row.question, type: row.type === "other" ? undefined : row.type }, deps);
+      const answer = await ask({ file: join(datasetRoot(), row.path), question: row.question, type: row.type === "other" || flag("untyped") ? undefined : row.type }, deps);
       value = answer.value;
       kind = answer.kind ?? kind;
     } catch (error) {
@@ -132,7 +142,8 @@ console.log();
 for (const [sourceName, t] of totals) console.log(`${sourceName.padEnd(17)} ${t.correct}/${t.n} correct (${((t.correct / t.n) * 100).toFixed(1)}%)`);
 const partly = [...stats.values()].reduce((sum, s) => sum + s.partly, 0);
 if (flag("judge")) console.log(`graded by ${deps.vision.id}; ${partly} more answers were partly right`);
-console.log(`\n${jobs.length} questions in ${((Date.now() - started) / 1000).toFixed(0)}s; vision ${deps.vision.id}; detector ${deps.useDetector === false ? "off" : deps.detector?.id ?? "none"}`);
+const readBy = interpreter === "model" ? `the interpreter ${planner!.id}` : "the keyword parsers (bulk mode)";
+console.log(`\n${jobs.length} questions in ${((Date.now() - started) / 1000).toFixed(0)}s; questions read by ${readBy}; vision ${deps.vision.id}; detector ${deps.useDetector === false ? "off" : deps.detector?.id ?? "none"}`);
 for (const [key, lines] of [...failures].sort()) {
   console.log(`\nwrong: ${key.replace("\t", " / ")}`);
   for (const line of lines) console.log(`  ${line}`);

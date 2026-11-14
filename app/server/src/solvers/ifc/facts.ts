@@ -40,7 +40,7 @@ function software(model: IfcModel): Answer {
   return reply("software", lines, "the IFC file header and its IfcApplication record");
 }
 
-interface Room {
+export interface Room {
   id: number;
   label: string;
   /** The room number, short enough to sit on a plan next to many others. */
@@ -49,7 +49,8 @@ interface Room {
   storey: Storey;
 }
 
-function roomsOf(model: IfcModel, storey: Storey): Room[] {
+/** The rooms of a storey with their areas, largest first; a room without an area has area 0. */
+export function roomsOf(model: IfcModel, storey: Storey): Room[] {
   return model
     .elements("space", storey)
     .map((id) => {
