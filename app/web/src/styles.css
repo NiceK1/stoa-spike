@@ -154,3 +154,10 @@ button { cursor: pointer; }
   .history { margin-left: 0; }
 }
 .chip.free { border-style: dashed; background: var(--sheet); font-style: italic; }
+.more { display: block; width: 100%; padding: 9px 20px; border: 0; border-top: 1px solid var(--rule); background: none; text-align: left; font-size: 13px; font-weight: 500; color: var(--marker); }
+.more:hover { background: var(--paper); }
+
+/* Numbered marks on image plans, drawn in the browser (CAD and IFC plans arrive as finished SVG). */
+.box { fill: rgba(242, 92, 5, 0.14); stroke: var(--marker); }
+.dot { fill: var(--marker); stroke: #fff; }
+.num { fill: #fff; font-weight: 600; text-anchor: middle; font-family: "Barlow", system-ui, sans-serif; }

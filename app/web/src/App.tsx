@@ -56,6 +56,9 @@ function freeQuestions(path: string | null, uploadName: string | undefined): str
   return /\.dxf$/i.test(uploadName) ? FREE_QUESTIONS.cad : /\.(png|jpe?g|webp)$/i.test(uploadName) ? FREE_QUESTIONS.image : [];
 }
 
+/** Drawings listed per source group before "Show more"; search reaches all of them. */
+const PAGE = 100;
+
 const fileName = (path: string) => path.split("/").pop() ?? path;
 const extension = (path: string) => (/\.(\w+)$/.exec(path)?.[1] ?? "").toUpperCase();
 
@@ -83,6 +86,8 @@ export function App() {
   const [sources, setSources] = useState<Source[]>([]);
   const [listed, setListed] = useState(false);
   const [filter, setFilter] = useState("");
+  /** How many drawings each source group lists; the full dataset has thousands per group. */
+  const [limits, setLimits] = useState<Record<string, number>>({});
   const [drawing, setDrawing] = useState<Drawing | null>(null);
   const [preview, setPreview] = useState<Evidence | null | "loading">(null);
   const [known, setKnown] = useState<Known[]>([]);
@@ -230,7 +235,7 @@ export function App() {
             ref={search} className="field" type="search" placeholder="Search drawings" value={filter}
             onChange={(e) => setFilter(e.target.value)} aria-label="Search drawings"
           />
-          <kbd>/</kbd>
+          {!filter && <kbd>/</kbd>}
         </div>
         <div className="files" role="listbox" aria-label="Drawings">
           {drawing?.kind === "upload" && (
@@ -245,7 +250,7 @@ export function App() {
           {shown.map((s) => (
             <div key={s.source}>
               <div className="group">{SOURCE_NAMES[s.source] ?? s.source}<span className="count">{s.files.length}</span></div>
-              {s.files.slice(0, 200).map((f) => {
+              {s.files.slice(0, limits[s.source] ?? PAGE).map((f) => {
                 const chosen = drawing?.kind === "dataset" && drawing.path === f.path;
                 const asked = history[f.path]?.length ?? 0;
                 return (
@@ -262,6 +267,11 @@ export function App() {
                   </button>
                 );
               })}
+              {s.files.length > (limits[s.source] ?? PAGE) && (
+                <button className="more" onClick={() => setLimits((l) => ({ ...l, [s.source]: (l[s.source] ?? PAGE) + PAGE }))}>
+                  Show {Math.min(PAGE, s.files.length - (limits[s.source] ?? PAGE))} more of {s.files.length - (limits[s.source] ?? PAGE)}
+                </button>
+              )}
             </div>
           ))}
           {sources.length > 0 && shown.length === 0 && <p className="hint">No drawing matches “{filter}”.</p>}
