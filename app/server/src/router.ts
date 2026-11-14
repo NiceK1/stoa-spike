@@ -14,7 +14,8 @@ import { rasterize, upright } from "./rasterize.js";
 import { toEnglish } from "./rewrite.js";
 import { isLayeredPlan, loadPlan, type Plan, type TakeoffResult } from "./solvers/dxf.js";
 import { solveRaster } from "./solvers/raster.js";
-import type { Answer, AskInput } from "./types.js";
+import sharp from "sharp";
+import type { Answer, AskInput, Evidence } from "./types.js";
 
 export interface Deps {
   vision: VisionModel;
@@ -42,6 +43,32 @@ function ifcModelOf(file: string): string | null {
 function planEvidence(plan: Plan, result: Pick<TakeoffResult, "highlights" | "cutouts"> & { labels?: string[] }, caption: string): Answer["evidence"] {
   const drawing = { solid: plan.walls, outlines: plan.roomOutlines, highlights: result.highlights, labels: result.labels };
   return { kind: "svg", caption, svg: renderPlanSvg(drawing, result.cutouts) };
+}
+
+/**
+ * The drawing as it looks before any question, so it can be shown as soon as it is chosen.
+ * Null when there is no cheap flat view (an IFC model without a rendered sheet).
+ */
+export async function preview(file: string, deps: Pick<Deps, "fileUrl">): Promise<Evidence | null> {
+  const extension = extname(file).toLowerCase();
+  const dxf = extension === ".dxf" ? file : twin(file, ".dxf");
+  if (dxf) {
+    const plan = await loadPlan(dxf);
+    if (isLayeredPlan(plan)) {
+      return { kind: "svg", caption: "The drawing", svg: renderPlanSvg({ solid: plan.walls, outlines: plan.roomOutlines, highlights: [] }) };
+    }
+  }
+  let image: string | null = null;
+  if (IMAGE.has(extension) && existsSync(file)) image = file;
+  else if (RENDERABLE.has(extension) && existsSync(file)) image = await rasterize(file);
+  else {
+    const pdf = twin(file, ".pdf");
+    image = twin(file, ".png") ?? twin(file, ".jpg") ?? (pdf ? await rasterize(pdf) : null);
+  }
+  if (!image) return null;
+  image = await upright(image);
+  const { width = 1, height = 1 } = await sharp(image).metadata();
+  return { kind: "image", caption: "The drawing", imageUrl: deps.fileUrl(image), width, height, marks: [] };
 }
 
 export async function ask(input: AskInput, deps: Deps): Promise<Answer> {

@@ -9,7 +9,7 @@ import { APP_ROOT, CACHE_DIR, UPLOAD_DIR, datasetRoot, loadEnv } from "./config.
 import { isAvailable, questionsByPath } from "./dataset.js";
 import { createDetector } from "./models/detector.js";
 import { createPlanner, createVision } from "./models/vision.js";
-import { ask, type Deps } from "./router.js";
+import { ask, preview, type Deps } from "./router.js";
 import { isCorrect } from "./scoring.js";
 import type { QuestionType } from "./types.js";
 
@@ -61,6 +61,17 @@ app.get<{ Querystring: { root: string; path: string } }>("/api/file", async (req
   const absolute = root ? inside(root, request.query.path ?? "") : null;
   if (!absolute || !existsSync(absolute)) return reply.code(404).send({ error: "not found" });
   return reply.type(MIME[extname(absolute).toLowerCase()] ?? "application/octet-stream").send(createReadStream(absolute));
+});
+
+app.get<{ Querystring: { path?: string; upload?: string } }>("/api/preview", async (request, reply) => {
+  const { path, upload } = request.query;
+  const file = path ? inside(datasetRoot(), path) : upload ? inside(UPLOAD_DIR, upload) : null;
+  if (!file) return reply.code(400).send({ error: "path or upload is required" });
+  try {
+    return { evidence: await preview(file, deps) };
+  } catch (error) {
+    return reply.code(500).send({ error: error instanceof Error ? error.message : String(error) });
+  }
 });
 
 app.post("/api/upload", async (request, reply) => {

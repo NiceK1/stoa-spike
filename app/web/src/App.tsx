@@ -36,6 +36,14 @@ const PIPELINES: Record<string, string> = {
   none: "No answer",
 };
 
+const KINDS: { type: string; label: string }[] = [
+  { type: "count", label: "Counts" },
+  { type: "area", label: "Areas" },
+  { type: "length", label: "Lengths" },
+  { type: "volume", label: "Volumes" },
+  { type: "text", label: "Other" },
+];
+
 // Wording outside the dataset's templates, to show that a question does not have to follow them.
 const FREE_QUESTIONS: Record<string, string[]> = {
   cad: ["Show me the bedrooms", "Which room is the largest?", "What is the combined area of the bathrooms and the corridors?"],
@@ -49,81 +57,152 @@ function freeQuestions(path: string | null, uploadName: string | undefined): str
 }
 
 const fileName = (path: string) => path.split("/").pop() ?? path;
+const extension = (path: string) => (/\.(\w+)$/.exec(path)?.[1] ?? "").toUpperCase();
+
+/** A readable name for a dataset file; the file name stays visible underneath. */
+function title(path: string): string {
+  const stem = fileName(path).replace(/\.\w+$/, "");
+  const swiss = /^site(\d+)_bldg(\d+)_floor(\d+)$/.exec(stem);
+  if (swiss) return `Site ${swiss[1]} · Building ${swiss[2]} · Floor ${swiss[3]}`;
+  const [model, level] = stem.split("_plan-");
+  const words = model.replace(/^bsc-/, "").replace(/[_-]+/g, " ").trim();
+  const name = words.charAt(0).toUpperCase() + words.slice(1);
+  return level ? `${name} · plan ${level.replace(/-/g, " ")}` : name;
+}
+
+/** The dataset pairs each English question with a translation; English is shown first and the rest on request. */
+const isEnglish = (q: string) =>
+  /^(how|what|which|where|is|are|does|do|list|give|name|count|in|on|for|according)\b/i.test(q.trim()) && !/[äöüßéèàçò]/i.test(q);
+
+const kindOf = (type: string) => (KINDS.some((k) => k.type === type) ? type : "text");
+
+type Drawing = { kind: "dataset"; path: string } | { kind: "upload"; id: string; name: string };
+const drawingKey = (d: Drawing) => (d.kind === "dataset" ? d.path : `upload:${d.id}`);
 
 export function App() {
   const [sources, setSources] = useState<Source[]>([]);
   const [filter, setFilter] = useState("");
-  const [path, setPath] = useState<string | null>(null);
-  const [upload, setUpload] = useState<{ id: string; name: string } | null>(null);
+  const [drawing, setDrawing] = useState<Drawing | null>(null);
+  const [preview, setPreview] = useState<Evidence | null | "loading">(null);
   const [known, setKnown] = useState<Known[]>([]);
   const [question, setQuestion] = useState("");
-  const [reply, setReply] = useState<Reply | null>(null);
+  /** Answers asked this session, per drawing, newest last. */
+  const [history, setHistory] = useState<Record<string, Reply[]>>({});
+  const [shownReply, setShownReply] = useState<number | null>(null);
+  const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [kind, setKind] = useState<string | null>(null);
+  const [translations, setTranslations] = useState(false);
+  const search = useRef<HTMLInputElement>(null);
+  const composer = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     fetch("/api/dataset").then((r) => r.json()).then((d) => setSources(d.sources)).catch(() => setError("The server is not reachable."));
   }, []);
 
+  // "/" jumps to the drawing search, as in most file browsers.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
+      if (e.key === "/" && !typing) { e.preventDefault(); search.current?.focus(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   useEffect(() => {
     setKnown([]);
-    if (path) fetch(`/api/questions?path=${encodeURIComponent(path)}`).then((r) => r.json()).then((d) => setKnown(d.questions));
-  }, [path]);
+    setPreview(null);
+    if (!drawing) return;
+    const query = drawing.kind === "dataset" ? `path=${encodeURIComponent(drawing.path)}` : `upload=${encodeURIComponent(drawing.id)}`;
+    if (drawing.kind === "dataset") {
+      fetch(`/api/questions?${query}`).then((r) => r.json()).then((d) => setKnown(d.questions));
+    }
+    let current = true;
+    setPreview("loading");
+    fetch(`/api/preview?${query}`).then((r) => r.json()).then((d) => current && setPreview(d.evidence ?? null)).catch(() => current && setPreview(null));
+    return () => { current = false; };
+  }, [drawing]);
 
   // A link can open a drawing and ask a question straight away: ?path=...&q=...
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const linked = params.get("path");
     if (!linked) return;
-    setPath(linked);
+    const d: Drawing = { kind: "dataset", path: linked };
+    setDrawing(d);
     const q = params.get("q");
-    if (q) void ask(q, linked);
+    if (q) void ask(q, d);
   }, []);
 
   const shown = useMemo(() => {
-    const needle = filter.trim().toLowerCase();
+    const needles = filter.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const matches = (path: string) => {
+      const hay = `${path} ${title(path)}`.toLowerCase();
+      return needles.every((n) => hay.includes(n));
+    };
     return sources
-      .map((s) => ({ ...s, files: s.files.filter((f) => !needle || f.path.toLowerCase().includes(needle)) }))
+      .map((s) => ({ ...s, files: s.files.filter((f) => matches(f.path)) }))
       .filter((s) => s.files.length > 0);
   }, [sources, filter]);
 
-  const drawingChosen = path !== null || upload !== null;
-  const free = freeQuestions(path, upload?.name);
+  const key = drawing ? drawingKey(drawing) : null;
+  const replies = key ? history[key] ?? [] : [];
+  const reply = shownReply !== null ? replies[shownReply] ?? null : null;
+
+  const english = known.filter((k) => isEnglish(k.question));
+  const offered = translations || english.length === 0 ? known : english;
+  const kinds = KINDS.map((k) => ({ ...k, n: offered.filter((q) => kindOf(q.type) === k.type).length })).filter((k) => k.n > 0);
+  const free = drawing ? freeQuestions(drawing.kind === "dataset" ? drawing.path : null, drawing.kind === "upload" ? drawing.name : undefined) : [];
+  const chips = kind === "free" ? [] : kind ? offered.filter((q) => kindOf(q.type) === kind) : offered;
+  const freeChips = kind === null || kind === "free" ? free : [];
 
   // Only the latest request may update the screen: a slow answer must not land under another drawing or question.
   const latest = useRef(0);
 
-  async function ask(text: string, drawing: string | null = path) {
-    if (!(drawing || upload) || !text.trim()) return;
+  async function ask(text: string, target: Drawing | null = drawing) {
+    if (!target || !text.trim()) return;
     const request = ++latest.current;
-    setQuestion(text);
-    setBusy(true);
+    setQuestion("");
+    setPending(text);
     setError(null);
     try {
       const response = await fetch("/api/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: drawing ?? undefined, upload: drawing ? undefined : upload?.id, question: text }),
+        body: JSON.stringify(target.kind === "dataset" ? { path: target.path, question: text } : { upload: target.id, question: text }),
       });
       const body = await response.json();
       if (request !== latest.current) return;
       if (!response.ok) throw new Error(body.error ?? "The question could not be answered.");
-      setReply({ ...body, question: text });
+      const k = drawingKey(target);
+      setHistory((h) => {
+        const list = [...(h[k] ?? []), { ...body, question: text }];
+        setShownReply(list.length - 1);
+        return { ...h, [k]: list };
+      });
     } catch (e) {
       if (request !== latest.current) return;
-      setReply(null);
+      setQuestion(text);
       setError(e instanceof Error ? e.message : String(e));
     } finally {
-      if (request === latest.current) setBusy(false);
+      if (request === latest.current) setPending(null);
     }
   }
 
-  function changeDrawing() {
+  function choose(d: Drawing) {
     latest.current++;
-    setBusy(false);
-    setReply(null);
+    setPending(null);
     setError(null);
     setQuestion("");
+    setKind(null);
+    setShownReply((history[drawingKey(d)]?.length ?? 0) > 0 ? history[drawingKey(d)].length - 1 : null);
+    setDrawing(d);
+    // Keep the link shareable: it reopens this drawing.
+    const url = new URL(location.href);
+    url.search = d.kind === "dataset" ? `?path=${encodeURIComponent(d.path)}` : "";
+    history_replace(url);
+    setTimeout(() => composer.current?.focus(), 0);
   }
 
   async function chooseUpload(file: File | undefined) {
@@ -133,116 +212,207 @@ export function App() {
     const response = await fetch("/api/upload", { method: "POST", body: form });
     if (!response.ok) return setError("The upload failed.");
     const body = await response.json();
-    changeDrawing();
-    setUpload({ id: body.upload, name: body.name });
-    setPath(null);
+    choose({ kind: "upload", id: body.upload, name: body.name });
   }
+
+  const evidence = reply?.answer.evidence ?? (preview === "loading" ? null : preview);
 
   return (
     <div className="layout">
-      <aside className="panel">
-        <h1>Take-off check</h1>
-        <p className="lede">Ask a quantity question about a drawing. The answer comes back with every counted item marked, so you can check it yourself.</p>
-
-        <section>
-          <h2>Drawing</h2>
-          <input className="field" placeholder="Filter drawings" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Filter drawings" />
-          <div className="files" role="listbox" aria-label="Drawings">
-            {shown.map((s) => (
-              <div key={s.source}>
-                <div className="group">{SOURCE_NAMES[s.source] ?? s.source}</div>
-                {s.files.slice(0, 80).map((f) => (
+      <aside className="browser">
+        <header className="brand">
+          <h1>Take-off check</h1>
+          <p className="lede">Pick a drawing, ask how many or how much. Every counted item is marked so you can check it.</p>
+        </header>
+        <div className="search">
+          <input
+            ref={search} className="field" type="search" placeholder="Search drawings" value={filter}
+            onChange={(e) => setFilter(e.target.value)} aria-label="Search drawings"
+          />
+          <kbd>/</kbd>
+        </div>
+        <div className="files" role="listbox" aria-label="Drawings">
+          {drawing?.kind === "upload" && (
+            <div>
+              <div className="group">Your upload</div>
+              <button className="file chosen" role="option" aria-selected>
+                <span className="name">{drawing.name}</span>
+                <span className="meta"><span className="badge">{extension(drawing.name)}</span></span>
+              </button>
+            </div>
+          )}
+          {shown.map((s) => (
+            <div key={s.source}>
+              <div className="group">{SOURCE_NAMES[s.source] ?? s.source}<span className="count">{s.files.length}</span></div>
+              {s.files.slice(0, 200).map((f) => {
+                const chosen = drawing?.kind === "dataset" && drawing.path === f.path;
+                const asked = history[f.path]?.length ?? 0;
+                return (
                   <button
-                    key={f.path} role="option" aria-selected={f.path === path}
-                    className={f.path === path ? "file chosen" : "file"}
-                    onClick={() => { changeDrawing(); setPath(f.path); setUpload(null); }}
+                    key={f.path} role="option" aria-selected={chosen} className={chosen ? "file chosen" : "file"}
+                    onClick={() => choose({ kind: "dataset", path: f.path })} title={f.path}
                   >
-                    <span>{fileName(f.path)}</span>
-                    <span className="count">{f.questions}</span>
+                    <span className="name">{title(f.path)}</span>
+                    <span className="meta">
+                      <span className="badge">{extension(f.path)}</span>
+                      <span className="fname">{fileName(f.path)}</span>
+                      <span className="count">{asked > 0 ? `${asked} asked · ` : ""}{f.questions} q</span>
+                    </span>
                   </button>
-                ))}
-              </div>
-            ))}
-            {shown.length === 0 && <p className="hint">No drawing matches the filter.</p>}
-          </div>
-          <label className="upload">
-            <input type="file" accept=".png,.jpg,.jpeg,.pdf,.dxf,.ifc,.svg" onChange={(e) => chooseUpload(e.target.files?.[0])} />
-            {upload ? `Uploaded: ${upload.name}` : "Or upload your own drawing"}
-          </label>
-        </section>
-
-        <section>
-          <h2>Question</h2>
-          <form onSubmit={(e) => { e.preventDefault(); ask(question); }}>
-            <textarea
-              className="field" rows={3} value={question} onChange={(e) => setQuestion(e.target.value)}
-              placeholder={drawingChosen ? "How many windows are shown on this floor plan?" : "Choose a drawing first"}
-              disabled={!drawingChosen} aria-label="Question"
-            />
-            <button className="primary" disabled={!drawingChosen || busy || !question.trim()}>{busy ? "Reading the drawing…" : "Ask"}</button>
-          </form>
-          {free.length > 0 && (
-            <>
-              <h3>Or in your own words</h3>
-              <div className="known">
-                {free.map((q) => (
-                  <button key={q} className="suggestion" onClick={() => ask(q)} disabled={busy}>{q}</button>
-                ))}
-              </div>
-            </>
-          )}
-          {known.length > 0 && (
-            <>
-              <h3>Questions that come with this drawing</h3>
-              <div className="known">
-                {known.map((k, i) => (
-                  <button key={i} className="suggestion" onClick={() => ask(k.question)} disabled={busy}>{k.question}</button>
-                ))}
-              </div>
-            </>
-          )}
-        </section>
+                );
+              })}
+            </div>
+          ))}
+          {sources.length > 0 && shown.length === 0 && <p className="hint">No drawing matches “{filter}”.</p>}
+          {sources.length === 0 && !error && <p className="hint">No drawings in the dataset folder yet.</p>}
+        </div>
+        <label className="upload">
+          <input type="file" accept=".png,.jpg,.jpeg,.pdf,.dxf,.ifc,.svg" onChange={(e) => chooseUpload(e.target.files?.[0])} />
+          <span>＋ Upload your own drawing</span>
+          <small>PDF, PNG, JPG, DXF, IFC</small>
+        </label>
       </aside>
 
       <main className="stage">
-        {error && <div className="notice" role="alert">{error}</div>}
-        {reply ? <Result reply={reply} question={reply.question} /> : !error && (
+        {!drawing ? (
           <div className="empty">
-            <p>{drawingChosen ? "Ask a question, or pick one from the list." : "Choose a drawing to start."}</p>
+            <div>
+              <p className="big">Choose a drawing to start</p>
+              <p>Search on the left by site, building or file name, or upload your own.</p>
+            </div>
           </div>
+        ) : (
+          <>
+            <header className="topbar">
+              <div className="current">
+                <span className="badge">{extension(drawing.kind === "dataset" ? drawing.path : drawing.name)}</span>
+                <h2>{drawing.kind === "dataset" ? title(drawing.path) : drawing.name}</h2>
+              </div>
+              {replies.length > 0 && (
+                <nav className="history" aria-label="Answers for this drawing">
+                  <button className={shownReply === null ? "step on" : "step"} onClick={() => setShownReply(null)}>Drawing</button>
+                  {replies.map((r, i) => (
+                    <button
+                      key={i} className={i === shownReply ? "step on" : "step"} onClick={() => setShownReply(i)} title={r.question}
+                    >
+                      <b>{r.answer.value === null ? "—" : String(r.answer.value)}</b>
+                      {r.expected?.correct === true && <span className="ok" aria-label="matches the dataset">✓</span>}
+                      {r.expected?.correct === false && <span className="off" aria-label="differs from the dataset">✗</span>}
+                      <span className="short">{r.question}</span>
+                    </button>
+                  ))}
+                </nav>
+              )}
+            </header>
+
+            {error && <div className="notice" role="alert">{error}</div>}
+            {pending ? (
+              <div className="placard pending" aria-live="polite">
+                <div className="figure"><span className="spinner" /></div>
+                <div className="facts">
+                  <p className="asked">{pending}</p>
+                  <p className="time">Reading the drawing… vector drawings answer at once, images take up to 20 s.</p>
+                </div>
+              </div>
+            ) : reply && <Result reply={reply} />}
+
+            {evidence ? (
+              <Viewer evidence={evidence} />
+            ) : (
+              <div className="empty">
+                <p>{preview === "loading" ? "Loading the drawing…" : "No flat preview for this file. Ask a question and the matching plan appears here."}</p>
+              </div>
+            )}
+
+            <section className="ask">
+              {(known.length > 0 || free.length > 0) && (
+                <div className="suggest">
+                  <div className="tabs" role="tablist" aria-label="Suggested questions">
+                    <span className="label">Try</span>
+                    <button role="tab" aria-selected={kind === null} className={kind === null ? "tab on" : "tab"} onClick={() => setKind(null)}>
+                      All <span className="count">{offered.length + free.length}</span>
+                    </button>
+                    {free.length > 0 && (
+                      <button role="tab" aria-selected={kind === "free"} className={kind === "free" ? "tab on" : "tab"} onClick={() => setKind("free")}>
+                        Your words <span className="count">{free.length}</span>
+                      </button>
+                    )}
+                    {kinds.map((k) => (
+                      <button
+                        key={k.type} role="tab" aria-selected={kind === k.type} className={kind === k.type ? "tab on" : "tab"}
+                        onClick={() => setKind(k.type)}
+                      >
+                        {k.label} <span className="count">{k.n}</span>
+                      </button>
+                    ))}
+                    {english.length > 0 && english.length < known.length && (
+                      <label className="toggle">
+                        <input type="checkbox" checked={translations} onChange={(e) => setTranslations(e.target.checked)} />
+                        Translations
+                      </label>
+                    )}
+                  </div>
+                  <div className="chips">
+                    {freeChips.map((q) => (
+                      <button key={q} className="chip free" onClick={() => ask(q)} disabled={pending !== null} title="Free wording, outside the dataset's templates">
+                        {q}
+                      </button>
+                    ))}
+                    {chips.map((k, i) => (
+                      <button key={i} className="chip" onClick={() => ask(k.question)} disabled={pending !== null} title={k.question}>
+                        {k.question}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <form className="composer" onSubmit={(e) => { e.preventDefault(); ask(question); }}>
+                <textarea
+                  ref={composer} rows={1} value={question} onChange={(e) => setQuestion(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(question); } }}
+                  placeholder="Ask about this drawing, e.g. How many windows are there?" aria-label="Question"
+                />
+                <button className="primary" disabled={pending !== null || !question.trim()}>Ask</button>
+              </form>
+            </section>
+          </>
         )}
       </main>
     </div>
   );
 }
 
-function Result({ reply, question }: { reply: Reply; question: string }) {
-  const { answer, expected, seconds } = reply;
+function history_replace(url: URL) {
+  try { window.history.replaceState(null, "", url); } catch { /* not allowed in some embeds */ }
+}
+
+function Result({ reply }: { reply: Reply }) {
+  const { answer, expected, seconds, question } = reply;
   const unit = answer.unit && answer.unit !== "count" ? answer.unit.replace("m2", "m²").replace("m3", "m³") : "";
+  const long = typeof answer.value === "string" && answer.value.length > 12;
   return (
-    <>
-      <header className="placard">
-        <div className="figure">
-          {answer.value === null ? "—" : String(answer.value)}
-          {unit && <span className="unit">{unit}</span>}
-        </div>
-        <div className="facts">
-          <p className="asked">{question}</p>
-          <p>
-            <span className={answer.exact ? "tag exact" : "tag estimate"}>{answer.exact ? "Exact" : "Estimate"}</span>
-            {PIPELINES[answer.pipeline] ?? answer.pipeline}: {answer.method}.
-          </p>
-          {answer.note && <p className="note">{answer.note}</p>}
+    <header className="placard">
+      <div className={long ? "figure text" : "figure"}>
+        {answer.value === null ? "—" : String(answer.value)}
+        {unit && <span className="unit">{unit}</span>}
+      </div>
+      <div className="facts">
+        <p className="asked">{question}</p>
+        <p>
+          <span className={answer.exact ? "tag exact" : "tag estimate"}>{answer.exact ? "Exact" : "Estimate"}</span>
+          {PIPELINES[answer.pipeline] ?? answer.pipeline}: {answer.method}.
+        </p>
+        {answer.note && <p className="note">{answer.note}</p>}
+        <p className="time">
           {expected && expected.correct !== null && (
-            <p className={expected.correct ? "check ok" : "check off"}>
-              {expected.correct ? "Matches" : "Differs from"} the dataset answer, {String(expected.value)}.
-            </p>
+            <span className={expected.correct ? "check ok" : "check off"}>
+              {expected.correct ? "Matches" : "Differs from"} the dataset answer, {String(expected.value)}.{" "}
+            </span>
           )}
-          <p className="time">Answered in {seconds.toFixed(1)} s</p>
-        </div>
-      </header>
-      {answer.evidence ? <Viewer evidence={answer.evidence} /> : <div className="empty"><p>No drawing to show for this answer.</p></div>}
-    </>
+          Answered in {seconds.toFixed(1)} s
+        </p>
+      </div>
+    </header>
   );
 }
 
@@ -251,20 +421,26 @@ function Viewer({ evidence }: { evidence: Evidence }) {
   const drag = useRef<{ x: number; y: number } | null>(null);
   useEffect(() => setView({ x: 0, y: 0, k: 1 }), [evidence]);
 
-  function zoom(e: React.WheelEvent<HTMLDivElement>) {
-    const box = e.currentTarget.getBoundingClientRect();
-    const px = e.clientX - box.left, py = e.clientY - box.top;
+  function zoomAt(px: number, py: number, factor: number) {
     setView((v) => {
-      const k = Math.min(12, Math.max(1, v.k * (e.deltaY < 0 ? 1.2 : 1 / 1.2)));
-      // Keep the point under the cursor fixed while zooming.
+      const k = Math.min(12, Math.max(1, v.k * factor));
+      // Keep the given point fixed while zooming.
       return { k, x: px - ((px - v.x) * k) / v.k, y: py - ((py - v.y) * k) / v.k };
     });
+  }
+
+  const canvas = useRef<HTMLDivElement>(null);
+  function zoomCentre(factor: number) {
+    const box = canvas.current?.getBoundingClientRect();
+    if (box) zoomAt(box.width / 2, box.height / 2, factor);
   }
 
   return (
     <figure className="viewer">
       <div
-        className="canvas" onWheel={zoom}
+        ref={canvas} className="canvas"
+        onWheel={(e) => { const box = e.currentTarget.getBoundingClientRect(); zoomAt(e.clientX - box.left, e.clientY - box.top, e.deltaY < 0 ? 1.2 : 1 / 1.2); }}
+        onDoubleClick={(e) => { const box = e.currentTarget.getBoundingClientRect(); zoomAt(e.clientX - box.left, e.clientY - box.top, 2); }}
         onPointerDown={(e) => { drag.current = { x: e.clientX - view.x, y: e.clientY - view.y }; e.currentTarget.setPointerCapture(e.pointerId); }}
         onPointerMove={(e) => {
           // Read the drag start now: by the time the state update runs, pointer-up may have cleared it.
@@ -276,16 +452,17 @@ function Viewer({ evidence }: { evidence: Evidence }) {
         onPointerUp={() => (drag.current = null)}
       >
         <div className="sheet" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})` }}>
-          {/* As wide as the stage allows, but never taller than the space under the answer. */}
-          <div className="fit" style={{ width: `min(100%, calc((100vh - 290px) * ${aspect(evidence)}))` }}>
-            {evidence.kind === "svg" ? <div dangerouslySetInnerHTML={{ __html: evidence.svg }} /> : <Marked evidence={evidence} />}
+          <div className="fit" style={{ "--aspect": aspect(evidence) } as React.CSSProperties}>
+            {evidence.kind === "svg" ? <div className="svgwrap" dangerouslySetInnerHTML={{ __html: evidence.svg }} /> : <Marked evidence={evidence} />}
           </div>
         </div>
+        <div className="zoom" onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
+          <button onClick={() => zoomCentre(1.4)} aria-label="Zoom in">＋</button>
+          <button onClick={() => zoomCentre(1 / 1.4)} aria-label="Zoom out">－</button>
+          <button onClick={() => setView({ x: 0, y: 0, k: 1 })} aria-label="Fit to screen" disabled={view.k === 1 && view.x === 0 && view.y === 0}>⤢</button>
+        </div>
       </div>
-      <figcaption>
-        {evidence.caption}. Scroll to zoom, drag to move.
-        {view.k !== 1 && <button className="link" onClick={() => setView({ x: 0, y: 0, k: 1 })}>Reset view</button>}
-      </figcaption>
+      <figcaption>{evidence.caption}. Scroll or double-click to zoom, drag to move.</figcaption>
     </figure>
   );
 }
@@ -300,7 +477,7 @@ function Marked({ evidence }: { evidence: Extract<Evidence, { kind: "image" }> }
   const { width, height, marks } = evidence;
   const r = Math.max(width, height) / 70;
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${marks.length} marked items`}>
+    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={marks.length ? `${marks.length} marked items` : "The drawing"}>
       <image href={evidence.imageUrl} width={width} height={height} />
       {marks.map((m) => {
         const boxed = m.w !== undefined && m.h !== undefined;
