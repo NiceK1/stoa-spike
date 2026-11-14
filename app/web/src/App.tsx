@@ -25,6 +25,7 @@ const PIPELINES: Record<string, string> = {
   "ifc-geometry": "Measured from the building model",
   detector: "Counted by the symbol detector",
   "vision-model": "Read from the image by a vision model",
+  "sheet-text": "Read from the text on the sheet",
   none: "No answer",
 };
 
@@ -253,13 +254,16 @@ function Marked({ evidence }: { evidence: Extract<Evidence, { kind: "image" }> }
       <image href={evidence.imageUrl} width={width} height={height} />
       {marks.map((m) => {
         const boxed = m.w !== undefined && m.h !== undefined;
-        const cx = boxed ? m.x + m.w! / 2 : m.x;
-        const cy = boxed ? m.y - r * 0.9 : m.y;
+        // A text row is wide and thin: its badge shrinks to the row height and sits at the row's left end.
+        const row = boxed && m.w! > 6 * m.h!;
+        const size = row ? Math.max(r * 0.3, Math.min(r, m.h! * 0.8)) : r;
+        const cx = row ? m.x - size * 1.3 : boxed ? m.x + m.w! / 2 : m.x;
+        const cy = row ? m.y + m.h! / 2 : boxed ? m.y - size * 0.9 : m.y;
         return (
           <g key={m.n}>
-            {boxed && <rect x={m.x} y={m.y} width={m.w} height={m.h} className="box" strokeWidth={r / 6} />}
-            <circle cx={cx} cy={cy} r={r} className="dot" strokeWidth={r / 8} />
-            <text x={cx} y={cy + r * 0.38} fontSize={r * 1.15} className="num">{m.n}</text>
+            {boxed && <rect x={m.x} y={m.y} width={m.w} height={m.h} className="box" strokeWidth={size / 6} />}
+            <circle cx={cx} cy={cy} r={size} className="dot" strokeWidth={size / 8} />
+            <text x={cx} y={cy + size * 0.38} fontSize={size * 1.15} className="num">{m.n}</text>
             {m.label && <title>{m.label}</title>}
           </g>
         );

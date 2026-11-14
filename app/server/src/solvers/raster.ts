@@ -55,7 +55,7 @@ export function rasterTarget(question: string): Target | null {
 
 const CATEGORIES = [...new Set(TARGETS.flatMap((t) => t.categories))];
 
-export const INVENTORY_SYSTEM = [
+const INVENTORY_BASE = [
   "You take an inventory of an architectural floor plan. Open the image with the Read tool before answering.",
   "Go through the plan room by room and record every item of each category exactly once, with the position of its centre:",
   "x and y in thousandths of the image width and height (0 to 1000, origin at the top-left corner).",
@@ -76,6 +76,29 @@ export const INVENTORY_SYSTEM = [
   "",
   "Use an empty list for a category with no items.",
 ].join("\n");
+
+const SCOPE_RULE =
+  "Scope: many images show one apartment inside a larger building plan, with parts of neighbouring apartments or shared " +
+  "spaces visible around it. When a hand-drawn outline, the labels (for example an apartment name with its area) or the " +
+  "framing single out one apartment, record only that apartment's items. Ignore everything in neighbouring apartments, " +
+  "above all rooms and fixtures that are cut off at the edge of the image.";
+
+const FIXTURE_RULES =
+  "Fixtures: a shower is often drawn only as a small shower-head symbol (a small circle with a short curved hose or " +
+  "spray lines) in a corner of a bathroom, with no tray; record each one as a shower. " +
+  "A sink is a basin with a bowl outline; a stove (four circles), a washing machine, a floor drain or a water heater is not a sink.";
+
+/** Prompt versions, kept so that measured results stay reproducible. Selected with INVENTORY_PROMPT. */
+export const INVENTORY_PROMPTS: Record<string, string> = {
+  v1: INVENTORY_BASE,
+  v2: `${INVENTORY_BASE}\n\n${SCOPE_RULE}`,
+  v3: `${INVENTORY_BASE}\n\n${SCOPE_RULE}\n\n${FIXTURE_RULES}`,
+};
+const DEFAULT_PROMPT = "v3";
+
+function inventorySystem(): string {
+  return INVENTORY_PROMPTS[process.env.INVENTORY_PROMPT ?? DEFAULT_PROMPT] ?? INVENTORY_PROMPTS[DEFAULT_PROMPT];
+}
 
 const POINTS = {
   type: "array",
@@ -149,21 +172,32 @@ export async function solveRaster(imagePath: string, question: string, qtype: Qu
   }
 
   if (target) {
-    const { output } = await deps.vision.ask({
-      imagePath, system: INVENTORY_SYSTEM, schema: INVENTORY_SCHEMA,
-      prompt: "Take the inventory of this floor plan.",
-    });
+    // Several independent readings, answered by the middle one: a single reading is off by one too often.
+    const votes = Math.max(1, Number(process.env.INVENTORY_VOTES ?? 1));
+    const readings = await Promise.all(
+      Array.from({ length: votes }, (_, pass) =>
+        deps.vision.ask({
+          imagePath, system: inventorySystem(), schema: INVENTORY_SCHEMA,
+          prompt: pass === 0 ? "Take the inventory of this floor plan." : `Take the inventory of this floor plan. (Independent reading ${pass + 1}.)`,
+        }),
+      ),
+    );
+    const itemsOf = (output: Record<string, any>): Located[] => target.categories.flatMap((c) => output[c] ?? []);
+    const countOf = (output: Record<string, any>): number => (target.id === "floor" ? output.floors : itemsOf(output).length);
+    const middle = readings.map((r) => countOf(r.output)).sort((a, b) => a - b)[Math.floor(votes / 2)];
+    const chosen = readings.find((r) => countOf(r.output) === middle)!.output;
+    const by = votes > 1 ? `${deps.vision.id}, middle of ${votes} readings` : deps.vision.id;
+
     if (target.id === "floor") {
       return {
-        value: output.floors, unit: "count", pipeline: "vision-model", exact: false, kind: target.id,
-        method: `storeys counted by ${deps.vision.id}`, evidence: image([], "Source drawing"),
+        value: middle, unit: "count", pipeline: "vision-model", exact: false, kind: target.id,
+        method: `storeys counted by ${by}`, evidence: image([], "Source drawing"),
       };
     }
-    const items: Located[] = target.categories.flatMap((c) => output[c] ?? []);
     return {
-      value: items.length, unit: "count", pipeline: "vision-model", exact: false, kind: target.id,
-      method: `${target.categories.join(" and ").replaceAll("_", " ")} located by ${deps.vision.id}`,
-      evidence: image(toMarks(items), "Each number is one counted item; positions are the model's estimate"),
+      value: middle, unit: "count", pipeline: "vision-model", exact: false, kind: target.id,
+      method: `${target.categories.join(" and ").replaceAll("_", " ")} located by ${by}`,
+      evidence: image(toMarks(itemsOf(chosen)), "Each number is one counted item; positions are the model's estimate"),
     };
   }
 

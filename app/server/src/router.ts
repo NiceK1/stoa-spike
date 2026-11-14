@@ -11,7 +11,6 @@ import type { VisionModel } from "./models/vision.js";
 import { inferType, parseTakeoff } from "./questions.js";
 import { rasterize } from "./rasterize.js";
 import { isLayeredPlan, loadPlan } from "./solvers/dxf.js";
-import { solveIfc } from "./solvers/ifc.js";
 import { solveRaster } from "./solvers/raster.js";
 import type { Answer, AskInput } from "./types.js";
 
@@ -42,6 +41,8 @@ export async function ask(input: AskInput, deps: Deps): Promise<Answer> {
 
   const ifc = extension === ".ifc" ? input.file : ifcModelOf(input.file);
   if (ifc) {
+    // Loaded on demand: the IFC engine is heavy and the other pipelines should not wait for it.
+    const { solveIfc } = await import("./solvers/ifc.js");
     const answer = await solveIfc(ifc, input.question, qtype);
     if (answer) return answer;
   }
@@ -60,6 +61,13 @@ export async function ask(input: AskInput, deps: Deps): Promise<Answer> {
         },
       };
     }
+  }
+
+  if (extension === ".pdf" && existsSync(input.file)) {
+    // Schedules and notes are answered from the sheet's text layer; drawings without enough text go to the image pipeline.
+    const { solveDocument } = await import("./solvers/document.js");
+    const answer = await solveDocument(input.file, input.question, qtype, { text: deps.vision, fileUrl: deps.fileUrl });
+    if (answer) return answer;
   }
 
   let image: string | null = null;

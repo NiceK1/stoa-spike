@@ -14,6 +14,8 @@ export interface Mesh {
 const FACING_TOLERANCE = 0.01;
 // Vertices closer than this in plan are the same outline corner.
 const WELD = 1e-4;
+// Above this many faces the exact union is too slow, and the plain sum of face areas is used.
+const MAX_UNION_FACES = 400;
 
 /** Signed plan area of every triangle that is visible along the z axis; positive when counter-clockwise from above. */
 function projectedAreas(mesh: Mesh): Float64Array {
@@ -32,7 +34,8 @@ function projectedAreas(mesh: Mesh): Float64Array {
 
 /**
  * The faces that make up the footprint: of a closed solid, the upward and the downward faces cover the same plan area,
- * so either set works; of an open surface only one set exists. Returns the sign of the larger set.
+ * and the upward ones are taken (door openings cut the underside of a wall, not its top); of an open surface only
+ * one set exists. Returns the sign of the chosen set and the sum of its face areas.
  */
 function footprintSide(areas: Float64Array): { sign: 1 | -1; area: number } {
   let up = 0, down = 0;
@@ -40,12 +43,79 @@ function footprintSide(areas: Float64Array): { sign: 1 | -1; area: number } {
     if (a > 0) up += a;
     else down -= a;
   }
-  return up >= down ? { sign: 1, area: up } : { sign: -1, area: down };
+  return up >= 0.999 * down ? { sign: 1, area: up } : { sign: -1, area: down };
 }
 
-/** Plan area covered by the mesh, in m². Exact for solids that any vertical line crosses at most once. */
+/**
+ * Plan area covered by the mesh, in m²: the union of the faces seen from above, so stacked layers and
+ * overhangs count once. Very large meshes fall back to the sum of those faces.
+ */
 export function footprintArea(mesh: Mesh): number {
-  return footprintSide(projectedAreas(mesh)).area;
+  const { positions: p, indices } = mesh;
+  const areas = projectedAreas(mesh);
+  const { sign, area } = footprintSide(areas);
+  const faces: Point[][] = [];
+  for (let t = 0; t < areas.length; t++) {
+    if (areas[t] * sign > 0) faces.push([0, 1, 2].map((k) => [p[indices[3 * t + k] * 3], p[indices[3 * t + k] * 3 + 1]] as Point));
+  }
+  return faces.length <= MAX_UNION_FACES ? unionArea(faces) : area;
+}
+
+/** Area of the union of triangles, summed over the vertical strips between every x where their outline can change. */
+export function unionArea(triangles: Point[][]): number {
+  const xs: number[] = [];
+  const edges: [Point, Point][] = [];
+  for (const [a, b, c] of triangles) {
+    xs.push(a[0], b[0], c[0]);
+    edges.push([a, b], [b, c], [c, a]);
+  }
+  for (let i = 0; i < edges.length; i++) {
+    for (let j = i + 1; j < edges.length; j++) {
+      const x = crossingX(edges[i], edges[j]);
+      if (x !== null) xs.push(x);
+    }
+  }
+  xs.sort((a, b) => a - b);
+
+  let area = 0;
+  for (let k = 0; k + 1 < xs.length; k++) {
+    const width = xs[k + 1] - xs[k];
+    if (width < 1e-12) continue;
+    const x = (xs[k] + xs[k + 1]) / 2;
+    const spans = triangles.map((triangle) => spanAt(triangle, x)).filter((span) => span !== null).sort((a, b) => a[0] - b[0]);
+    // Inside a strip every edge is a straight line that crosses no other, so the covered height at mid-strip is the mean.
+    let covered = 0, end = -Infinity;
+    for (const [low, high] of spans) {
+      if (high <= end) continue;
+      covered += high - Math.max(low, end);
+      end = high;
+    }
+    area += covered * width;
+  }
+  return area;
+}
+
+/** The x where two segments cross strictly inside both, or null. */
+function crossingX([[ax, ay], [bx, by]]: [Point, Point], [[cx, cy], [dx, dy]]: [Point, Point]): number | null {
+  if (Math.max(ax, bx) <= Math.min(cx, dx) || Math.max(cx, dx) <= Math.min(ax, bx)) return null;
+  const denominator = (bx - ax) * (dy - cy) - (by - ay) * (dx - cx);
+  if (denominator === 0) return null;
+  const t = ((cx - ax) * (dy - cy) - (cy - ay) * (dx - cx)) / denominator;
+  const u = ((cx - ax) * (by - ay) - (cy - ay) * (bx - ax)) / denominator;
+  return t > 0 && t < 1 && u > 0 && u < 1 ? ax + t * (bx - ax) : null;
+}
+
+/** The y range a triangle covers on the vertical line at x, or null when the line misses it. */
+function spanAt(triangle: Point[], x: number): [number, number] | null {
+  let low = Infinity, high = -Infinity;
+  for (let i = 0; i < 3; i++) {
+    const [ax, ay] = triangle[i], [bx, by] = triangle[(i + 1) % 3];
+    if (ax === bx || x < Math.min(ax, bx) || x > Math.max(ax, bx)) continue;
+    const y = ay + ((x - ax) / (bx - ax)) * (by - ay);
+    if (y < low) low = y;
+    if (y > high) high = y;
+  }
+  return high > low ? [low, high] : null;
 }
 
 /**
@@ -200,6 +270,28 @@ export function convexHull(points: Point[]): Polygon {
   return [...half(sorted), ...half(sorted.reverse())];
 }
 
+/** The longer side of the smallest rectangle around a polygon: the run of a straight wall, for one. */
+export function longSide(points: Polygon): number {
+  const hull = convexHull(points);
+  let best = { area: Infinity, long: 0 };
+  for (let i = 0; i < hull.length; i++) {
+    const [ax, ay] = hull[i], [bx, by] = hull[(i + 1) % hull.length];
+    const length = Math.hypot(bx - ax, by - ay);
+    if (length === 0) continue;
+    // The smallest rectangle shares a side with the hull.
+    const ux = (bx - ax) / length, uy = (by - ay) / length;
+    let along0 = Infinity, along1 = -Infinity, across0 = Infinity, across1 = -Infinity;
+    for (const [x, y] of hull) {
+      const along = x * ux + y * uy, across = y * ux - x * uy;
+      along0 = Math.min(along0, along); along1 = Math.max(along1, along);
+      across0 = Math.min(across0, across); across1 = Math.max(across1, across);
+    }
+    const area = (along1 - along0) * (across1 - across0);
+    if (area < best.area) best = { area, long: Math.max(along1 - along0, across1 - across0) };
+  }
+  return best.long;
+}
+
 /** Volume enclosed by a closed mesh, in m³. */
 export function meshVolume(mesh: Mesh): number {
   const { positions: p, indices } = mesh;
@@ -214,17 +306,4 @@ export function meshVolume(mesh: Mesh): number {
     total += ax * (by * cz - bz * cy) + ay * (bz * cx - bx * cz) + az * (bx * cy - by * cx);
   }
   return Math.abs(total) / 6;
-}
-
-/** Plan bounding box of a mesh: [minX, minY, maxX, maxY]. */
-export function planBounds(mesh: Mesh): [number, number, number, number] {
-  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-  for (let i = 0; i < mesh.positions.length; i += 3) {
-    const x = mesh.positions[i], y = mesh.positions[i + 1];
-    if (x < x0) x0 = x;
-    if (y < y0) y0 = y;
-    if (x > x1) x1 = x;
-    if (y > y1) y1 = y;
-  }
-  return [x0, y0, x1, y1];
 }

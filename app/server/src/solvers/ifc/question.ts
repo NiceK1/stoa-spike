@@ -3,7 +3,7 @@ import type { QuestionType } from "../../types.js";
 
 export type ElementKind =
   | "space" | "door" | "window" | "wall" | "column" | "stair" | "beam" | "slab"
-  | "sanitary" | "railing" | "roof" | "ramp" | "furniture" | "covering" | "footing";
+  | "sanitary" | "railing" | "roof" | "ramp" | "furniture" | "covering" | "footing" | "pipe";
 
 export type IfcIntent =
   /** Net floor area of one room; `storey` is null when the question names only the room. */
@@ -12,17 +12,29 @@ export type IfcIntent =
   | { kind: "wall_length" | "wall_side_area" | "wall_volume" | "slab_volume"; storey: string | null }
   /** `scope` is null when the wording does not say whether `name` is a storey or the model. */
   | { kind: "count"; element: ElementKind; scope: "storey" | "model" | null; name: string | null }
-  | { kind: "text"; topic: TextTopic };
+  | { kind: "text"; ask: TextAsk };
 
-export type TextTopic = "software" | "storeys" | "spaces" | "largest_room" | "elements" | "summary";
+/** A storey named by its position rather than its name: 0 is the ground floor, 1 the floor above it, -1 the basement. */
+export type LevelRef = { above: number } | "top";
+
+/** What a free-text question wants to know about the model. */
+export type TextAsk =
+  | { topic: "software" | "overview" | "levels" | "floor_area" | "structure" | "wall_lengths" }
+  | { topic: "largest_room"; smallest: boolean }
+  | { topic: "spaces"; level: LevelRef | null; listed: boolean }
+  | { topic: "element_types"; element: ElementKind; side: "exterior" | "interior" | null }
+  | { topic: "element_widths"; element: ElementKind }
+  | { topic: "element_volume"; element: ElementKind }
+  | { topic: "element_property"; element: ElementKind; property: "LoadBearing" | "FireRating" };
 
 /** A word or phrase that is not part of a longer word; \b does not know letters such as ø or ä. */
 function words(pattern: string): RegExp {
   return new RegExp(`(?<![\\p{L}\\p{N}])(?:${pattern})(?![\\p{L}\\p{N}])`, "u");
 }
 
+/** English, then Estonian, Danish and German where the take-off questions use them. */
 const ELEMENT_WORDS: [ElementKind, RegExp][] = [
-  ["sanitary", words("sanitary (?:fixtures?|terminals?|appliances?|ware)|sanitetsgenstande|sanitet|sanitärobjekte|sanitärgegenstände|sanitaarseadet|sanitaarseadmeid|sanitaartehnikat")],
+  ["sanitary", words("sanitary (?:fixtures?|terminals?|appliances?|ware)")],
   ["space", words("rooms?|spaces?|ruumi|ruume|ruumid|ruum|rum|räume|raum")],
   ["door", words("doors?|ust|uks|ukse|uksi|uksed|døre|dør|türen|tür")],
   ["window", words("windows?|akent|aken|akna|aknaid|aknad|vinduer|vindue|fenster")],
@@ -30,25 +42,33 @@ const ELEMENT_WORDS: [ElementKind, RegExp][] = [
   ["column", words("columns?|posti|post|poste|postid|søjler|søjle|stützen|stütze|säulen|säule")],
   ["stair", words("stairs?|staircases?|treppi|trepp|treppe|trepid|trapper|trappe|treppen")],
   ["beam", words("beams?|tala|talasid|talad|bjælker|bjælke|träger|balken")],
-  ["slab", words("slabs?|dæk|plader|decken|bodenplatten|vahelage|vahelagesid|plaati|plaate")],
-  ["railing", words("railings?|handrails?|piiret|piirded|gelændere?|rækværk|geländer")],
+  ["slab", words("slabs?|dæk|plader|decken|bodenplatten")],
+  ["railing", words("railings?|handrails?|gelændere?|rækværk|geländer")],
   ["roof", words("roofs?|katust|katused|tage|dächer|dach")],
-  ["ramp", words("ramps?|kaldteed|kaldteid|ramper|rampen")],
-  ["furniture", words("furniture|furnishings?|furniture items|mööblieset|møbler|möbel")],
+  ["ramp", words("ramps?|ramper|rampen")],
+  ["furniture", words("furniture|furnishings?|møbler|möbel")],
   ["covering", words("coverings?")],
-  ["footing", words("footings?|foundations?|vundamenti|fundamenter|fundamente")],
+  ["footing", words("footings?|foundations?|fundamenter|fundamente")],
+  ["pipe", words("pipes?|pipe segments?|ducts?|rør|rohre")],
 ];
 
-const WHOLE_MODEL = words("(?:in|of) (?:the |this )?(?:whole |entire )?(?:model|building|project)|mudelis|i modellen|i bygningen|das modell|im modell|im gebäude|hoones");
+const WHOLE_MODEL = words("(?:in|of) (?:the |this )?(?:whole |entire )?(?:model|building|project)|mudelis|i modellen|i bygningen|das modell|im modell|im gebäude");
 const ONE_STOREY = words("floor plan|floor|storey|story|level|plaanil|korruse|korrusel|plantegningen|etagen|etage|grundriss|geschoss|stockwerk");
-const ALL_ROOMS = words("all (?:the )?(?:rooms|spaces)|alle rum|kõigi ruumide|aller räume|total");
-const SIDE_AREA = words("side area|sideareal|nettosideareal|seitenfläche|netto-seitenfläche|külgpind|küljepind|külgpindala");
+const ALL_ROOMS = words("all (?:the )?(?:rooms|spaces)|alle rum|kõigi ruumide|aller räume");
+const SIDE_AREA = words("side area|sideareal|nettosideareal|seitenfläche|netto-seitenfläche");
 const WALLS = words("walls?|vægge|wände|seinte|seinad|seina");
-const SLABS = words("slabs?|dæk|plader|decken|bodenplatten|vahelagede|plaatide");
+const SLABS = words("slabs?|dæk|plader|decken|bodenplatten");
 
 // 'x', „x“, «x», »x«, “x”, "x". A single quote only opens after a space and closes before one, so that
 // apostrophes inside a name stay part of it.
 const QUOTED = /(?<=^|[\s(])'(.+?)'(?=$|[\s,.;:?!)])|„([^“”]+)[“”]|«([^»]+)»|»([^«]+)«|“([^”]+)”|"([^"]+)"/g;
+
+/** True when the text names this storey, room or model as whole words, ignoring case and spacing. */
+export function mentions(text: string, name: string): boolean {
+  const loose = (value: string) => value.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
+  const wanted = loose(name);
+  return wanted !== "" && words(wanted.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).test(loose(text));
+}
 
 /** The quoted names in a question, in order. */
 export function quotedNames(question: string): string[] {
@@ -69,14 +89,62 @@ function elementKind(lowered: string): ElementKind | null {
   return best?.kind ?? null;
 }
 
-const TEXT_TOPICS: [TextTopic, RegExp][] = [
-  ["software", words("software|ifc (?:standards?|schema|version)|authoring|created with|modell?ing standards?|exported")],
-  ["largest_room", words("(?:largest|biggest|smallest) (?:room|space)|(?:room|space)[^?]* (?:largest|biggest)")],
-  ["storeys", words("heights? of each level|storeys|stories|levels|floors|elevations?")],
-  ["spaces", words("space (?:breakdown|distribution)|rooms?|spaces?|floor area|net (?:usable )?floor area")],
-  ["elements", words("types?|quantit(?:y|ies)|how many|components|elements|doors?|windows?|walls?|slabs?|columns?|beams?|stairs?|railings?|furniture|coverings?|pipes?|fixtures?|systems?")],
-  ["summary", words("what (?:type|kind) of building|building(?:'s)? type|overview|describe|summary|about (?:this|the) (?:building|model)")],
-];
+const ORDINALS = ["ground", "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth"];
+
+/** 'basement', 'ground floor', 'second level', 'level 3', 'attic'. A numbered or named floor counts up from the ground floor. */
+function levelRef(lowered: string): LevelRef | null {
+  if (words("basement|cellar|underground (?:floor|level|storey)").test(lowered)) return { above: -1 };
+  if (words("attic|top (?:floor|level|storey)|roof level").test(lowered)) return "top";
+  const named = ORDINALS.findIndex((ordinal) => words(`${ordinal} (?:floor|level|storey|story)`).test(lowered));
+  if (named >= 0) return { above: named };
+  const numbered = /(?:level|floor|storey|story) (\d{1,2})(?![\d.])/.exec(lowered);
+  return numbered ? { above: Number(numbered[1]) } : null;
+}
+
+/** Things a question can narrow down to that the solver does not extract: one room or dwelling, materials, build-ups, ratings. */
+const OUT_OF_REACH = words(
+  "materials?|thick\\w*|insulation|glazing|glazed|coefficient|warranty|fa[cç]ades?|steps|spans?|depth|compliant|lifespan|specification|layers|painting|" +
+    "fire-rated|vapou?r|curtain|carbon|efficiency|grid|load path|restrooms?|bathrooms?|bedrooms?|toilets?|house [a-z]|duplex [a-z]|in room|room [a-z]?\\d[\\w.]*|" +
+    "skirting|tiles?|tiling|doorknobs?|[0-9a-z_$]{22}",
+);
+
+/** Words that ask which kinds of an element there are and how many. */
+const LISTING = "types?|kinds?|quantit(?:y|ies)|how many|distribution|counts?|breakdown|installed|present|used|applied|available|located|found|in (?:this|the) building";
+
+/** Maps an English free-text question about a model to the facts it asks for, or null. */
+export function parseTextQuestion(question: string): TextAsk | null {
+  const lowered = withoutQuoted(question);
+  const has = (pattern: string) => words(pattern).test(lowered);
+
+  if (has("software|ifc (?:standards?|schema|version)|modell?ing standards?")) return { topic: "software" };
+  if (has("(?:largest|biggest|smallest) (?:room|space)") || /(?:room|space).*(?:largest|biggest|smallest)/.test(lowered)) {
+    return { topic: "largest_room", smallest: has("smallest") };
+  }
+  if (has("building(?:'s)? type|(?:type|kind) of building|project information|building details") || (has("number of levels") && has("rooms|spaces|area"))) {
+    return { topic: "overview" };
+  }
+  if (has("(?:heights?|elevations?) of (?:each |the |all )?(?:building )?(?:levels?|storeys?|stories|floors?)|floor-to-floor|(?:how many|number of) (?:levels|storeys|stories|floors)")) {
+    return { topic: "levels" };
+  }
+  if (has("(?:total |net |gross |usable )+floor area")) return { topic: "floor_area" };
+  // From here on the nearest known fact would be a wrong answer to a narrower question.
+  if (OUT_OF_REACH.test(lowered)) return null;
+  if (has("space (?:breakdown|distribution)|(?:spaces|rooms) (?:are )?(?:on|in|of)|names of (?:all )?(?:the )?(?:rooms|spaces)|list of (?:each |all |the )?(?:rooms?|spaces?)")) {
+    return { topic: "spaces", level: levelRef(lowered), listed: !has("by level|per level|distribution") || has("room names|individual|listing|complete") };
+  }
+  if (has("structural (?:components|elements|members)|structural system[^?]*counts")) return { topic: "structure" };
+
+  const element = elementKind(lowered);
+  if (!element || element === "space" || levelRef(lowered)) return null;
+  if (element === "wall" && has("length")) return { topic: "wall_lengths" };
+  if (has("load[- ]bearing")) return { topic: "element_property", element, property: "LoadBearing" };
+  if (has("fire rating")) return { topic: "element_property", element, property: "FireRating" };
+  if ((element === "door" || element === "window") && has("widths?|widest|narrowest|wide")) return { topic: "element_widths", element };
+  if (has("volume")) return { topic: "element_volume", element };
+  if (!has(LISTING) || has("lengths?|heights?|areas?|sizes? of|dimensions of")) return null;
+  const side = has("exterior|external|outer|outside") ? "exterior" : has("interior|internal|inner|inside") ? "interior" : null;
+  return { topic: "element_types", element, side };
+}
 
 /** Maps a question to what it asks of the model, or null when it is not one of the understood forms. */
 export function parseIfcQuestion(question: string, qtype: QuestionType): IfcIntent | null {
@@ -103,8 +171,8 @@ export function parseIfcQuestion(question: string, qtype: QuestionType): IfcInte
     return { kind: "count", element, scope, name: last };
   }
   if (qtype === "text") {
-    const topic = TEXT_TOPICS.find(([, pattern]) => pattern.test(lowered))?.[0];
-    return topic ? { kind: "text", topic } : null;
+    const ask = parseTextQuestion(question);
+    return ask ? { kind: "text", ask } : null;
   }
   return null;
 }
