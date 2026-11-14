@@ -287,6 +287,33 @@
     for (const link of document.querySelectorAll("a[data-path]")) {
       link.href = `app.html?path=${encodeURIComponent(link.dataset.path)}&q=${encodeURIComponent(link.dataset.q)}`;
     }
+    // Links within the page glide to their section over about a second, easing in and out, one step per screen
+    // frame. Scrolling by hand stops the glide; visitors who ask for less motion get the plain jump.
+    const glide = window.matchMedia("(prefers-reduced-motion: no-preference)").matches;
+    let gliding = 0;
+    const stop = () => cancelAnimationFrame(gliding);
+    for (const event of ["wheel", "touchstart", "keydown"]) window.addEventListener(event, stop, { passive: true });
+    for (const link of document.querySelectorAll('a[href^="#"]')) {
+      link.addEventListener("click", (e) => {
+        const target = document.querySelector(link.getAttribute("href"));
+        if (!glide || !target) return;
+        e.preventDefault();
+        stop();
+        const from = window.scrollY;
+        const to = Math.min(target.getBoundingClientRect().top + from, document.documentElement.scrollHeight - innerHeight);
+        const duration = Math.min(1400, 700 + Math.abs(to - from) * 0.35);
+        const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+        const start = performance.now();
+        const step = (now) => {
+          const t = Math.min(1, (now - start) / duration);
+          window.scrollTo(0, from + (to - from) * ease(t));
+          if (t < 1) gliding = requestAnimationFrame(step);
+          else history.replaceState(null, "", link.getAttribute("href"));
+        };
+        gliding = requestAnimationFrame(step);
+      });
+    }
+
     // The count rises with each mark as it appears; without motion it simply shows the answer.
     if (window.matchMedia("(prefers-reduced-motion: no-preference)").matches) {
       const count = document.getElementById("count");
