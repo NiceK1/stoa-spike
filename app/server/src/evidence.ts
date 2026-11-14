@@ -35,7 +35,12 @@ export function renderPlanSvg({ solid = [], outlines = [], highlights, labels = 
     ...outlines.map((p) => `<path d="${path(p)}" fill="none" stroke="#c3cbdb" stroke-width="1"/>`),
     ...solid.map((p) => `<path d="${path(p)}" fill="#3b4459"/>`),
     // Even-odd fill leaves the cut-out rings (holes in a room) unpainted.
-    ...highlights.map((p, i) => `<path d="${[p, ...(cutouts[i] ?? [])].map(path).join(" ")}" fill="#2f6bff" fill-opacity="0.28" fill-rule="evenodd" stroke="#1e4fd8" stroke-width="2"/>`),
+    // A white halo under each fixed-width blue outline keeps small highlights (a door, a WC) visible on dark walls.
+    ...highlights.map((p, i) => {
+      const d = [p, ...(cutouts[i] ?? [])].map(path).join(" ");
+      return `<path d="${d}" fill="none" stroke="#ffffff" stroke-width="5.5" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>` +
+        `<path d="${d}" fill="#2f6bff" fill-opacity="0.32" fill-rule="evenodd" stroke="#1e4fd8" stroke-width="2.5" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`;
+    }),
   ];
   highlights.forEach((p, i) => {
     const [cx, cy] = centroid(p);

@@ -516,7 +516,7 @@ function aspect(evidence: Evidence): number {
 
 function Marked({ evidence }: { evidence: Extract<Evidence, { kind: "image" }> }) {
   const { width, height, marks } = evidence;
-  const r = Math.max(width, height) / 70;
+  const r = Math.max(width, height) / 62;
   return (
     <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={marks.length ? `${marks.length} marked items` : "The drawing"}>
       <image href={evidence.imageUrl} width={width} height={height} />
@@ -524,12 +524,20 @@ function Marked({ evidence }: { evidence: Extract<Evidence, { kind: "image" }> }
         const boxed = m.w !== undefined && m.h !== undefined;
         // A text row is wide and thin: its badge shrinks to the row height and sits at the row's left end.
         const row = boxed && m.w! > 6 * m.h!;
+        const pad = row ? 0 : r * 0.2;
         const size = row ? Math.max(r * 0.3, Math.min(r, m.h! * 0.8)) : r;
         const cx = row ? m.x - size * 1.3 : boxed ? m.x + m.w! / 2 : m.x;
-        const cy = row ? m.y + m.h! / 2 : boxed ? m.y - size * 0.9 : m.y;
+        const cy = row ? m.y + m.h! / 2 : boxed ? m.y - pad - size * 0.9 : m.y;
         return (
           <g key={m.n}>
-            {boxed && <rect x={m.x} y={m.y} width={m.w} height={m.h} className="box" strokeWidth={size / 6} />}
+            {boxed && (
+              // A little room around the symbol, then a white halo under a fixed-width blue outline: small boxes stay
+              // visible on dark walls and when a large scan is shrunk to fit the screen.
+              <>
+                <rect x={m.x - pad} y={m.y - pad} width={m.w! + 2 * pad} height={m.h! + 2 * pad} rx={pad} className="box-halo" vectorEffect="non-scaling-stroke" />
+                <rect x={m.x - pad} y={m.y - pad} width={m.w! + 2 * pad} height={m.h! + 2 * pad} rx={pad} className="box" vectorEffect="non-scaling-stroke" />
+              </>
+            )}
             <circle cx={cx} cy={cy} r={size} className="dot" strokeWidth={size / 8} />
             <text x={cx} y={cy + size * 0.38} fontSize={size * 1.15} className="num">{m.n}</text>
             {m.label && <title>{m.label}</title>}
