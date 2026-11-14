@@ -1,7 +1,7 @@
 /**
  * Raster drawings. A vision model reads each drawing once into an inventory of located items
  * (windows, doors, fixtures, room types); every count question is then answered from that inventory.
- * A detector, when one is configured, replaces the model for the symbol classes it knows.
+ * Detectors, when configured, count the symbol classes they know, and the sources vote.
  * Either way the answer comes with numbered marks on the image, so a person can check each counted item.
  */
 import sharp from "sharp";
@@ -18,7 +18,7 @@ export interface RasterDeps {
   useDetector?: boolean;
 }
 
-interface Target {
+export interface Target {
   id: string;
   pattern: RegExp;
   /** Inventory categories that add up to this target. */
@@ -155,6 +155,133 @@ const FREE_SCHEMA = {
 
 type Located = { x: number; y: number };
 
+/** One source's count of a target, with the items it counted. */
+export interface Tally {
+  name: string;
+  count: number;
+  boxes?: Detection[];
+  points?: Located[];
+}
+
+/** A way to count a target on one drawing. `tally` does the work, so a source that is not asked costs nothing. */
+export interface Source {
+  name: string;
+  kind: "detector" | "vision";
+  tally(): Promise<Tally>;
+}
+
+/**
+ * Who answers a target where the default did not measure best: detectors by name, "vision" for the vision model.
+ * With an even number of voters `upper` takes the higher middle count. Chosen on one set of held-out drawings and
+ * kept only where a second set agreed (scripts/voters.ts). The default is a vote of every detector and the vision
+ * model on symbols, and the vision model alone on room types and storeys.
+ */
+const ELECTORATE: Record<string, { voters: string[]; upper?: boolean }> = {
+  // The vision model misses door leaves, which drags a three-way vote down.
+  door: { voters: ["floorplan-yolo11m-1280"] },
+  // Both sources overlook saunas more often than they invent one.
+  sauna: { voters: ["floorplan-yolo11m-1280", "vision"], upper: true },
+};
+
+const CATEGORY_OF: Record<string, string> = Object.fromEntries(
+  TARGETS.filter((t) => t.categories.length === 1 && t.detectorClasses.length === 1).map((t) => [t.detectorClasses[0], t.categories[0]]),
+);
+const SYMBOL_CLASSES = new Set(TARGETS.filter((t) => t.symbol).flatMap((t) => t.detectorClasses));
+/** Detections down to this share of a class's threshold are passed to the vision model as unsure candidates. */
+const UNSURE = 0.5;
+
+const HINT_RULE =
+  "Detector candidates: the request lists positions that a symbol detector found for some categories, in the same " +
+  "coordinates. The detector finds most items, but it misses some and sometimes reports things that are not there; " +
+  "a position followed by a question mark is one it was unsure about. Check every candidate against the drawing, " +
+  "keep the real ones, drop the wrong ones and add every item it missed. Categories that are not listed were not scanned.";
+
+/** INVENTORY_HINTS: "symbols" or "all" passes the detector's findings for those classes to the vision model. */
+function hintedClasses(detector: Detector): string[] {
+  const mode = process.env.INVENTORY_HINTS ?? "off";
+  if (mode !== "symbols" && mode !== "all") return [];
+  return Object.keys(detector.thresholds).filter((cls) => cls in CATEGORY_OF && (mode === "all" || SYMBOL_CLASSES.has(cls)));
+}
+
+function candidateList(detector: Detector, scanned: Detection[], width: number, height: number): string | null {
+  const classes = hintedClasses(detector);
+  if (classes.length === 0) return null;
+  const lines = classes.map((cls) => {
+    const sure = detector.thresholds[cls];
+    const points = scanned
+      .filter((d) => d.cls === cls && d.score >= sure * UNSURE)
+      .sort((a, b) => a.y - b.y || a.x - b.x)
+      .map((d) => `${Math.round(((d.x + d.w / 2) / width) * 1000)},${Math.round(((d.y + d.h / 2) / height) * 1000)}${d.score < sure ? "?" : ""}`);
+    return `${CATEGORY_OF[cls]}: ${points.length > 0 ? points.join(" ") : "none"}`;
+  });
+  return `Detector candidates (x,y of each centre):\n${lines.join("\n")}`;
+}
+
+/**
+ * Every independent way to count `target` on this drawing: each detector that knows its classes, when the drawing
+ * is in the detectors' style, and the vision model's inventory (the middle of INVENTORY_VOTES readings).
+ * `routed` is the count of the detector preferred for the target, for answering without a vote.
+ *
+ * RASTER_DETECTOR_TARGETS: "symbols" (default) lets the detectors count drawn symbols and leaves room types and
+ * storeys to the vision model; "all" gives the detectors everything they know; "none" switches them off.
+ */
+export async function countSources(imagePath: string, target: Target, deps: RasterDeps): Promise<{ sources: Source[]; routed: Tally | null }> {
+  const { width = 0, height = 0 } = await sharp(imagePath).metadata();
+  const scope = deps.useDetector === false ? "none" : (process.env.RASTER_DETECTOR_TARGETS ?? "symbols");
+  const detector = scope === "none" ? null : deps.detector;
+  const known = (model: Detector) => target.detectorClasses.every((cls) => cls in model.thresholds);
+  const answers = detector !== null && known(detector) && (scope === "all" || target.symbol === true);
+  const counts = answers || (detector !== null && known(detector) && target.id in ELECTORATE);
+  const scanned = detector && (counts || hintedClasses(detector).length > 0) ? await detector.detect(imagePath) : null;
+  // The detectors know one drawing style. On a drawing where they recognise almost nothing with confidence
+  // (an elevation, a historic scan), their count would be a confident zero, so they are left out.
+  const trusted = scanned !== null && scanned.filter((d) => d.score >= IN_DOMAIN_SCORE).length >= IN_DOMAIN_DETECTIONS;
+  const counted = (model: Detector, all: Detection[]) =>
+    all.filter((d) => target.detectorClasses.includes(d.cls) && d.score >= model.thresholds[d.cls]).sort((a, b) => a.y - b.y || a.x - b.x);
+
+  const sources: Source[] = [];
+  if (detector && trusted && counts) {
+    for (const model of (detector.members ?? [detector]).filter(known)) {
+      const name = model.id.split(":")[1];
+      sources.push({
+        name, kind: "detector",
+        tally: async () => {
+          const boxes = counted(model, await model.detect(imagePath));
+          return { name, count: boxes.length, boxes };
+        },
+      });
+    }
+  }
+
+  const hints = detector && trusted ? candidateList(detector, scanned!, width, height) : null;
+  const system = hints ? `${inventorySystem()}\n\n${HINT_RULE}` : inventorySystem();
+  const votes = Math.max(1, Number(process.env.INVENTORY_VOTES ?? 1));
+  sources.push({
+    name: deps.vision.id, kind: "vision",
+    tally: async () => {
+      // Several independent readings, answered by the middle one: a single reading is off by one too often.
+      const readings = await Promise.all(
+        Array.from({ length: votes }, (_, pass) => {
+          const request = pass === 0 ? INVENTORY_PROMPT : `${INVENTORY_PROMPT} (Independent reading ${pass + 1}.)`;
+          return deps.vision.ask({ imagePath, system, schema: INVENTORY_SCHEMA, prompt: hints ? `${request}\n\n${hints}` : request });
+        }),
+      );
+      const itemsOf = (output: Record<string, any>): Located[] => target.categories.flatMap((c) => output[c] ?? []);
+      const countOf = (output: Record<string, any>): number => (target.id === "floor" ? output.floors : itemsOf(output).length);
+      const middle = readings.map((r) => countOf(r.output)).sort((a, b) => a - b)[Math.floor(votes / 2)];
+      const chosen = readings.find((r) => countOf(r.output) === middle)!.output;
+      return {
+        name: votes > 1 ? `${deps.vision.id}, middle of ${votes} readings` : deps.vision.id, count: middle,
+        points: target.id === "floor" ? undefined : itemsOf(chosen),
+      };
+    },
+  });
+
+  if (!detector || !trusted || !answers) return { sources, routed: null };
+  const boxes = counted(detector, scanned!);
+  return { sources, routed: { name: detector.nameFor?.(target.detectorClasses[0]) ?? detector.id.split(":")[1], count: boxes.length, boxes } };
+}
+
 export async function solveRaster(imagePath: string, question: string, qtype: QuestionType, deps: RasterDeps): Promise<Answer> {
   const { width = 0, height = 0 } = await sharp(imagePath).metadata();
   const image = (marks: Mark[], caption: string) => ({ kind: "image" as const, imageUrl: deps.imageUrl, width, height, marks, caption });
@@ -169,89 +296,66 @@ export async function solveRaster(imagePath: string, question: string, qtype: Qu
   }
 
   const target = rasterTarget(question);
-  // RASTER_DETECTOR_TARGETS: "symbols" (default) lets the detector count drawn symbols and leaves room types and
-  // storeys to the vision model; "all" gives the detector everything it knows; "none" switches it off.
-  const scope = deps.useDetector === false ? "none" : (process.env.RASTER_DETECTOR_TARGETS ?? "symbols");
-  const detector = deps.detector;
-  const detections =
-    detector && target && scope !== "none" && (scope === "all" || target.symbol) &&
-    target.detectorClasses.every((cls) => cls in detector.thresholds)
-      ? await detector.detect(imagePath)
-      : null;
-  // The detector knows one drawing style. On a drawing where it recognises almost nothing with confidence
-  // (an elevation, a historic scan), its count would be a confident zero, so the vision model answers instead.
-  if (detector && target && detections && detections.filter((d) => d.score >= IN_DOMAIN_SCORE).length >= IN_DOMAIN_DETECTIONS) {
-    const counted = (model: Detector, all: Detection[]) =>
-      all.filter((d) => target.detectorClasses.includes(d.cls) && d.score >= model.thresholds[d.cls]).sort((a, b) => a.y - b.y || a.x - b.x);
-    const boxMarks = (found: Detection[]): Mark[] =>
-      found.map((d, i) => ({ n: i + 1, x: d.x, y: d.y, w: d.w, h: d.h, label: `${d.cls.replace("_", " ")}, ${Math.round(d.score * 100)}% confidence` }));
-    const names = target.detectorClasses.map((cls) => cls.replace("_", " ")).join(" and ");
-
-    // With two or more detectors, a symbol is counted by each of them and by the vision model, and the middle
-    // count wins: on held-out drawings that beats every single source. RASTER_SYMBOL_VOTE=off disables it.
-    const members = (detector.members ?? []).filter((m) => target.detectorClasses.every((cls) => cls in m.thresholds));
-    if (target.symbol && members.length >= 2 && process.env.RASTER_SYMBOL_VOTE !== "off") {
-      const perModel = await Promise.all(
-        members.map(async (m) => ({ name: m.id.split(":")[1], found: counted(m, await m.detect(imagePath)) })),
-      );
-      const reading = (await deps.vision.ask({ imagePath, system: inventorySystem(), schema: INVENTORY_SCHEMA, prompt: INVENTORY_PROMPT })).output;
-      const located: Located[] = target.categories.flatMap((c) => reading[c] ?? []);
-      const counts = [...perModel.map((p) => p.found.length), located.length].sort((a, b) => a - b);
-      const middle = counts[Math.floor((counts.length - 1) / 2)];
-      const boxes = perModel.find((p) => p.found.length === middle);
-      const tally = [...perModel.map((p) => `${p.name}: ${p.found.length}`), `${deps.vision.id}: ${located.length}`].join("; ");
-      return {
-        value: middle, unit: "count", pipeline: "symbol-vote", exact: false, kind: target.id,
-        method: `middle of ${counts.length} independent counts of ${names} symbols (${tally})`,
-        evidence: boxes
-          ? image(boxMarks(boxes.found), `Each box is one counted ${names}, as found by ${boxes.name}`)
-          : image(toMarks(located), "Each number is one counted item; positions are the vision model's estimate"),
-      };
-    }
-
-    const found = counted(detector, detections);
+  if (!target) {
+    const { output } = await deps.vision.ask({ imagePath, system: COUNT_SYSTEM, prompt: question, schema: COUNT_SCHEMA });
+    const items: Located[] = output.items ?? [];
     return {
-      value: found.length, unit: "count", pipeline: "detector", exact: false, kind: target.id,
-      method: `${names} symbols found by the detector ${detector.nameFor?.(target.detectorClasses[0]) ?? detector.id.split(":")[1]}`,
-      evidence: image(boxMarks(found), `Each box is one counted ${names}`),
+      value: items.length > 0 ? items.length : output.count, unit: "count", pipeline: "vision-model", exact: false, kind: "other",
+      method: `items listed by ${deps.vision.id}`,
+      evidence: image(toMarks(items), "Each number is one counted item; positions are the model's estimate"),
     };
   }
 
-  if (target) {
-    // Several independent readings, answered by the middle one: a single reading is off by one too often.
-    const votes = Math.max(1, Number(process.env.INVENTORY_VOTES ?? 1));
-    const readings = await Promise.all(
-      Array.from({ length: votes }, (_, pass) =>
-        deps.vision.ask({
-          imagePath, system: inventorySystem(), schema: INVENTORY_SCHEMA,
-          prompt: pass === 0 ? INVENTORY_PROMPT : `${INVENTORY_PROMPT} (Independent reading ${pass + 1}.)`,
-        }),
-      ),
-    );
-    const itemsOf = (output: Record<string, any>): Located[] => target.categories.flatMap((c) => output[c] ?? []);
-    const countOf = (output: Record<string, any>): number => (target.id === "floor" ? output.floors : itemsOf(output).length);
-    const middle = readings.map((r) => countOf(r.output)).sort((a, b) => a - b)[Math.floor(votes / 2)];
-    const chosen = readings.find((r) => countOf(r.output) === middle)!.output;
-    const by = votes > 1 ? `${deps.vision.id}, middle of ${votes} readings` : deps.vision.id;
+  const names = target.detectorClasses.map((cls) => cls.replace("_", " ")).join(" and ");
+  const boxMarks = (found: Detection[]): Mark[] =>
+    found.map((d, i) => ({ n: i + 1, x: d.x, y: d.y, w: d.w, h: d.h, label: `${d.cls.replace("_", " ")}, ${Math.round(d.score * 100)}% confidence` }));
+  const { sources, routed } = await countSources(imagePath, target, deps);
+  const what = `${names} ${target.symbol ? "symbols" : "rooms"}`;
 
+  const single = (tally: Tally): Answer => {
+    if (tally.boxes) {
+      return {
+        value: tally.count, unit: "count", pipeline: "detector", exact: false, kind: target.id,
+        method: `${what} found by the detector ${tally.name}`, evidence: image(boxMarks(tally.boxes), `Each box is one counted ${names}`),
+      };
+    }
     if (target.id === "floor") {
       return {
-        value: middle, unit: "count", pipeline: "vision-model", exact: false, kind: target.id,
-        method: `storeys counted by ${by}`, evidence: image([], "Source drawing"),
+        value: tally.count, unit: "count", pipeline: "vision-model", exact: false, kind: target.id,
+        method: `storeys counted by ${tally.name}`, evidence: image([], "Source drawing"),
       };
     }
     return {
-      value: middle, unit: "count", pipeline: "vision-model", exact: false, kind: target.id,
-      method: `${target.categories.join(" and ").replaceAll("_", " ")} located by ${by}`,
-      evidence: image(toMarks(itemsOf(chosen)), "Each number is one counted item; positions are the model's estimate"),
+      value: tally.count, unit: "count", pipeline: "vision-model", exact: false, kind: target.id,
+      method: `${target.categories.join(" and ").replaceAll("_", " ")} located by ${tally.name}`,
+      evidence: image(toMarks(tally.points ?? []), "Each number is one counted item; positions are the model's estimate"),
+    };
+  };
+
+  // With two or more detectors, a symbol is counted by each of them and by the vision model, and the middle
+  // count wins: on held-out drawings that beats every single source. RASTER_SYMBOL_VOTE=off disables voting.
+  const voting = process.env.RASTER_SYMBOL_VOTE !== "off";
+  const rule = voting ? ELECTORATE[target.id] : undefined;
+  const named = rule ? sources.filter((s) => rule.voters.includes(s.kind === "vision" ? "vision" : s.name)) : [];
+  const everyone = voting && routed && target.symbol && sources.filter((s) => s.kind === "detector").length >= 2 ? sources : [];
+  const voters = named.length > 0 ? named : everyone;
+
+  if (voters.length === 1) return single(await voters[0].tally());
+  if (voters.length > 1) {
+    const tallies = await Promise.all(voters.map((s) => s.tally()));
+    const counts = tallies.map((t) => t.count).sort((a, b) => a - b);
+    const chosen = counts[rule?.upper ? Math.floor(counts.length / 2) : Math.floor((counts.length - 1) / 2)];
+    const which = counts.length === 2 ? (rule?.upper ? "higher" : "lower") : "middle";
+    const boxes = tallies.find((t) => t.boxes && t.count === chosen);
+    const located = tallies.find((t) => t.points && t.count === chosen) ?? tallies.find((t) => t.points);
+    return {
+      value: chosen, unit: "count", pipeline: "symbol-vote", exact: false, kind: target.id,
+      method: `${which} of ${counts.length} independent counts of ${what} (${tallies.map((t) => `${t.name}: ${t.count}`).join("; ")})`,
+      evidence: boxes
+        ? image(boxMarks(boxes.boxes!), `Each box is one counted ${names}, as found by ${boxes.name}`)
+        : image(toMarks(located?.points ?? []), "Each number is one counted item; positions are the vision model's estimate"),
     };
   }
 
-  const { output } = await deps.vision.ask({ imagePath, system: COUNT_SYSTEM, prompt: question, schema: COUNT_SCHEMA });
-  const items: Located[] = output.items ?? [];
-  return {
-    value: items.length > 0 ? items.length : output.count, unit: "count", pipeline: "vision-model", exact: false, kind: "other",
-    method: `items listed by ${deps.vision.id}`,
-    evidence: image(toMarks(items), "Each number is one counted item; positions are the model's estimate"),
-  };
+  return single(routed ?? (await sources.find((s) => s.kind === "vision")!.tally()));
 }
