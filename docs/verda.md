@@ -6,7 +6,7 @@ are answered by exact geometry code. For raster floor plans we needed models of 
 Verda: we trained them there, we fine-tuned the small model that interprets questions there, and the public demo runs
 there.
 
-Live demo, served from a Verda instance: https://65-108-33-91.sslip.io
+Live demo, served from a Verda instance: https://blueline.65-108-33-91.sslip.io
 
 ![Training history: the runs in order, what went in, what came out](training-history.png)
 
