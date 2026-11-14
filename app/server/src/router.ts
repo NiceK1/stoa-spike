@@ -4,7 +4,7 @@
  * and `<model>_plan-<level>.pdf` was rendered from `<model>.ifc`.
  */
 import { existsSync } from "node:fs";
-import { extname } from "node:path";
+import { basename, extname } from "node:path";
 import { renderPlanSvg } from "./evidence.js";
 import type { Detector } from "./models/detector.js";
 import type { VisionModel } from "./models/vision.js";
@@ -65,7 +65,13 @@ export async function preview(file: string, deps: Pick<Deps, "fileUrl">): Promis
     const pdf = twin(file, ".pdf");
     image = twin(file, ".png") ?? twin(file, ".jpg") ?? (pdf ? await rasterize(pdf) : null);
   }
-  if (!image) return null;
+  if (!image) {
+    // No sheet to show: draw the plan from the building model it belongs to, loaded on demand like in ask().
+    const ifc = extension === ".ifc" ? file : ifcModelOf(file);
+    if (!ifc) return null;
+    const { previewIfc } = await import("./solvers/ifc.js");
+    return previewIfc(ifc, basename(file, extname(file)).split("_plan-")[1]);
+  }
   image = await upright(image);
   const { width = 1, height = 1 } = await sharp(image).metadata();
   return { kind: "image", caption: "The drawing", imageUrl: deps.fileUrl(image), width, height, marks: [] };

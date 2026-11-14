@@ -5,6 +5,8 @@ import type { Evidence, Polygon } from "../../types.js";
 import type { IfcModel, Storey } from "./model.js";
 
 interface Panel extends Required<PlanDrawing> {
+  /** The storey's name, written on its frame when several storeys share the sheet. */
+  name: string;
   /** Elements that have no body in the model and so could not be drawn. */
   undrawn: number;
 }
@@ -62,6 +64,8 @@ function storeyPanel(model: IfcModel, storey: Storey | undefined, marked: number
     solid: numbered ? others(walls).flatMap((id) => model.shape(id)?.shapes ?? []) : [],
     highlights: [],
     labels: [],
+    titles: [],
+    name: storey?.name ?? "Outside the storeys",
     undrawn: 0,
   };
   if (storey && spaces.length === 0 && walls.length === 0) panel.outlines = others(model.elements("pipe", storey)).map(outlineOf).filter(drawable);
@@ -84,7 +88,7 @@ function storeyPanel(model: IfcModel, storey: Storey | undefined, marked: number
 function panelGrid(panels: Panel[]): Panel {
   const drawn = panels.filter((panel) => panel.outlines.length + panel.solid.length + panel.highlights.length > 0);
   const undrawn = panels.reduce((n, panel) => n + panel.undrawn, 0);
-  if (drawn.length <= 1) return { ...(drawn[0] ?? { outlines: [], solid: [], highlights: [], labels: [] }), undrawn };
+  if (drawn.length <= 1) return { ...(drawn[0] ?? { outlines: [], solid: [], highlights: [], labels: [], titles: [], name: "" }), undrawn };
 
   const boxes = drawn.map((panel) => bbox([...panel.outlines, ...panel.solid, ...panel.highlights].flat()));
   const width = Math.max(...boxes.map(([x0, , x1]) => x1 - x0));
@@ -93,7 +97,7 @@ function panelGrid(panels: Panel[]): Panel {
   const densest = Math.max(1, ...drawn.map((panel) => panel.highlights.length));
   const columns = Math.max(1, Math.min(Math.ceil(Math.sqrt(drawn.length)), Math.floor(Math.sqrt(MARKS_PER_SHEET / densest))));
 
-  const grid: Panel = { outlines: [], solid: [], highlights: [], labels: [], undrawn };
+  const grid: Panel = { outlines: [], solid: [], highlights: [], labels: [], titles: [], name: "", undrawn };
   drawn.forEach((panel, i) => {
     const [x0, y0, x1, y1] = boxes[i];
     const left = (i % columns) * (width + 4 * pad);
@@ -109,6 +113,7 @@ function panelGrid(panels: Panel[]): Panel {
     grid.solid.push(...move(panel.solid));
     grid.highlights.push(...move(panel.highlights));
     grid.labels.push(...panel.labels);
+    grid.titles.push({ at: [left - pad, bottom + height + pad], text: panel.name });
   });
   return grid;
 }

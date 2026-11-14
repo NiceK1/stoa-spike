@@ -13,10 +13,12 @@ export interface PlanDrawing {
   highlights: Polygon[];
   /** Optional text per highlight, shown next to its number. */
   labels?: string[];
+  /** Plain text at a drawing point, written to the right of and below it, e.g. a storey name in a corner of its frame. */
+  titles?: { at: [number, number]; text: string }[];
 }
 
 /** SVG of a plan with the shapes behind an answer highlighted and numbered 1..n, so a person can check them. */
-export function renderPlanSvg({ solid = [], outlines = [], highlights, labels = [] }: PlanDrawing, cutouts: Polygon[][] = []): string {
+export function renderPlanSvg({ solid = [], outlines = [], highlights, labels = [], titles = [] }: PlanDrawing, cutouts: Polygon[][] = []): string {
   const all = [...solid, ...outlines, ...highlights].flat();
   if (all.length === 0) return "";
   const [x0, y0, x1, y1] = bbox(all);
@@ -50,6 +52,13 @@ export function renderPlanSvg({ solid = [], outlines = [], highlights, labels = 
         `<text y="4.5" text-anchor="middle" font-size="13" font-weight="600" fill="#ffffff">${escapeXml(text)}</text></g>`,
     );
   });
+  for (const { at: [x, y], text } of titles) {
+    const left = Number(px(x)) + 4, top = Number(py(y)) + 4;
+    parts.push(
+      `<rect x="${left.toFixed(1)}" y="${top.toFixed(1)}" width="${(16 + text.length * 11).toFixed(1)}" height="26" rx="3" fill="#ffffff" stroke="#c9c9c4"/>` +
+        `<text x="${(left + 7).toFixed(1)}" y="${(top + 19).toFixed(1)}" font-size="17" font-weight="600" fill="#1f2421">${escapeXml(text)}</text>`,
+    );
+  }
   parts.push("</svg>");
   return parts.join("\n");
 }

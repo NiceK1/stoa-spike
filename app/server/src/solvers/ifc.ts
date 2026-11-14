@@ -11,6 +11,32 @@ import { mentions, parseIfcQuestion, type ElementKind, type IfcIntent } from "./
 
 const PIPELINE = "ifc-geometry";
 
+const previews = new Map<string, Promise<Evidence | null>>();
+/** Lower-case letters and digits only, so "4.korrus" matches "4-korrus" and "Kælder" matches "klder" in a file name. */
+const plain = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, "");
+
+/**
+ * Plan of the model before any question: every storey in a grid, or only `level` when given, as in a
+ * `<model>_plan-<nn>-<storey>` sheet name. Null when the model has no plan geometry to draw.
+ */
+export function previewIfc(ifcPath: string, level?: string): Promise<Evidence | null> {
+  const key = `${ifcPath}\n${level ?? ""}`;
+  let running = previews.get(key);
+  if (!running) {
+    running = (async () => {
+      const model = await loadModel(ifcPath);
+      const wanted = level ? plain(level.replace(/^\d+-/, "")) : "";
+      const storey = wanted ? model.storeys.find((each) => plain(each.name) === wanted) : undefined;
+      const storeys = storey ? [storey] : model.storeys;
+      const caption = storey ? `Storey ${storey.name}, from the building model` : "Every storey with a plan, from the building model";
+      return planEvidence(model, storeys.map((each) => ({ storey: each, ids: [] })), caption) ?? null;
+    })();
+    previews.set(key, running);
+    running.catch(() => previews.delete(key));
+  }
+  return running;
+}
+
 /** Per-storey totals of a base quantity that exporters store on walls and slabs. */
 const TOTALS = {
   wall_length: { element: "wall", quantity: "Length", unit: "m", symbol: "m", kind: "length_walls_storey", what: "length" },

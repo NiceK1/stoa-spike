@@ -81,6 +81,7 @@ const drawingKey = (d: Drawing) => (d.kind === "dataset" ? d.path : `upload:${d.
 
 export function App() {
   const [sources, setSources] = useState<Source[]>([]);
+  const [listed, setListed] = useState(false);
   const [filter, setFilter] = useState("");
   const [drawing, setDrawing] = useState<Drawing | null>(null);
   const [preview, setPreview] = useState<Evidence | null | "loading">(null);
@@ -97,7 +98,7 @@ export function App() {
   const composer = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    fetch("/api/dataset").then((r) => r.json()).then((d) => setSources(d.sources)).catch(() => setError("The server is not reachable."));
+    fetch("/api/dataset").then((r) => r.json()).then((d) => { setSources(d.sources); setListed(true); }).catch(() => setError("The server is not reachable."));
   }, []);
 
   // "/" jumps to the drawing search, as in most file browsers.
@@ -264,7 +265,8 @@ export function App() {
             </div>
           ))}
           {sources.length > 0 && shown.length === 0 && <p className="hint">No drawing matches “{filter}”.</p>}
-          {sources.length === 0 && !error && <p className="hint">No drawings in the dataset folder yet.</p>}
+          {!listed && !error && <p className="hint">Loading drawings…</p>}
+          {listed && sources.length === 0 && <p className="hint">No drawings in the dataset folder yet.</p>}
         </div>
         <label className="upload">
           <input type="file" accept=".png,.jpg,.jpeg,.pdf,.dxf,.ifc,.svg" onChange={(e) => chooseUpload(e.target.files?.[0])} />
