@@ -1,0 +1,148 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1125" viewBox="0 0 1200 1125" font-family="'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif">
+<rect width="1200" height="1125" fill="#fcfcfb"/>
+<text x="20.0" y="42.0" font-size="25" fill="#0b0b0b" font-weight="700" text-anchor="start">In two days the raster score rose from 71% to 85%, and reworded questions answered right</text>
+<text x="20.0" y="74.0" font-size="25" fill="#0b0b0b" font-weight="700" text-anchor="start">from 103 to 236 of 250</text>
+<text x="20.0" y="102.0" font-size="15" fill="#52514e" font-weight="400" text-anchor="start">How the solution got here, 13 and 14 November 2026. Every score is the number of questions answered right under the dataset&#x27;s rules (counts exact).</text>
+<text x="20.0" y="146.0" font-size="17.5" fill="#0b0b0b" font-weight="700" text-anchor="start">Raster floor plans, step by step on one fixed test sample: 30 drawings, 280 questions</text>
+<text x="20.0" y="169.0" font-size="14" fill="#52514e" font-weight="400" text-anchor="start">Steps in the order they were taken on 13 and 14 November. None of the 30 drawings was used to train the detectors. The colour says who counts.</text>
+<rect x="20.0" y="186.0" width="12.0" height="12.0" rx="3" fill="#eb6834" stroke="none"/>
+<text x="38.0" y="197.0" font-size="14" fill="#52514e" font-weight="400" text-anchor="start">vision model alone</text>
+<rect x="180.1" y="186.0" width="12.0" height="12.0" rx="3" fill="#1baf7a" stroke="none"/>
+<text x="198.1" y="197.0" font-size="14" fill="#52514e" font-weight="400" text-anchor="start">trained detectors alone</text>
+<rect x="20.0" y="208.0" width="12.0" height="12.0" rx="3" fill="#2a78d6" stroke="none"/>
+<text x="38.0" y="219.0" font-size="14" fill="#52514e" font-weight="400" text-anchor="start">default: detectors for symbols, vision model for room types</text>
+<rect x="435.0" y="208.0" width="12.0" height="12.0" rx="3" fill="#a8a69d" stroke="none"/>
+<text x="453.0" y="219.0" font-size="14" fill="#52514e" font-weight="400" text-anchor="start">detectors and vision model vote (removed)</text>
+<text x="500.0" y="248.0" font-size="13.5" fill="#52514e" font-weight="400" text-anchor="start">questions answered right, of 280</text>
+<text x="990.0" y="248.0" font-size="13.5" fill="#52514e" font-weight="400" text-anchor="end">change</text>
+<line x1="500.0" y1="258.0" x2="500.0" y2="598.0" stroke="#c3c2b7" stroke-width="1"/>
+<text x="500.0" y="615.0" font-size="13" fill="#77756f" font-weight="400" text-anchor="middle">0%</text>
+<line x1="695.0" y1="258.0" x2="695.0" y2="598.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="695.0" y="615.0" font-size="13" fill="#77756f" font-weight="400" text-anchor="middle">50%</text>
+<line x1="890.0" y1="258.0" x2="890.0" y2="598.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="890.0" y="615.0" font-size="13" fill="#77756f" font-weight="400" text-anchor="middle">100%</text>
+<circle cx="32" cy="286.0" r="12" fill="#f1efe8"/>
+<text x="32.0" y="291.0" font-size="14" fill="#0b0b0b" font-weight="700" text-anchor="middle">1</text>
+<text x="54.0" y="291.0" font-size="15" fill="#0b0b0b" font-weight="400" text-anchor="start">Vision model, one count question at a time</text>
+<path d="M500.0,278.0 H771.8 a4,4 0 0 1 4,4 v8.0 a4,4 0 0 1 -4,4 H500.0 Z" fill="#eb6834"/>
+<text x="783.8" y="291.0" font-size="15" fill="#0b0b0b" font-weight="700" text-anchor="start">198</text>
+<text x="817.3" y="291.0" font-size="13.5" fill="#52514e" font-weight="400" text-anchor="start">70.7%</text>
+<text x="990.0" y="291.0" font-size="15" fill="#52514e" font-weight="400" text-anchor="end">start</text>
+<circle cx="32" cy="334.0" r="12" fill="#f1efe8"/>
+<text x="32.0" y="339.0" font-size="14" fill="#0b0b0b" font-weight="700" text-anchor="middle">2</text>
+<text x="54.0" y="329.5" font-size="15" fill="#0b0b0b" font-weight="400" text-anchor="start">Vision model, one inventory per drawing with the position of</text>
+<text x="54.0" y="348.5" font-size="15" fill="#0b0b0b" font-weight="400" text-anchor="start">every item</text>
+<path d="M500.0,326.0 H777.4 a4,4 0 0 1 4,4 v8.0 a4,4 0 0 1 -4,4 H500.0 Z" fill="#eb6834"/>
+<text x="789.4" y="339.0" font-size="15" fill="#0b0b0b" font-weight="700" text-anchor="start">202</text>
+<text x="822.8" y="339.0" font-size="13.5" fill="#52514e" font-weight="400" text-anchor="start">72.1%</text>
+<text x="990.0" y="339.0" font-size="15" fill="#0b0b0b" font-weight="700" text-anchor="end">+4</text>
+<circle cx="32" cy="382.0" r="12" fill="#f1efe8"/>
+<text x="32.0" y="387.0" font-size="14" fill="#0b0b0b" font-weight="700" text-anchor="middle">3</text>
+<text x="54.0" y="377.5" font-size="15" fill="#0b0b0b" font-weight="400" text-anchor="start">Inventory with scope and fixture rules, the middle of three</text>
+<text x="54.0" y="396.5" font-size="15" fill="#0b0b0b" font-weight="400" text-anchor="start">readings</text>
+<path d="M500.0,374.0 H803.8 a4,4 0 0 1 4,4 v8.0 a4,4 0 0 1 -4,4 H500.0 Z" fill="#eb6834"/>
+<text x="815.8" y="387.0" font-size="15" fill="#0b0b0b" font-weight="700" text-anchor="start">221</text>
+<text x="849.3" y="387.0" font-size="13.5" fill="#52514e" font-weight="400" text-anchor="start">78.9%</text>
+<text x="990.0" y="387.0" font-size="15" fill="#0b0b0b" font-weight="700" text-anchor="end">+19</text>
+<circle cx="32" cy="430.0" r="12" fill="#f1efe8"/>
+<text x="32.0" y="435.0" font-size="14" fill="#0b0b0b" font-weight="700" text-anchor="middle">4</text>
+<text x="54.0" y="435.0" font-size="15" fill="#0b0b0b" font-weight="400" text-anchor="start">Our first trained detector alone</text>
+<path d="M500.0,422.0 H813.6 a4,4 0 0 1 4,4 v8.0 a4,4 0 0 1 -4,4 H500.0 Z" fill="#1baf7a"/>
+<text x="825.6" y="435.0" font-size="15" fill="#0b0b0b" font-weight="700" text-anchor="start">228</text>
+<text x="859.1" y="435.0" font-size="13.5" fill="#52514e" font-weight="400" text-anchor="start">81.4%</text>
+<text x="990.0" y="435.0" font-size="15" fill="#0b0b0b" font-weight="700" text-anchor="end">+7</text>
+<circle cx="32" cy="478.0" r="12" fill="#f1efe8"/>
+<text x="32.0" y="483.0" font-size="14" fill="#0b0b0b" font-weight="700" text-anchor="middle">5</text>
+<text x="54.0" y="483.0" font-size="15" fill="#0b0b0b" font-weight="400" text-anchor="start">Detector for the drawn symbols, vision model for room types</text>
+<path d="M500.0,470.0 H830.3 a4,4 0 0 1 4,4 v8.0 a4,4 0 0 1 -4,4 H500.0 Z" fill="#2a78d6"/>
+<text x="842.3" y="483.0" font-size="15" fill="#0b0b0b" font-weight="700" text-anchor="start">240</text>
+<text x="875.8" y="483.0" font-size="13.5" fill="#52514e" font-weight="400" text-anchor="start">85.7%</text>
+<text x="990.0" y="483.0" font-size="15" fill="#0b0b0b" font-weight="700" text-anchor="end">+12</text>
+<circle cx="32" cy="526.0" r="12" fill="#f1efe8"/>
+<text x="32.0" y="531.0" font-size="14" fill="#0b0b0b" font-weight="700" text-anchor="middle">6</text>
+<text x="54.0" y="531.0" font-size="15" fill="#0b0b0b" font-weight="400" text-anchor="start">Two detectors and the vision model vote on each symbol</text>
+<path d="M500.0,518.0 H837.2 a4,4 0 0 1 4,4 v8.0 a4,4 0 0 1 -4,4 H500.0 Z" fill="#a8a69d"/>
+<text x="849.2" y="531.0" font-size="15" fill="#0b0b0b" font-weight="700" text-anchor="start">245</text>
+<text x="882.7" y="531.0" font-size="13.5" fill="#52514e" font-weight="400" text-anchor="start">87.5%</text>
+<text x="990.0" y="531.0" font-size="15" fill="#0b0b0b" font-weight="700" text-anchor="end">+5</text>
+<text x="1040.0" y="522.0" font-size="13.5" fill="#52514e" font-weight="400" text-anchor="start">a vision call for every</text>
+<text x="1040.0" y="540.0" font-size="13.5" fill="#52514e" font-weight="400" text-anchor="start">drawing</text>
+<circle cx="32" cy="574.0" r="12" fill="#f1efe8"/>
+<text x="32.0" y="579.0" font-size="14" fill="#0b0b0b" font-weight="700" text-anchor="middle">7</text>
+<text x="54.0" y="579.0" font-size="15" fill="#0b0b0b" font-weight="700" text-anchor="start">Voting removed: the two detectors count the symbols</text>
+<path d="M500.0,566.0 H826.1 a4,4 0 0 1 4,4 v8.0 a4,4 0 0 1 -4,4 H500.0 Z" fill="#2a78d6"/>
+<text x="838.1" y="579.0" font-size="15" fill="#0b0b0b" font-weight="700" text-anchor="start">237</text>
+<text x="871.6" y="579.0" font-size="13.5" fill="#52514e" font-weight="400" text-anchor="start">84.6%</text>
+<text x="990.0" y="579.0" font-size="15" fill="#0b0b0b" font-weight="700" text-anchor="end">−8</text>
+<text x="1040.0" y="570.0" font-size="13.5" fill="#52514e" font-weight="400" text-anchor="start">no vision call to count</text>
+<text x="1040.0" y="588.0" font-size="13.5" fill="#52514e" font-weight="400" text-anchor="start">a symbol</text>
+<text x="20.0" y="644.0" font-size="14.5" fill="#0b0b0b" font-weight="400" text-anchor="start">From 198 to 237 of 280: 39 more questions right. The last step gave back 8 of them so that a symbol count costs no hosted-model call.</text>
+<text x="20.0" y="696.0" font-size="17.5" fill="#0b0b0b" font-weight="700" text-anchor="start">Questions worded differently from the dataset</text>
+<text x="20.0" y="719.0" font-size="14" fill="#52514e" font-weight="400" text-anchor="start">Dataset questions with known answers, reworded: casual, terse, show/where requests,</text>
+<text x="20.0" y="738.0" font-size="14" fill="#52514e" font-weight="400" text-anchor="start">other languages, typos. A small language model (Haiku 5.5) now turns every question into a</text>
+<text x="20.0" y="757.0" font-size="14" fill="#52514e" font-weight="400" text-anchor="start">structured call that the exact scripts run.</text>
+<rect x="20.0" y="775.0" width="12.0" height="12.0" rx="3" fill="#a8a69d" stroke="none"/>
+<text x="38.0" y="786.0" font-size="14" fill="#52514e" font-weight="400" text-anchor="start">keyword parser only</text>
+<rect x="191.7" y="775.0" width="12.0" height="12.0" rx="3" fill="#2a78d6" stroke="none"/>
+<text x="209.7" y="786.0" font-size="14" fill="#52514e" font-weight="400" text-anchor="start">language model interprets the question</text>
+<line x1="132.0" y1="803.0" x2="132.0" y2="977.0" stroke="#c3c2b7" stroke-width="1"/>
+<text x="132.0" y="994.0" font-size="13" fill="#77756f" font-weight="400" text-anchor="middle">0%</text>
+<line x1="318.0" y1="803.0" x2="318.0" y2="977.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="318.0" y="994.0" font-size="13" fill="#77756f" font-weight="400" text-anchor="middle">50%</text>
+<line x1="504.0" y1="803.0" x2="504.0" y2="977.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="504.0" y="994.0" font-size="13" fill="#77756f" font-weight="400" text-anchor="middle">100%</text>
+<text x="120.0" y="831.0" font-size="14.5" fill="#0b0b0b" font-weight="400" text-anchor="end">Swiss plans</text>
+<text x="120.0" y="848.0" font-size="13" fill="#52514e" font-weight="400" text-anchor="end">of 120</text>
+<path d="M132.0,818.0 H292.3 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 H132.0 Z" fill="#a8a69d"/>
+<text x="303.3" y="829.5" font-size="14" fill="#0b0b0b" font-weight="400" text-anchor="start">53 of 120</text>
+<path d="M132.0,834.0 H500.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 H132.0 Z" fill="#2a78d6"/>
+<text x="511.0" y="845.5" font-size="14" fill="#0b0b0b" font-weight="700" text-anchor="start">120 of 120</text>
+<text x="120.0" y="889.0" font-size="14.5" fill="#0b0b0b" font-weight="400" text-anchor="end">Raster plans</text>
+<text x="120.0" y="906.0" font-size="13" fill="#52514e" font-weight="400" text-anchor="end">of 90</text>
+<path d="M132.0,876.0 H264.4 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 H132.0 Z" fill="#a8a69d"/>
+<text x="275.4" y="887.5" font-size="14" fill="#0b0b0b" font-weight="400" text-anchor="start">33 of 90</text>
+<path d="M132.0,892.0 H442.1 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 H132.0 Z" fill="#2a78d6"/>
+<text x="453.1" y="903.5" font-size="14" fill="#0b0b0b" font-weight="700" text-anchor="start">76 of 90</text>
+<text x="120.0" y="947.0" font-size="14.5" fill="#0b0b0b" font-weight="400" text-anchor="end">IFC models</text>
+<text x="120.0" y="964.0" font-size="13" fill="#52514e" font-weight="400" text-anchor="end">of 40</text>
+<path d="M132.0,934.0 H286.1 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 H132.0 Z" fill="#a8a69d"/>
+<text x="297.1" y="945.5" font-size="14" fill="#0b0b0b" font-weight="400" text-anchor="start">17 of 40</text>
+<path d="M132.0,950.0 H500.0 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 H132.0 Z" fill="#2a78d6"/>
+<text x="511.0" y="961.5" font-size="14" fill="#0b0b0b" font-weight="700" text-anchor="start">40 of 40</text>
+<text x="20.0" y="1025.0" font-size="14" fill="#0b0b0b" font-weight="400" text-anchor="start">All 14 raster misses are counting errors of the detectors or the vision model, not misread</text>
+<text x="20.0" y="1044.0" font-size="14" fill="#0b0b0b" font-weight="400" text-anchor="start">questions. In total 103 of 250 before, 236 of 250 after. One interpretation costs about 0.0007</text>
+<text x="20.0" y="1063.0" font-size="14" fill="#0b0b0b" font-weight="400" text-anchor="start">USD (0.70 USD per 1,000 questions).</text>
+<text x="650.0" y="696.0" font-size="17.5" fill="#0b0b0b" font-weight="700" text-anchor="start">The other parts, from the first spike to now</text>
+<text x="650.0" y="728.0" font-size="15" fill="#0b0b0b" font-weight="600" text-anchor="start">IFC building models, numeric answers</text>
+<line x1="850.0" y1="740.0" x2="850.0" y2="830.0" stroke="#c3c2b7" stroke-width="1"/>
+<text x="850.0" y="847.0" font-size="13" fill="#77756f" font-weight="400" text-anchor="middle">0%</text>
+<line x1="940.0" y1="740.0" x2="940.0" y2="830.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="940.0" y="847.0" font-size="13" fill="#77756f" font-weight="400" text-anchor="middle">50%</text>
+<line x1="1030.0" y1="740.0" x2="1030.0" y2="830.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="1030.0" y="847.0" font-size="13" fill="#77756f" font-weight="400" text-anchor="middle">100%</text>
+<text x="838.0" y="760.0" font-size="13.5" fill="#52514e" font-weight="400" text-anchor="end">first spike, preview dataset</text>
+<path d="M850.0,749.0 H1006.9 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 H850.0 Z" fill="#a8a69d"/>
+<text x="1017.9" y="760.0" font-size="14" fill="#0b0b0b" font-weight="700" text-anchor="start">89.4%</text>
+<text x="1065.4" y="760.0" font-size="13" fill="#52514e" font-weight="400" text-anchor="start">938 of 1,049</text>
+<text x="838.0" y="790.0" font-size="13.5" fill="#52514e" font-weight="400" text-anchor="end">in between</text>
+<path d="M850.0,779.0 H1016.3 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 H850.0 Z" fill="#a8a69d"/>
+<text x="1027.3" y="790.0" font-size="14" fill="#0b0b0b" font-weight="700" text-anchor="start">94.6%</text>
+<text x="1074.8" y="790.0" font-size="13" fill="#52514e" font-weight="400" text-anchor="start"></text>
+<text x="838.0" y="820.0" font-size="13.5" fill="#52514e" font-weight="400" text-anchor="end">now, full dataset</text>
+<path d="M850.0,809.0 H1024.9 a4,4 0 0 1 4,4 v4.0 a4,4 0 0 1 -4,4 H850.0 Z" fill="#2a78d6"/>
+<text x="1035.9" y="820.0" font-size="14" fill="#0b0b0b" font-weight="700" text-anchor="start">99.4%</text>
+<text x="1083.4" y="820.0" font-size="13" fill="#52514e" font-weight="400" text-anchor="start">3,044 of 3,062</text>
+<text x="850.0" y="882.0" font-size="13.5" fill="#52514e" font-weight="400" text-anchor="start">first spike</text>
+<text x="950.0" y="882.0" font-size="13.5" fill="#52514e" font-weight="400" text-anchor="start">now</text>
+<line x1="650.0" y1="890.0" x2="1180.0" y2="890.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="650.0" y="914.0" font-size="14.5" fill="#0b0b0b" font-weight="600" text-anchor="start">Practice drawing sheets</text>
+<text x="850.0" y="914.0" font-size="14" fill="#52514e" font-weight="400" text-anchor="start">no solver</text>
+<text x="950.0" y="914.0" font-size="14" fill="#0b0b0b" font-weight="700" text-anchor="start">48 of 48 numeric answers right</text>
+<line x1="650.0" y1="944.0" x2="1180.0" y2="944.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="650.0" y="968.0" font-size="14.5" fill="#0b0b0b" font-weight="600" text-anchor="start">IFC models, free-text</text>
+<text x="650.0" y="987.0" font-size="14.5" fill="#0b0b0b" font-weight="600" text-anchor="start">answers</text>
+<text x="850.0" y="968.0" font-size="14" fill="#52514e" font-weight="400" text-anchor="start">no solver</text>
+<text x="950.0" y="968.0" font-size="14" fill="#0b0b0b" font-weight="700" text-anchor="start">25 of 46 right, 13 partly right, 8</text>
+<text x="950.0" y="987.0" font-size="14" fill="#0b0b0b" font-weight="700" text-anchor="start">wrong (graded sample)</text>
+<text x="20.0" y="1107.0" font-size="13.5" fill="#77756f" font-weight="400" text-anchor="start">How the detectors themselves were trained, run by run, is in docs/training-history.png.</text>
+</svg>
