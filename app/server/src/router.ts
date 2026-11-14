@@ -1,5 +1,6 @@
 /**
- * Picks the pipeline for a drawing: exact geometry when a vector twin exists, a model otherwise.
+ * Picks the pipeline for a drawing: exact geometry when a vector twin exists, our detectors on an image, and an
+ * external model only for what neither can do.
  * In the dataset, files with the same name and a different extension are the same drawing,
  * and `<model>_plan-<level>.pdf` was rendered from `<model>.ifc`.
  *
@@ -64,6 +65,12 @@ async function interpret<T>(reader: Reader, run: (model: VisionModel) => Promise
 const byModel = (reading: string, model: VisionModel) => `understood as "${reading}" by ${model.id}`;
 const byKeywords = (reader: Reader) => `read by the keyword parser (${reader.why})`;
 const joined = (...notes: (string | undefined | false)[]) => notes.filter(Boolean).join(" ") || undefined;
+/** A question about a building model's facts, which a language model writes the answer to, when none is configured. */
+const factsUnanswered = (how: string): Answer => ({
+  value: null, pipeline: "none", exact: false,
+  method: `${how}; not answered: only an external language model could write the answer from the model's facts, and none is configured`,
+  note: "No answer: this question is about the building model's facts, not a count or a measure our code computes, so it needs an external language model, and the app is running with our local models only (VISION_PROVIDER=none).",
+});
 const highlighted = (count: number) => `The ${count} counted item${count === 1 ? " is" : "s are"} highlighted on the drawing.`;
 
 const IMAGE = new Set([".png", ".jpg", ".jpeg", ".webp"]);
@@ -222,7 +229,7 @@ export async function ask(input: AskInput, deps: Deps): Promise<Answer> {
       how = byKeywords(reader);
     }
 
-    if (pdf) {
+    if (pdf && deps.vision.id !== "none") {
       // Schedules and notes are answered from the sheet's text layer; drawings without enough text go to the image pipeline.
       const { solveDocument } = await import("./solvers/document.js");
       const answer = await solveDocument(input.file, input.question, asked ?? reading.type, { text: deps.vision, fileUrl: deps.fileUrl });
@@ -289,6 +296,7 @@ async function askIfcByModel(ifc: string, input: AskInput, deps: Deps, reader: R
   if (extname(input.file).toLowerCase() !== ".ifc" && existsSync(input.file)) {
     return sheet ? { ...sheet, method: `${how}; ${sheet.method}` } : { value: null, pipeline: "none", exact: false, method: how };
   }
+  if (deps.vision.id === "none") return { ...factsUnanswered(how), evidence: sheet?.evidence };
   const { answerFromDigest } = await import("./solvers/ifc/digest.js");
   const written = await answerFromDigest(ifc, input.question, type, deps.vision, typeof sheet?.value === "string" ? sheet.value : undefined);
   return {
@@ -324,6 +332,7 @@ async function askIfcByKeywords(ifc: string, input: AskInput, deps: Deps, reader
   if (extname(input.file).toLowerCase() === ".ifc") {
     // A free-text question: the fixed rules give a fact sheet on the topic at best, so a language model
     // writes the answer to the actual question from the model's extracted facts.
+    if (deps.vision.id === "none") return { ...factsUnanswered(how), evidence: answer?.evidence };
     const { answerFromDigest } = await import("./solvers/ifc/digest.js");
     const related = typeof answer?.value === "string" ? answer.value : undefined;
     const written = await answerFromDigest(ifc, input.question, asked, deps.vision, related);

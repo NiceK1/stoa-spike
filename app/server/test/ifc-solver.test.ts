@@ -256,6 +256,18 @@ describe("a question about a building model, read by the interpreter", () => {
     expect(answer.method).toContain(`understood as "a question about facts in the building model" by fake-planner; answered by fake-writer`);
   });
 
+  it("answers a question about the model's facts with no value and the reason when no external model is configured", async () => {
+    const none: VisionModel = { id: "none", ask: async () => { throw new Error("This question needs a vision model"); } };
+    const planner = interpreter({ operation: "model_facts", answer_type: "text" });
+    for (const reader of [{ planner }, { planner: null }]) {
+      const answer = await ask({ file: house, question: "what are the walls made of?" }, { vision: none, detector: null, fileUrl: () => "", ...reader });
+      expect(answer).toMatchObject({ value: null, pipeline: "none" });
+      expect(answer.note).toContain("it needs an external language model, and the app is running with our local models only (VISION_PROVIDER=none)");
+    }
+    // What the code computes needs no model.
+    expect(await ask({ file: house, question: "Show me the walls" }, { vision: none, planner: null, detector: null, fileUrl: () => "" })).toMatchObject({ value: 2 });
+  });
+
   it("without an interpreter, does not turn a question about one room into a count of all rooms", async () => {
     const answer = await ask({ file: house, question: "Where is the kitchen?" }, { vision: writer, planner: null, detector: null, fileUrl: () => "" });
     expect(answer.value).toBe("On the ground floor.");

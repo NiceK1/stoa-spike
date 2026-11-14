@@ -29,12 +29,38 @@ PDF is answered from its vector twin when one is there.
 | IFC model, question about its facts (types, materials, properties) | facts extracted from the model, answered by a language model | storey plan when a rule matched | one text call |
 | Layered DXF, or a PDF/PNG with a DXF of the same name | room outlines, labels and symbols from the CAD layers | plan with the counted shapes numbered | none |
 | PDF sheet with a text layer (schedules, notes) | text rows with positions, answered by a language model | the rows used, boxed on the page | one text call |
-| Raster floor plan | a drawn symbol (window, door, sanitary fixture) is counted by the trained detector routed to its class; room types and storeys come from one inventory of the drawing by a vision model | numbered boxes or marks on the image | none for a symbol; one vision call per drawing for room types and storeys, shared by all its questions |
+| Raster floor plan, a count of a known kind | each of the 13 known kinds (window, door, toilet bowl, sink, shower, bathtub; sauna, kitchen, bedroom, WC room, bathroom, balcony; storey) is counted by our trained detector routed to its class | numbered boxes on the image | none |
+| Raster floor plan, anything else | the external vision model, as the fallback: items of other kinds, a count limited to a part of the drawing, a free reading, and any count on a drawing the detectors do not recognise | numbered marks on the image, or the drawing | one vision call per question; one per drawing for the known kinds on an unrecognised drawing, shared by all its questions |
 
 Before a pipeline computes anything, the question is read by the interpreter model, which costs one small text call
 per question (next section). Vector answers are exact and labelled so; model answers are labelled as estimates.
 Models sit behind two interfaces, `VisionModel` (`server/src/models/vision.ts`) and `Detector`
 (`server/src/models/detector.ts`), so a provider can be replaced without touching the pipelines.
+
+### Local first, the external vision model as the fallback
+
+Nothing our own models can do is sent to an external vision model. On a raster drawing the interpreter's call decides
+the tier (`server/src/solvers/raster.ts`):
+
+| The interpreter's call | Who answers | Why |
+|---|---|---|
+| `count_known` on the whole drawing, the drawing in the detectors' style | our detectors, no model call | |
+| `count_known` on a drawing where the detectors find fewer than 3 items with 60% confidence (an elevation, a historic scan) | external vision model, one inventory of the drawing | the detectors' count would be a confident zero |
+| `count_known` limited to a part of the drawing ("the kitchen sink", "in enlarged plan 6A") | external vision model, from the full question | the detectors count on the whole drawing only |
+| `count_other` (stairs, wardrobes, fireplaces) | external vision model | the detectors do not know the kind |
+| `read` (a text, a dimension, a schedule entry) | external vision model | the detectors count items and cannot read |
+
+The method line of every raster answer names the tier in plain words: `window symbols counted by our detectors
+(floorplan-symbols-yolo11l-1280), no external model`, against `staircases read by the external vision model
+claude-cli:claude-sonnet-5-5 because our detectors do not know this kind of item`. When several kinds are asked, each
+part says its own tier.
+
+With no external model configured (`VISION_PROVIDER=none`) a question of the fallback tier is not an error: the answer
+has no value, and its note says why, for example `No answer: this question needs an external vision model, because our
+detectors count on the whole drawing only, not in a part of it, and the app is running with our local models only
+(VISION_PROVIDER=none).` The same holds for a question about a building model's facts, which a language model writes
+the answer to. When one of several kinds cannot be counted, the others are still counted and marked, and the note says
+which one is missing.
 
 ## How questions are understood
 
@@ -48,7 +74,7 @@ and the answer type. Code then computes the answer and the marks, so the numbers
 | Drawing | Menu the interpreter sees | The call it returns |
 |---|---|---|
 | Layered DXF | this plan's room labels with the number of rooms carrying each, its apartments, its room numbers, the number of each symbol (median 0.5k characters, at most 1.2k over the 1,040 Swiss plans; labels and numbers are cut off at 60 and 120) | `operation` (`count_symbols`, `count_apartments`, `rooms`, `area_apartment`, `area_floor`, `compare`, `none`), `symbols[]`, `labels[]` (only this plan's labels can be chosen), `room_numbers[]`, `apartments[]`, `pick` (all, largest, smallest), `measure` (count, area, average, list), `missing[]`, `broader_label`, `reason`, `locate`, `answer_type` |
-| Raster image, or a PDF sheet | the kinds the detectors and the inventory know | `operation` (`count_known`, `count_other`, `read`), `targets[]`, `whole_drawing`, `items`, `locate`, `answer_type` |
+| Raster image, or a PDF sheet | the 13 kinds our detectors know | `operation` (`count_known`, `count_other`, `read`), `targets[]`, `whole_drawing`, `items`, `locate`, `answer_type` |
 | IFC model | storey names with elevations and room counts, the element classes present with their counts, room names (at most 60, those sharing a word with the question first; median 1.0k characters, at most 1.9k over the 29 models) | `operation` (`count_elements`, `rooms`, `storey_total`, `model_facts`, `none`), `elements[]`, `storey` (one of the model's storeys, or the whole model), `rooms[]`, `pick`, `measure`, `quantity`, `missing[]`, `reason`, `locate`, `answer_type` |
 
 What the code does with a call:
@@ -66,7 +92,8 @@ What the code does with a call:
 - A question the drawing cannot answer gets the reason in a sentence, and a request to show, mark or find things
   returns the marks or says why there are none.
 - A raster question limited to part of the drawing ("the kitchen sink", "in enlarged plan 6A") is counted by the
-  vision model from the full question instead of by the whole-drawing detectors.
+  external vision model from the full question, because the detectors count on the whole drawing only; the method
+  line says so.
 
 The method line of every answer says how the question was read and by whom, for example
 `understood as "count doors in apartment A" by claude-cli:claude-haiku-5-5; door symbols on layer DOOR; those lying
@@ -100,6 +127,10 @@ Model first against bulk mode on the same questions in the dataset's own wording
 | IFC models, 30 models and sheets, numeric questions, English | 58 | 57 | 57 |
 | IFC models, 7 models and sheets, numeric questions in other languages | 13 | 8 | 12 |
 | Practice drawing sheets, with the dataset's answer type | 48 scorable | 48 | 48 |
+
+The raster rows of this table and of the next three were measured while room types and storeys were still read by the
+vision model (`RASTER_DETECTOR_TARGETS=symbols` today); they compare how questions are read, which the local-first
+default does not change.
 
 No kind is read worse by the model than by the templates; every miss is a counting or geometry miss that both modes
 share. The bulk-mode misses on IFC questions in other languages come from the keyword guess of the answer type; with
@@ -190,7 +221,7 @@ mode.
 | Swiss apartment floors (DXF geometry) | 37,584 | 37,376 | 99.4% |
 | IFC models, numeric questions | 3,062 | 3,044 | 99.4% |
 | Practice drawing sheets (PDF text) | 48 scorable | 48 | 100% |
-| Raster floor plans, 200 held-out drawings | 1,781 | 1,548 | 86.9% |
+| Raster floor plans, 200 held-out drawings, our detectors alone | 1,781 | 1,530 | 85.9% |
 | IFC models, free-text questions (graded sample) | 46 | 16, and 11 partly | 35% |
 
 Raster floor plans, on drawings the detectors never saw in training (two samples of 100, English questions; the
@@ -198,9 +229,23 @@ Finnish questions map to the same targets):
 
 | Who answers | Sample A (916) | Sample B (865) | Both | Vision calls per drawing |
 |---|---|---|---|---|
-| Sonnet 5.5 alone (`--no-detector`) | 713 | 660 | 77.1% | 1 |
-| Our trained detectors alone (`RASTER_DETECTOR_TARGETS=all`, or `VISION_PROVIDER=none`) | 773 | 757 | 85.9% | 0 |
-| Detectors for symbols, one Sonnet reading for room types and storeys (default) | 791 | 757 | 86.9% | none for a symbol question; 1 once a room type or storey is asked |
+| Our trained detectors for all 13 kinds (default) | 773 | 757 | 1,530, 85.9% | 0 |
+| Optional, `RASTER_DETECTOR_TARGETS=symbols`: detectors for drawn symbols, one Sonnet 5.5 reading for room types and storeys | 791 | 757 | 1,548, 86.9% | none for a symbol question; 1 once a room type or storey is asked |
+| Sonnet 5.5 alone (`--no-detector`) | 713 | 660 | 1,373, 77.1% | 1 |
+
+All 200 drawings pass the detectors' in-domain guard, so the default made no vision call on these samples. What the
+optional setting buys, per room kind on both samples (exact counts; the symbols are the same in both rows above):
+
+| Kind | Asked | Our detectors (default) | Sonnet 5.5 reading |
+|---|---|---|---|
+| Storeys | 200 | 191 | 196 |
+| WC rooms | 98 | 95 | 97 |
+| Kitchens | 129 | 118 | 125 |
+| Saunas | 137 | 133 | 129 |
+| Balconies | 61 | 55 | 58 |
+| Bedrooms | 125 | 111 | 116 |
+| Bathrooms | 94 | 87 | 87 |
+| All seven | 844 | 790 | 808 |
 
 Windows are the weak kind (97 of 200 drawings counted exactly); doors are at 76%, every other kind between 87% and 99%.
 
@@ -212,6 +257,16 @@ Things that were tried and measured but are not in the code any more:
   sample A, but the vote dropped, because the hinted reading stopped being an independent opinion.
 - Three vision readings per drawing instead of one gained a few questions at three times the cost.
 - A larger detector at a higher resolution (YOLO11x at 1536 px) scored below YOLO11l at 1280 px on the test drawings.
+- Reading the room labels (MH, K, KH, WC, S, PARVEKE, "2. kerros") with a local OCR engine, to close the gap to the
+  vision model on room types without a model call. PP-OCRv4 through `onnxruntime-node` reads the labels well where
+  they are printed upright; tesseract.js reads almost nothing on these line drawings. Counting the seven room kinds
+  from the labels alone scored 267 of 445 on sample A and 241 of 399 on sample B, against 410 and 380 for the
+  detectors: 20 and 13 of the 100 drawings carry no label it can read in any rotation, many rooms have none (open
+  kitchens), and the single letters K and S also turn up as noise and in apartment formulas ("3h+k+s"). The best
+  combination with the detectors' boxes, chosen on sample A (a kitchen box under the threshold counts when a kitchen
+  label lies in it; more sauna labels than sauna boxes win; a bathroom box whose only label names another room is
+  dropped), gained 4 questions on A (414) and lost 2 on B (378), so it is not in the app. It would have added about
+  1 second per drawing (one reading upright and one upside-down; all four rotations take 2 seconds).
 
 ## Measure it yourself
 
@@ -221,7 +276,8 @@ npm run eval -- --source ifc_models --interpreter templates
 npm run eval -- --source opening_design --interpreter templates        # needs STOA_DATASET=../dataset
 npm run eval -- --source opening_design --interpreter model            # the interpreter reads every question
 npm run eval -- --source cubicasa5k --sample ../raster-test100.txt --interpreter templates     # sample A; raster-test100b.txt is sample B
-npm run eval -- --source cubicasa5k --sample ../raster-test100.txt --interpreter templates --no-detector
+RASTER_DETECTOR_TARGETS=symbols npm run eval -- --source cubicasa5k --sample ../raster-test100.txt --interpreter templates   # room types and storeys by the vision model
+npm run eval -- --source cubicasa5k --sample ../raster-test100.txt --interpreter templates --no-detector                      # the vision model alone
 npm run eval -- --source ifc_bench --per-file 2 --judge --interpreter templates   # free text, graded by a language model
 npm run eval:paraphrase -- --source swiss_dwellings --drawings 24 --per-file 5      # reworded questions, model first
 npm run eval:paraphrase -- --source cubicasa5k --sample ../raster-dev.txt --drawings 30 --per-file 3
@@ -242,16 +298,17 @@ The server reads `../.env` and the environment:
 | Variable | Purpose |
 |---|---|
 | `STOA_DATASET` | dataset folder, default `../dataset` |
-| `VISION_PROVIDER` | `claude-cli` (default, the local `claude` CLI), `anthropic-api` (needs `ANTHROPIC_API_KEY`), `gemini-api` (needs `GEMINI_API_KEY`), or `none`: no cloud model at all, image plans answered by the detectors in `../models`, which then count every class they know, and questions read by the keyword parsers; questions only a vision model can answer then return an error |
+| `VISION_PROVIDER` | the external model, used as the fallback only: `claude-cli` (default, the local `claude` CLI), `anthropic-api` (needs `ANTHROPIC_API_KEY`), `gemini-api` (needs `GEMINI_API_KEY`), or `none`: no external model at all, questions read by the keyword parsers unless `PLANNER_PROVIDER` names an interpreter; a question that only an external model could answer then gets an answer with no value and a note saying why |
 | `VISION_MODEL` | model id, default `claude-sonnet-5-5` |
 | `PLANNER_MODEL` | the interpreter model that reads every question, default the vision model; a small one is enough (measured: `claude-haiku-5-5`). `PLANNER_PROVIDER` picks its provider (default the vision provider; `gemma-local` is the fine-tuned Gemma on this machine's CPU, with `PLANNER_MODEL` as the optional path of its GGUF file; `none` leaves the keyword parsers), `PLANNER_EFFORT` its effort with the CLI |
 | `INTERPRETER` | `templates` is the bulk mode: the keyword parsers read the questions and no interpreter is asked |
 | `DETECTOR` | `onnx` (our weights in `../models`, the default when present), `roboflow` (needs `ROBOFLOW_API_KEY`), `none` |
-| `RASTER_DETECTOR_TARGETS` | `symbols` (default: the detectors count drawn symbols, the vision model reads room types and storeys), `all` (detectors also count the room types and storeys they know), `none` |
-| `INVENTORY_PROMPT` | raster prompt version, default `v3` |
+| `RASTER_DETECTOR_TARGETS` | `all` (default: the detectors count every kind they know, room types and storeys included, with no vision call), `symbols` (the earlier behaviour, for comparison: the detectors count drawn symbols and one reading by the vision model gives room types and storeys), `none` (the vision model counts everything) |
+| `INVENTORY_PROMPT` | version of the prompt for the vision model's inventory of a drawing, default `v3` |
 
-With `anthropic-api` a drawing takes about 5 seconds and costs about $0.009; through the local CLI it takes about
-20 seconds.
+The first count on a drawing takes about 3 seconds on a laptop CPU (both detectors scan it once; later questions about
+the same drawing reuse the scan) and costs nothing. A fallback reading by the external model takes about 5 seconds
+and costs about $0.009 with `anthropic-api`; through the local CLI it takes about 20 seconds.
 
 ## Detector weights
 
