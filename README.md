@@ -8,6 +8,13 @@ Answers quantity take-off questions from the Junction 2026 Stoa dataset, and sco
 
 ![Results on the preview dataset](docs/results.png)
 
+## Web app
+
+The full solution is the TypeScript web app in [app/](app/README.md): it takes any drawing of the dataset, routes it
+to exact geometry (IFC, DXF), to the sheet's text layer, or to trained detectors and a vision model (raster plans),
+and returns the answer with every counted item numbered on the drawing. Its README has the current measurements.
+The detector training code is in [training/](training/README.md). The Python files below are the first spike.
+
 ## Run
 
 ```
