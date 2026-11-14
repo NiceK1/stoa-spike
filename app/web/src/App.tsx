@@ -316,12 +316,12 @@ export function App() {
           </div>
         ) : (
           <>
+
+            {/* Answers asked about this drawing: one click shows that answer again, "Drawing" the plain sheet. */}
             <header className="topbar">
-              <div className="current">
-                <span className="badge">{extension(drawing.kind === "dataset" ? drawing.path : drawing.name)}</span>
-                <h2>{drawing.kind === "dataset" ? title(drawing.path) : drawing.name}</h2>
-              </div>
-              {replies.length > 0 && (
+              {replies.length === 0 ? (
+                <p className="history-empty">Answers you ask about this drawing collect here.</p>
+              ) : (
                 <nav className="history" aria-label="Answers for this drawing">
                   <button className={shownReply === null ? "step on" : "step"} onClick={() => setShownReply(null)}>Drawing</button>
                   {replies.map((r, i) => (
@@ -337,7 +337,6 @@ export function App() {
                 </nav>
               )}
             </header>
-
             {/* The drawing takes the full height; the answer and the questions sit beside it, like a properties panel. */}
             <div className="workspace">
               <div className="drawing-area">
@@ -364,7 +363,11 @@ export function App() {
                       <p className="time">Reading the drawing… vector drawings answer at once, images take up to 20 s.</p>
                     </div>
                   </div>
-                ) : reply && <Result reply={reply} />}
+                ) : reply ? <Result reply={reply} /> : (
+                  <div className="placard idle">
+                    <p>Pick a question below or ask your own. The answer appears here, and every counted item is marked on the drawing.</p>
+                  </div>
+                )}
 
                 <section className="ask">
                   {(known.length > 0 || free.length > 0) && (

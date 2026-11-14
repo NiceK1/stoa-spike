@@ -111,11 +111,14 @@ button { cursor: pointer; }
 .empty p { margin: 0; }
 .notice { margin: 12px 26px 0; padding: 10px 14px; border-left: 4px solid var(--off); background: var(--sheet); }
 
-.topbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; padding: 14px 26px; background: var(--sheet); border-bottom: 1px solid var(--rule); }
+/* Only the answer history now: a slim bar above the drawing. */
+.topbar { display: flex; align-items: center; padding: 9px 22px; background: var(--sheet); border-bottom: 1px solid var(--rule); }
 .current { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .current h2 { margin: 0; font: 600 26px/1.1 var(--display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .current .badge { color: var(--brand); border-color: rgba(30, 79, 216, 0.4); }
-.history { display: flex; gap: 6px; overflow-x: auto; margin-left: auto; max-width: 100%; }
+.history { display: flex; gap: 6px; overflow-x: auto; max-width: 100%; scrollbar-width: thin; }
+.topbar { min-height: 46px; }
+.history-empty { margin: 0; font-size: 13px; color: var(--faint); }
 .step {
   display: flex; align-items: center; gap: 6px; flex: none; max-width: 230px; padding: 4px 11px; border: 1px solid var(--rule);
   border-radius: 6px; background: var(--sheet); font-size: 13px;
@@ -226,14 +229,24 @@ button { cursor: pointer; }
 .drawing-area { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .inspector { display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--rule); background: var(--sheet); }
 .inspector .notice { margin: 14px 18px 0; }
-.inspector .placard { flex-direction: column; align-items: flex-start; gap: 10px; padding: 18px 20px 18px 22px; }
+
+/* The answer box takes the panel's spare height and scrolls a long answer; the example questions below stay a small window. */
+.inspector .placard {
+  flex: 1 1 auto; min-height: 200px; overflow-y: auto; flex-direction: column; align-items: flex-start; justify-content: flex-start;
+  gap: 10px; padding: 18px 20px 30px 22px; scrollbar-width: thin;
+  /* A soft fade at the bottom edge shows there is more; it covers only the padding, so scrolled to the end the last line is clear. */
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 30px), transparent);
+}
+.inspector .placard.idle { justify-content: center; box-shadow: inset 4px 0 0 var(--rule); }
+.placard.idle p { margin: 0; max-width: 34ch; color: var(--soft); line-height: 1.5; }
 .inspector .figure { min-width: 0; }
 .inspector .figure.text { max-width: 100%; }
 .inspector .facts p:last-child { margin-bottom: 0; }
-.inspector .ask { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 14px 18px 16px; border-top: 0; }
-.inspector .suggest { flex: 1; min-height: 0; display: flex; flex-direction: column; margin-bottom: 12px; }
+.inspector .ask { flex: none; display: flex; flex-direction: column; padding: 14px 18px 16px; border-top: 1px solid var(--rule); }
+.inspector .suggest { display: flex; flex-direction: column; margin-bottom: 12px; }
 .inspector .toggle { margin-left: 0; flex-basis: 100%; margin-top: 4px; }
-.inspector .chips { flex: 1; min-height: 0; max-height: none; flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 5px; padding-right: 2px; }
+/* About three questions tall; the rest scroll. */
+.inspector .chips { max-height: 196px; flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 5px; padding-right: 2px; }
 .inspector .chip { flex: none; white-space: normal; line-height: 1.35; padding: 7px 11px; }
 .inspector .composer { flex: none; }
 
