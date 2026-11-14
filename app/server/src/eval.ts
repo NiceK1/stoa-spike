@@ -7,7 +7,7 @@
  * Raster drawings are limited to the list in raster-sample.txt and to English questions unless --all-languages is set,
  * because every raster answer costs a model call (answers are cached).
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { REPO_ROOT, datasetRoot, loadEnv } from "./config.js";
 import { isAvailable, questionsByPath } from "./dataset.js";
@@ -51,6 +51,7 @@ for (const [path, rows] of questionsByPath()) {
 }
 if (limit) jobs.length = Math.min(jobs.length, limit);
 
+const dumped: { path: string; question: string; kind: string; expected: number | string; value: number | string | null }[] = [];
 const stats = new Map<string, { n: number; answered: number; correct: number; scorable: number }>();
 const failures = new Map<string, string[]>();
 let next = 0;
@@ -69,6 +70,7 @@ async function worker(): Promise<void> {
     } catch (error) {
       failure = `ERROR ${row.path}: ${error instanceof Error ? error.message : error}`;
     }
+    dumped.push({ path: row.path, question: row.question, kind, expected: row.answer, value });
     const key = `${sourceName}\t${kind}`;
     if (!stats.has(key)) stats.set(key, { n: 0, answered: 0, correct: 0, scorable: 0 });
     const s = stats.get(key)!;
@@ -92,6 +94,8 @@ async function worker(): Promise<void> {
 }
 
 await Promise.all(Array.from({ length: concurrency }, worker));
+// --dump <file> keeps every answer, for comparing configurations offline.
+if (option("dump")) writeFileSync(option("dump")!, JSON.stringify(dumped));
 
 console.log(`${"source".padEnd(17)} ${"kind".padEnd(24)} ${"n".padStart(6)} ${"answered".padStart(9)} ${"correct".padStart(8)} ${"accuracy".padStart(9)}`);
 const totals = new Map<string, { n: number; correct: number }>();

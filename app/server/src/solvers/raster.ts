@@ -5,7 +5,7 @@
  * Either way the answer comes with numbered marks on the image, so a person can check each counted item.
  */
 import sharp from "sharp";
-import type { Detector } from "../models/detector.js";
+import type { Detection, Detector } from "../models/detector.js";
 import type { VisionModel } from "../models/vision.js";
 import type { Answer, Mark, QuestionType } from "../types.js";
 
@@ -57,6 +57,7 @@ export function rasterTarget(question: string): Target | null {
 
 const CATEGORIES = [...new Set(TARGETS.flatMap((t) => t.categories))];
 
+const INVENTORY_PROMPT = "Take the inventory of this floor plan.";
 const IN_DOMAIN_SCORE = 0.6;
 const IN_DOMAIN_DETECTIONS = 3;
 
@@ -174,17 +175,39 @@ export async function solveRaster(imagePath: string, question: string, qtype: Qu
   // The detector knows one drawing style. On a drawing where it recognises almost nothing with confidence
   // (an elevation, a historic scan), its count would be a confident zero, so the vision model answers instead.
   if (detector && target && detections && detections.filter((d) => d.score >= IN_DOMAIN_SCORE).length >= IN_DOMAIN_DETECTIONS) {
-    const found = detections
-      .filter((d) => target.detectorClasses.includes(d.cls) && d.score >= detector.thresholds[d.cls])
-      .sort((a, b) => a.y - b.y || a.x - b.x);
-    const marks = found.map((d, i) => ({
-      n: i + 1, x: d.x, y: d.y, w: d.w, h: d.h, label: `${d.cls.replace("_", " ")}, ${Math.round(d.score * 100)}% confidence`,
-    }));
+    const counted = (model: Detector, all: Detection[]) =>
+      all.filter((d) => target.detectorClasses.includes(d.cls) && d.score >= model.thresholds[d.cls]).sort((a, b) => a.y - b.y || a.x - b.x);
+    const boxMarks = (found: Detection[]): Mark[] =>
+      found.map((d, i) => ({ n: i + 1, x: d.x, y: d.y, w: d.w, h: d.h, label: `${d.cls.replace("_", " ")}, ${Math.round(d.score * 100)}% confidence` }));
     const names = target.detectorClasses.map((cls) => cls.replace("_", " ")).join(" and ");
+
+    // With two or more detectors, a symbol is counted by each of them and by the vision model, and the middle
+    // count wins: on held-out drawings that beats every single source. RASTER_SYMBOL_VOTE=off disables it.
+    const members = (detector.members ?? []).filter((m) => target.detectorClasses.every((cls) => cls in m.thresholds));
+    if (target.symbol && members.length >= 2 && process.env.RASTER_SYMBOL_VOTE !== "off") {
+      const perModel = await Promise.all(
+        members.map(async (m) => ({ name: m.id.split(":")[1], found: counted(m, await m.detect(imagePath)) })),
+      );
+      const reading = (await deps.vision.ask({ imagePath, system: inventorySystem(), schema: INVENTORY_SCHEMA, prompt: INVENTORY_PROMPT })).output;
+      const located: Located[] = target.categories.flatMap((c) => reading[c] ?? []);
+      const counts = [...perModel.map((p) => p.found.length), located.length].sort((a, b) => a - b);
+      const middle = counts[Math.floor((counts.length - 1) / 2)];
+      const boxes = perModel.find((p) => p.found.length === middle);
+      const tally = [...perModel.map((p) => `${p.name}: ${p.found.length}`), `${deps.vision.id}: ${located.length}`].join("; ");
+      return {
+        value: middle, unit: "count", pipeline: "symbol-vote", exact: false, kind: target.id,
+        method: `middle of ${counts.length} independent counts of ${names} symbols (${tally})`,
+        evidence: boxes
+          ? image(boxMarks(boxes.found), `Each box is one counted ${names}, as found by ${boxes.name}`)
+          : image(toMarks(located), "Each number is one counted item; positions are the vision model's estimate"),
+      };
+    }
+
+    const found = counted(detector, detections);
     return {
       value: found.length, unit: "count", pipeline: "detector", exact: false, kind: target.id,
       method: `${names} symbols found by the detector ${detector.nameFor?.(target.detectorClasses[0]) ?? detector.id.split(":")[1]}`,
-      evidence: image(marks, `Each box is one counted ${names}`),
+      evidence: image(boxMarks(found), `Each box is one counted ${names}`),
     };
   }
 
@@ -195,7 +218,7 @@ export async function solveRaster(imagePath: string, question: string, qtype: Qu
       Array.from({ length: votes }, (_, pass) =>
         deps.vision.ask({
           imagePath, system: inventorySystem(), schema: INVENTORY_SCHEMA,
-          prompt: pass === 0 ? "Take the inventory of this floor plan." : `Take the inventory of this floor plan. (Independent reading ${pass + 1}.)`,
+          prompt: pass === 0 ? INVENTORY_PROMPT : `${INVENTORY_PROMPT} (Independent reading ${pass + 1}.)`,
         }),
       ),
     );
