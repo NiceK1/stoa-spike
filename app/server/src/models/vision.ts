@@ -121,6 +121,10 @@ const API_PRICES: Record<string, [number, number]> = {
   "claude-opus-5-5": [4, 20],
   "claude-sonnet-5-5": [2, 10],
   "claude-haiku-5-5": [0.1, 0.5],
+  "gemini-2.0-flash-exp": [0, 0], // Free tier during preview
+  "gemini-2.0-flash-thinking-exp-1219": [0, 0], // Free tier during preview
+  "gemini-1.5-pro": [1.25, 5],
+  "gemini-1.5-flash": [0.075, 0.3],
 };
 const API_IMAGE_LONG_SIDE = 2000;
 
@@ -174,9 +178,131 @@ export class AnthropicApiVision implements VisionModel {
   }
 }
 
-/** VISION_PROVIDER picks the provider: "claude-cli" (default, local) or "anthropic-api". */
+/** Gemini through the Google AI API. Needs GEMINI_API_KEY. */
+export class GeminiApiVision implements VisionModel {
+  readonly id: string;
+  private client: import("@google/generative-ai").GoogleGenerativeAI | null = null;
+
+  constructor(private readonly model = process.env.VISION_MODEL ?? "gemini-2.0-flash-exp") {
+    this.id = `gemini-api:${model}`;
+  }
+
+  // Helper to convert JSON schema to Gemini format (remove unsupported fields)
+  private convertSchema(schema: any): any {
+    if (!schema || typeof schema !== 'object') return schema;
+    
+    // Create a copy to avoid mutating the original
+    const converted = Array.isArray(schema) ? [...schema] : { ...schema };
+    
+    // Remove unsupported fields
+    delete converted.$schema;
+    delete converted.additionalProperties;
+    
+    // Recursively process nested objects
+    if (converted.properties) {
+      const newProps: any = {};
+      for (const [key, value] of Object.entries(converted.properties)) {
+        newProps[key] = this.convertSchema(value);
+      }
+      converted.properties = newProps;
+    }
+    
+    // Process arrays
+    if (converted.items) {
+      converted.items = this.convertSchema(converted.items);
+    }
+    
+    // Process anyOf/oneOf/allOf
+    if (converted.anyOf) {
+      converted.anyOf = converted.anyOf.map((s: any) => this.convertSchema(s));
+    }
+    if (converted.oneOf) {
+      converted.oneOf = converted.oneOf.map((s: any) => this.convertSchema(s));
+    }
+    if (converted.allOf) {
+      converted.allOf = converted.allOf.map((s: any) => this.convertSchema(s));
+    }
+    
+    return converted;
+  }
+
+  async ask(request: VisionRequest): Promise<VisionResult> {
+    const key = await cacheKey(this.id, request);
+    const cacheFile = join(cacheDir("vision"), `${key}.json`);
+    const stored = await readJson<Omit<VisionResult, "cached">>(cacheFile);
+    if (stored) return { ...stored, cached: true };
+
+    if (!this.client) {
+      const { GoogleGenerativeAI } = await import("@google/generative-ai");
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) throw new Error("GEMINI_API_KEY not set in environment");
+      this.client = new GoogleGenerativeAI(apiKey);
+    }
+
+    const genModel = this.client.getGenerativeModel({
+      model: this.model,
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: this.convertSchema(request.schema),
+      },
+      systemInstruction: request.system.replace("Open the image with the Read tool before answering. ", "").replace("Open the image with the Read tool first. ", ""),
+    });
+
+    const parts: any[] = [{ text: request.prompt }];
+    if (request.imagePath) {
+      const { default: sharp } = await import("sharp");
+      // Resize image to reasonable size
+      const png = await sharp(request.imagePath)
+        .resize({ width: API_IMAGE_LONG_SIDE, height: API_IMAGE_LONG_SIDE, fit: "inside", withoutEnlargement: true })
+        .png()
+        .toBuffer();
+      
+      parts.unshift({
+        inlineData: {
+          mimeType: "image/png",
+          data: png.toString("base64"),
+        },
+      });
+    }
+
+    const started = Date.now();
+    const result = await genModel.generateContent(parts);
+    const response = result.response;
+    
+    if (!response.text()) {
+      throw new Error(`No text in Gemini response`);
+    }
+
+    let output: Record<string, any>;
+    try {
+      output = JSON.parse(response.text());
+    } catch (e) {
+      throw new Error(`Failed to parse Gemini JSON response: ${response.text().slice(0, 300)}`);
+    }
+
+    // Calculate cost estimate
+    const usage = response.usageMetadata;
+    const [inputPrice, outputPrice] = API_PRICES[this.model] ?? [0, 0];
+    const costUsd = usage 
+      ? ((usage.promptTokenCount || 0) * inputPrice + (usage.candidatesTokenCount || 0) * outputPrice) / 1e6
+      : 0;
+
+    const visionResult = {
+      output,
+      seconds: (Date.now() - started) / 1000,
+      costUsd,
+    };
+    
+    await writeJsonAtomic(cacheFile, visionResult);
+    return { ...visionResult, cached: false };
+  }
+}
+
+/** VISION_PROVIDER picks the provider: "claude-cli" (default, local), "anthropic-api", or "gemini-api". */
 export function createVision(): VisionModel {
-  return process.env.VISION_PROVIDER === "anthropic-api" ? new AnthropicApiVision() : new ClaudeCliVision();
+  if (process.env.VISION_PROVIDER === "anthropic-api") return new AnthropicApiVision();
+  if (process.env.VISION_PROVIDER === "gemini-api") return new GeminiApiVision();
+  return new ClaudeCliVision();
 }
 
 /**
@@ -185,6 +311,13 @@ export function createVision(): VisionModel {
  */
 export function createPlanner(): VisionModel {
   const model = process.env.PLANNER_MODEL;
-  if (!model) return createVision();
-  return process.env.VISION_PROVIDER === "anthropic-api" ? new AnthropicApiVision(model) : new ClaudeCliVision(model, process.env.PLANNER_EFFORT);
+  const provider = process.env.PLANNER_PROVIDER ?? process.env.VISION_PROVIDER;
+  
+  if (!model && !provider) return createVision();
+  
+  if (provider === "anthropic-api") return new AnthropicApiVision(model);
+  if (provider === "gemini-api") return new GeminiApiVision(model);
+  
+  // Default to Claude CLI if no provider specified but model is set
+  return new ClaudeCliVision(model, process.env.PLANNER_EFFORT);
 }
