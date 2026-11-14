@@ -230,7 +230,13 @@ export function App() {
     <div className="layout">
       <aside className="browser">
         <header className="brand">
-          <h1>Take-off check</h1>
+          <div className="wordmark">
+            <Logo />
+            <div>
+              <h1>Blueline</h1>
+              <span className="tagline">Take-off check</span>
+            </div>
+          </div>
           <p className="lede">Pick a drawing, ask how many or how much. Every counted item is marked so you can check it.</p>
         </header>
         <div className="search">
@@ -394,6 +400,17 @@ export function App() {
         )}
       </main>
     </div>
+  );
+}
+
+/** Blueline's mark: a white plan outline (walls, a door gap, an inner wall) and one counted-item dot on blue. */
+function Logo() {
+  return (
+    <svg className="logo" viewBox="0 0 32 32" aria-hidden="true">
+      <rect width="32" height="32" rx="7" className="logo-tile" />
+      <path d="M14 8H8v16h16V8h-6M8 16h5M16 16v8" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="20.5" cy="12.5" r="2.2" fill="#fff" />
+    </svg>
   );
 }
 

@@ -6,6 +6,7 @@
   --faint: #8b928c;
   --rule: #d5d9d2;
   --marker: #f25c05;
+  --brand: #1e4fd8;
   --marker-soft: #fde9dc;
   --exact: #0f6b4f;
   --estimate: #8a5a00;
@@ -26,8 +27,12 @@ button { cursor: pointer; }
 /* Drawing browser */
 .browser { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--rule); background: var(--sheet); }
 .brand { padding: 22px 20px 14px; }
-.brand h1 { margin: 0; font: 600 30px/1 "Barlow Condensed", "Barlow", sans-serif; letter-spacing: 0.01em; }
-.lede { margin: 8px 0 0; color: var(--soft); font-size: 14px; line-height: 1.45; }
+.wordmark { display: flex; align-items: center; gap: 11px; }
+.logo { flex: none; width: 38px; height: 38px; filter: drop-shadow(0 2px 4px rgba(30, 79, 216, 0.25)); }
+.logo-tile { fill: var(--brand); }
+.brand h1 { margin: 0; font: 600 30px/1 "Barlow Condensed", "Barlow", sans-serif; letter-spacing: 0.01em; color: var(--brand); }
+.tagline { display: block; margin-top: 2px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
+.lede { margin: 12px 0 0; color: var(--soft); font-size: 14px; line-height: 1.45; }
 
 .search { position: relative; padding: 0 20px 12px; }
 .search kbd {
