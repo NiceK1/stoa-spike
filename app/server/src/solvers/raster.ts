@@ -8,6 +8,7 @@ import sharp from "sharp";
 import type { Detector } from "../models/detector.js";
 import type { VisionModel } from "../models/vision.js";
 import { markedSentence, type RasterKind, type RasterReading } from "../planner.js";
+import { isLocate, isPlainRequest } from "../questions.js";
 import type { Answer, Mark, QuestionType } from "../types.js";
 
 export interface RasterDeps {
@@ -84,8 +85,35 @@ function targetsOf(ids: string[]): Target[] {
   return [...merged, ...rest];
 }
 
+/** Words that join or introduce a list of kinds without narrowing it. */
+const JOINING = ["and", "or", "plus", "ja", "sekä", "tai", "und", "oder", "et", "ou", "e", "o", "och", "eller", "y"];
+const LISTING = [...JOINING, "also", "both", "how", "many", "count", "number", "kuinka", "monta", "montako", "wie", "viele", "combien", "quanti", "quante", "hur", "många", "cuántos", "cuántas"];
+const JOINS = new RegExp(String.raw`[,&+/]|(?<![\p{L}])(?:${JOINING.join("|")})(?![\p{L}])`, "gu");
+
+/**
+ * Every kind a question names when it does nothing but list them ("where sauna and where bathroom"); otherwise the
+ * first-named kind alone, because in a longer sentence a later kind is usually an exclusion or an explanation.
+ * Kinds that are not joined ("the bedroom door") are one qualified thing, not a list.
+ */
+export function rasterTargets(question: string): Target[] {
+  const lowered = question.toLowerCase();
+  const named = TARGETS.filter((t) => t.pattern.test(lowered));
+  const kinds = [...new Set(targetsOf(named.map((t) => t.id)))];
+  const joined = (lowered.match(JOINS) ?? []).length >= named.length - 1;
+  if (named.length > 1 && joined && isPlainRequest(question, new RegExp(named.map((t) => `(?:${t.pattern.source})`).join("|")), LISTING)) {
+    return kinds;
+  }
+  const first = rasterTarget(question);
+  return first ? [first] : [];
+}
+
 /** The reading the keyword patterns give, for when no interpreter model reads the question. */
 export function readByKeywords(question: string, qtype: QuestionType, locate = false): RasterReading {
+  // A question that only lists several kinds asks for each of them, whatever answer type its wording suggests.
+  const listed = rasterTargets(question);
+  if (listed.length > 1) {
+    return { call: { operation: "count_known", targets: listed.map((t) => t.id), whole: true }, locate: locate || isLocate(question), type: "count" };
+  }
   const target = qtype === "count" ? rasterTarget(question) : null;
   if (target) return { call: { operation: "count_known", targets: [target.id], whole: true }, locate, type: qtype };
   return { call: qtype === "count" ? { operation: "count_other", items: "items" } : { operation: "read" }, locate, type: qtype };

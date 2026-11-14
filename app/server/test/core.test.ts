@@ -4,7 +4,7 @@ import { contains, polygonArea } from "../src/geometry.js";
 import { inferType, parseTakeoff } from "../src/questions.js";
 import { isCorrect } from "../src/scoring.js";
 import { Plan, parseDxf } from "../src/solvers/dxf.js";
-import { rasterTarget } from "../src/solvers/raster.js";
+import { rasterTarget, rasterTargets, readByKeywords } from "../src/solvers/raster.js";
 import type { Polygon } from "../src/types.js";
 
 const rect = (x: number, y: number, w: number, h: number): Polygon => [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
@@ -74,6 +74,22 @@ describe("raster targets", () => {
     expect(rasterTarget("Kuinka monta suihkua pohjapiirustuksessa on?")?.id).toBe("shower");
     expect(rasterTarget("How many showers are there, not counting bathtubs?")?.id).toBe("shower");
     expect(rasterTarget("How many showers and bathtubs are drawn on this floor plan in total?")?.id).toBe("shower_bathtub");
+  });
+
+  it("takes every kind of a question that only lists kinds", () => {
+    const ids = (question: string) => rasterTargets(question).map((t) => t.id);
+    expect(ids("where sauna and where bathroom")).toEqual(["sauna", "bathroom"]);
+    expect(ids("How many saunas and bathrooms are there?")).toEqual(["sauna", "bathroom"]);
+    expect(ids("show me the showers and the bathtubs")).toEqual(["shower_bathtub"]);
+    expect(ids("How many sinks and wash basins (kitchen and bathroom combined) are drawn on this floor plan?")).toEqual(["sink"]);
+    expect(ids("How many bathrooms or washrooms (e.g. KH, KPH) are on this floor plan, not counting separate WC rooms?")).toEqual(["bathroom"]);
+  });
+
+  it("reads a list of kinds as a request to count and mark each, without an interpreter", () => {
+    expect(readByKeywords("where sauna and where bathroom", "text")).toEqual({
+      call: { operation: "count_known", targets: ["sauna", "bathroom"], whole: true }, locate: true, type: "count",
+    });
+    expect(readByKeywords("How many windows are shown on this floor plan?", "count").call).toEqual({ operation: "count_known", targets: ["window"], whole: true });
   });
 
   it("reads the Finnish questions", () => {
