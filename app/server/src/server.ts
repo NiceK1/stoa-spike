@@ -5,7 +5,7 @@ import { randomBytes } from "node:crypto";
 import { createReadStream, existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { basename, extname, join, relative, resolve, sep } from "node:path";
-import { APP_ROOT, CACHE_DIR, UPLOAD_DIR, datasetRoot, loadEnv } from "./config.js";
+import { APP_ROOT, CACHE_DIR, REPO_ROOT, UPLOAD_DIR, datasetRoot, loadEnv } from "./config.js";
 import { isAvailable, questionsByPath } from "./dataset.js";
 import { createDetector } from "./models/detector.js";
 import { createPlanner, createVision } from "./models/vision.js";
@@ -104,8 +104,19 @@ app.post<{ Body: { path?: string; upload?: string; question: string; type?: Ques
   }
 });
 
+// The same front door as the Hugging Face Space: "/" is the landing page and the app is at /app.html.
+// A link that already names a drawing (/?path=...) still opens the app, so older links keep working.
 const webDist = join(APP_ROOT, "web", "dist");
-if (existsSync(webDist)) await app.register(fastifyStatic, { root: webDist });
+const landing = join(REPO_ROOT, "deploy", "hf-space", "landing.html");
+if (existsSync(webDist)) {
+  await app.register(fastifyStatic, { root: webDist, index: false });
+  app.get<{ Querystring: Record<string, string> }>("/", (request, reply) =>
+    existsSync(landing) && !request.query.path && !request.query.q
+      ? reply.type("text/html").send(createReadStream(landing))
+      : reply.sendFile("index.html"),
+  );
+  app.get("/app.html", (_request, reply) => reply.sendFile("index.html"));
+}
 
 const port = Number(process.env.PORT ?? 8787);
 // HOST=0.0.0.0 in a container (the Hugging Face Space); the default keeps a local run private to this machine.

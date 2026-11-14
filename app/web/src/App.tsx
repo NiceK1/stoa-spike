@@ -235,12 +235,10 @@ export function App() {
     <div className="layout">
       <aside className="browser">
         <header className="brand">
-          {/* In the online demo the wordmark leads back to the landing page. */}
+          {/* The wordmark leads back to the landing page: index.html in the online demo, "/" on the local server. */}
           {(() => {
             const inner = (<><Logo /><div><h1>Blueline</h1><span className="tagline">Take-off check</span></div></>);
-            return api.STATIC
-              ? <a className="wordmark" href="index.html" title="Back to the Blueline home page">{inner}</a>
-              : <div className="wordmark">{inner}</div>;
+            return <a className="wordmark" href={api.STATIC ? "index.html" : "/"} title="Back to the Blueline home page">{inner}</a>;
           })()}
           <p className="lede">Pick a drawing, ask how many or how much. Every counted item is marked so you can check it.</p>
         </header>

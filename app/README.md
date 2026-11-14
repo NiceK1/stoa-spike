@@ -14,6 +14,8 @@ npm run server       # http://127.0.0.1:8787
 
 For development, `npm run dev` restarts the server on changes and `npm run web` serves the client on port 5173.
 A drawing and a question can be linked directly: `http://127.0.0.1:8787/?path=data/cubicasa5k/<name>.png&q=<question>`.
+The server's front page is the landing page (`deploy/hf-space/landing.html`, the same one the Hugging Face demo opens with);
+the app itself is at `/app.html`, and a link that names a drawing as above opens the app directly.
 
 ## How a question is answered
 
