@@ -243,12 +243,30 @@ button { cursor: pointer; }
 .inspector .figure.text { max-width: 100%; }
 .inspector .facts p:last-child { margin-bottom: 0; }
 .inspector .ask { flex: none; display: flex; flex-direction: column; padding: 14px 18px 16px; border-top: 1px solid var(--rule); }
-.inspector .suggest { display: flex; flex-direction: column; margin-bottom: 12px; }
 .inspector .toggle { margin-left: 0; flex-basis: 100%; margin-top: 4px; }
-/* About three questions tall; the rest scroll. */
-.inspector .chips { max-height: 196px; flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 5px; padding-right: 2px; }
+.inspector .chips { max-height: none; flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 5px; padding-right: 2px; }
 .inspector .chip { flex: none; white-space: normal; line-height: 1.35; padding: 7px 11px; }
 .inspector .composer { flex: none; }
+
+/* Example questions: one button above the question box; the list pops up above it, over the answer. */
+.examples { position: relative; margin-bottom: 10px; }
+.examples-toggle {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 12px; border: 1px solid var(--rule); border-radius: 8px;
+  background: var(--sheet); font: 600 16px/1.2 var(--display); letter-spacing: 0.01em; color: var(--ink); text-align: left;
+}
+.examples-toggle .count { font: 500 14px var(--display); }
+.examples-toggle svg { width: 12px; height: 12px; margin-left: auto; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; transition: transform 0.15s; }
+.examples-toggle:hover, .examples-toggle.open { border-color: var(--brand); color: var(--brand); }
+.examples-toggle.open svg { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .examples-toggle svg { transition: none; } }
+.examples-panel {
+  position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); z-index: 5; display: flex; flex-direction: column; gap: 8px;
+  max-height: min(62vh, 480px); padding: 12px; overflow: hidden;
+  background: var(--sheet); border: 1px solid var(--rule); border-radius: 10px; box-shadow: 0 12px 34px rgba(20, 45, 110, 0.18);
+}
+.examples-panel .tabs { flex: none; margin: 0; }
+.examples-panel .toggle { margin-left: auto; flex-basis: auto; margin-top: 0; }
+.examples-panel .chips { flex: 1; min-height: 0; overflow-y: auto; }
 
 /* Numbered marks on image plans, drawn in the browser (CAD and IFC plans arrive as finished SVG). */
 .box-halo { fill: none; stroke: #fff; stroke-width: 5.5px; stroke-opacity: 0.95; }
@@ -264,7 +282,6 @@ button { cursor: pointer; }
 @media (max-width: 1100px) {
   .workspace { grid-template-columns: 1fr; grid-template-rows: minmax(420px, 1fr) auto; }
   .inspector { border-left: 0; border-top: 1px solid var(--rule); }
-  .inspector .chips { max-height: 150px; }
 }
 
 @media (max-width: 820px) {

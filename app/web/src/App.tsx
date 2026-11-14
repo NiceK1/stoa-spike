@@ -101,6 +101,8 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [kind, setKind] = useState<string | null>(null);
   const [translations, setTranslations] = useState(false);
+  const [examplesOpen, setExamplesOpen] = useState(false);
+  const examples = useRef<HTMLDivElement>(null);
   const search = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
@@ -122,6 +124,16 @@ export function App() {
       box.scrollTop = top - header - box.clientHeight / 3;
     }
   }, [drawing, sources]);
+
+  // The example list closes on Escape or a click anywhere else.
+  useEffect(() => {
+    if (!examplesOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setExamplesOpen(false); };
+    const onDown = (e: PointerEvent) => { if (!examples.current?.contains(e.target as Node)) setExamplesOpen(false); };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("pointerdown", onDown);
+    return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("pointerdown", onDown); };
+  }, [examplesOpen]);
 
   // "/" jumps to the drawing search, as in most file browsers.
   useEffect(() => {
@@ -205,6 +217,7 @@ export function App() {
   }
 
   function choose(d: Drawing) {
+    setExamplesOpen(false);
     latest.current++;
     setPending(null);
     setError(null);
@@ -368,45 +381,56 @@ export function App() {
                 )}
 
                 <section className="ask">
+                  {/* Example questions fold into one button; the list pops up above it, over the answer, so it takes no room. */}
                   {(known.length > 0 || free.length > 0) && (
-                    <div className="suggest">
-                      <div className="tabs" role="tablist" aria-label="Suggested questions">
-                        <span className="label">Try</span>
-                        <button role="tab" aria-selected={kind === null} className={kind === null ? "tab on" : "tab"} onClick={() => setKind(null)}>
-                          All <span className="count">{offered.length + free.length}</span>
-                        </button>
-                        {free.length > 0 && (
-                          <button role="tab" aria-selected={kind === "free"} className={kind === "free" ? "tab on" : "tab"} onClick={() => setKind("free")}>
-                            Your words <span className="count">{free.length}</span>
-                          </button>
-                        )}
-                        {kinds.map((k) => (
-                          <button
-                            key={k.type} role="tab" aria-selected={kind === k.type} className={kind === k.type ? "tab on" : "tab"}
-                            onClick={() => setKind(k.type)}
-                          >
-                            {k.label} <span className="count">{k.n}</span>
-                          </button>
-                        ))}
-                        {english.length > 0 && english.length < known.length && (
-                          <label className="toggle">
-                            <input type="checkbox" checked={translations} onChange={(e) => setTranslations(e.target.checked)} />
-                            Translations
-                          </label>
-                        )}
-                      </div>
-                      <div className="chips">
-                        {freeChips.map((q) => (
-                          <button key={q} className="chip free" onClick={() => ask(q)} disabled={pending !== null} title="Free wording, outside the dataset's templates">
-                            {q}
-                          </button>
-                        ))}
-                        {chips.map((k, i) => (
-                          <button key={i} className="chip" onClick={() => ask(k.question)} disabled={pending !== null} title={k.question}>
-                            {k.question}
-                          </button>
-                        ))}
-                      </div>
+                    <div className="examples" ref={examples}>
+                      <button
+                        type="button" className={examplesOpen ? "examples-toggle open" : "examples-toggle"}
+                        aria-expanded={examplesOpen} aria-controls="examples-panel" onClick={() => setExamplesOpen((o) => !o)}
+                      >
+                        Example questions <span className="count">{offered.length + free.length}</span>
+                        <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 7.5 6 4l3.5 3.5" /></svg>
+                      </button>
+                      {examplesOpen && (
+                        <div className="examples-panel" id="examples-panel">
+                          <div className="tabs" role="tablist" aria-label="Suggested questions">
+                                                        <button role="tab" aria-selected={kind === null} className={kind === null ? "tab on" : "tab"} onClick={() => setKind(null)}>
+                              All <span className="count">{offered.length + free.length}</span>
+                            </button>
+                            {free.length > 0 && (
+                              <button role="tab" aria-selected={kind === "free"} className={kind === "free" ? "tab on" : "tab"} onClick={() => setKind("free")}>
+                                Your words <span className="count">{free.length}</span>
+                              </button>
+                            )}
+                            {kinds.map((k) => (
+                              <button
+                                key={k.type} role="tab" aria-selected={kind === k.type} className={kind === k.type ? "tab on" : "tab"}
+                                onClick={() => setKind(k.type)}
+                              >
+                                {k.label} <span className="count">{k.n}</span>
+                              </button>
+                            ))}
+                            {english.length > 0 && english.length < known.length && (
+                              <label className="toggle">
+                                <input type="checkbox" checked={translations} onChange={(e) => setTranslations(e.target.checked)} />
+                                Translations
+                              </label>
+                            )}
+                          </div>
+                          <div className="chips">
+                            {freeChips.map((q) => (
+                              <button key={q} className="chip free" onClick={() => { setExamplesOpen(false); ask(q); }} disabled={pending !== null} title="Free wording, outside the dataset's templates">
+                                {q}
+                              </button>
+                            ))}
+                            {chips.map((k, i) => (
+                              <button key={i} className="chip" onClick={() => { setExamplesOpen(false); ask(k.question); }} disabled={pending !== null} title={k.question}>
+                                {k.question}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                   <form className="composer" onSubmit={(e) => { e.preventDefault(); ask(question); }}>
@@ -498,7 +522,11 @@ function Viewer({ evidence, title, file, type }: { evidence: Evidence; title: st
         ref={canvas} className="canvas" title="Scroll or double-click to zoom, drag to move"
         onWheel={(e) => { const box = e.currentTarget.getBoundingClientRect(); zoomAt(e.clientX - box.left, e.clientY - box.top, wheelFactor(e)); }}
         onDoubleClick={(e) => { const box = e.currentTarget.getBoundingClientRect(); zoomAt(e.clientX - box.left, e.clientY - box.top, 1.6); }}
-        onPointerDown={(e) => { drag.current = { x: e.clientX - view.x, y: e.clientY - view.y }; e.currentTarget.setPointerCapture(e.pointerId); }}
+        onPointerDown={(e) => {
+          drag.current = { x: e.clientX - view.x, y: e.clientY - view.y };
+          // Capture keeps the drag going outside the canvas; a synthetic event has no pointer to capture.
+          try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* not a live pointer */ }
+        }}
         onPointerMove={(e) => {
           // Read the drag start now: by the time the state update runs, pointer-up may have cleared it.
           const start = drag.current;
