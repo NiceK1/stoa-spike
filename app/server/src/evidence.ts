@@ -32,10 +32,10 @@ export function renderPlanSvg({ solid = [], outlines = [], highlights, labels = 
   const parts = [
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${WIDTH} ${height.toFixed(0)}" font-family="system-ui, sans-serif">`,
     `<rect width="100%" height="100%" fill="#ffffff"/>`,
-    ...outlines.map((p) => `<path d="${path(p)}" fill="none" stroke="#c9c9c4" stroke-width="1"/>`),
-    ...solid.map((p) => `<path d="${path(p)}" fill="#4b4b48"/>`),
+    ...outlines.map((p) => `<path d="${path(p)}" fill="none" stroke="#c3cbdb" stroke-width="1"/>`),
+    ...solid.map((p) => `<path d="${path(p)}" fill="#3b4459"/>`),
     // Even-odd fill leaves the cut-out rings (holes in a room) unpainted.
-    ...highlights.map((p, i) => `<path d="${[p, ...(cutouts[i] ?? [])].map(path).join(" ")}" fill="#ff7a00" fill-opacity="0.4" fill-rule="evenodd" stroke="#c44d00" stroke-width="2"/>`),
+    ...highlights.map((p, i) => `<path d="${[p, ...(cutouts[i] ?? [])].map(path).join(" ")}" fill="#2f6bff" fill-opacity="0.28" fill-rule="evenodd" stroke="#1e4fd8" stroke-width="2"/>`),
   ];
   highlights.forEach((p, i) => {
     const [cx, cy] = centroid(p);
@@ -48,15 +48,15 @@ export function renderPlanSvg({ solid = [], outlines = [], highlights, labels = 
     const y = small ? Math.max(12, Number(py(by1)) - 13) : Number(py(cy));
     parts.push(
       `<g transform="translate(${x.toFixed(1)},${y.toFixed(1)})">` +
-        `<rect x="${(-w / 2).toFixed(1)}" y="-10" width="${w.toFixed(1)}" height="20" rx="10" fill="#1d1d1b"/>` +
+        `<rect x="${(-w / 2).toFixed(1)}" y="-10" width="${w.toFixed(1)}" height="20" rx="10" fill="#1e4fd8" stroke="#ffffff" stroke-width="1.5"/>` +
         `<text y="4.5" text-anchor="middle" font-size="13" font-weight="600" fill="#ffffff">${escapeXml(text)}</text></g>`,
     );
   });
   for (const { at: [x, y], text } of titles) {
     const left = Number(px(x)) + 4, top = Number(py(y)) + 4;
     parts.push(
-      `<rect x="${left.toFixed(1)}" y="${top.toFixed(1)}" width="${(16 + text.length * 11).toFixed(1)}" height="26" rx="3" fill="#ffffff" stroke="#c9c9c4"/>` +
-        `<text x="${(left + 7).toFixed(1)}" y="${(top + 19).toFixed(1)}" font-size="17" font-weight="600" fill="#1f2421">${escapeXml(text)}</text>`,
+      `<rect x="${left.toFixed(1)}" y="${top.toFixed(1)}" width="${(16 + text.length * 11).toFixed(1)}" height="26" rx="3" fill="#ffffff" stroke="#c3cbdb"/>` +
+        `<text x="${(left + 7).toFixed(1)}" y="${(top + 19).toFixed(1)}" font-size="17" font-weight="600" fill="#142038">${escapeXml(text)}</text>`,
     );
   }
   parts.push("</svg>");

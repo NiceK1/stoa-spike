@@ -106,7 +106,7 @@ describe("layered DXF plan with a hole", () => {
   it("cuts the hole out of the highlight", () => {
     const room = plan.answer({ kind: "area_room", number: "1.01" })!;
     const svg = renderPlanSvg({ outlines: plan.roomOutlines, highlights: room.highlights }, room.cutouts);
-    expect(svg).toMatch(/<path d="M[^"]* Z M[^"]* Z" fill="#ff7a00"[^>]*fill-rule="evenodd"/);
+    expect(svg).toMatch(/<path d="M[^"]* Z M[^"]* Z" fill="#2f6bff"[^>]*fill-rule="evenodd"/);
   });
 });
 

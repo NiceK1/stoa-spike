@@ -1,13 +1,17 @@
 :root {
-  --paper: #f6f7f4;
+  --paper: #f3f6fb;
   --sheet: #ffffff;
-  --ink: #1f2421;
-  --soft: #5d655f;
-  --faint: #8b928c;
-  --rule: #d5d9d2;
-  --marker: #f25c05;
+  --ink: #142038;
+  --soft: #55607a;
+  --faint: #8a93a8;
+  --rule: #d6deec;
+  --marker: #1e4fd8;
   --brand: #1e4fd8;
-  --marker-soft: #fde9dc;
+  --brand-deep: #163ca8;
+  /* Blueprint grid behind the drawing: fine lines every 20 px, stronger every 100 px. */
+  --grid-fine: rgba(30, 79, 216, 0.06);
+  --grid-major: rgba(30, 79, 216, 0.12);
+  --marker-soft: #e7eeff;
   --exact: #0f6b4f;
   --estimate: #8a5a00;
   --off: #a3260b;
@@ -88,13 +92,13 @@ button { cursor: pointer; }
   border-radius: 999px; background: var(--sheet); font-size: 13px;
 }
 .step .short { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--soft); }
-.step.on { border-color: var(--ink); background: var(--ink); color: var(--sheet); }
-.step.on .short { color: #c9cfc9; }
+.step.on { border-color: var(--brand); background: var(--brand); color: var(--sheet); }
+.step.on .short { color: rgba(255, 255, 255, 0.78); }
 .step .ok { color: var(--exact); } .step.on .ok { color: #7fd8b4; }
 .step .off { color: var(--off); } .step.on .off { color: #ff9c85; }
 
 .placard { display: flex; gap: 24px; align-items: center; padding: 16px 24px; border-bottom: 1px solid var(--rule); background: var(--sheet); }
-.figure { font: 600 64px/0.9 "Barlow Condensed", "Barlow", sans-serif; min-width: 90px; }
+.figure { font: 600 64px/0.9 "Barlow Condensed", "Barlow", sans-serif; min-width: 90px; color: var(--brand); }
 .figure.text { font-size: 30px; line-height: 1.1; max-width: 40%; }
 .unit { margin-left: 6px; font-size: 26px; color: var(--soft); }
 .facts { max-width: 72ch; }
@@ -112,11 +116,18 @@ button { cursor: pointer; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .viewer { position: relative; flex: 1; display: flex; flex-direction: column; min-height: 0; margin: 0; }
-.canvas { position: relative; flex: 1; min-height: 0; overflow: hidden; cursor: grab; touch-action: none; background: var(--paper); container-type: size; }
+.canvas {
+  position: relative; flex: 1; min-height: 0; overflow: hidden; cursor: grab; touch-action: none; container-type: size;
+  background-color: #eaf0fb;
+  background-image:
+    linear-gradient(var(--grid-major) 1px, transparent 1px), linear-gradient(90deg, var(--grid-major) 1px, transparent 1px),
+    linear-gradient(var(--grid-fine) 1px, transparent 1px), linear-gradient(90deg, var(--grid-fine) 1px, transparent 1px);
+  background-size: 100px 100px, 100px 100px, 20px 20px, 20px 20px;
+}
 .canvas:active { cursor: grabbing; }
 .sheet { transform-origin: 0 0; height: 100%; padding: 16px; }
 .fit { margin: 0 auto; width: min(100cqw - 32px, (100cqh - 32px) * var(--aspect)); }
-.fit svg { display: block; width: 100%; height: auto; background: var(--sheet); box-shadow: 0 0 0 1px var(--rule), 0 4px 18px rgba(31, 36, 33, 0.08); }
+.fit svg { display: block; width: 100%; height: auto; background: var(--sheet); box-shadow: 0 0 0 1px var(--rule), 0 6px 24px rgba(20, 45, 110, 0.12); }
 .zoom { position: absolute; right: 14px; bottom: 14px; display: grid; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; background: var(--sheet); }
 .zoom button { width: 34px; height: 32px; border: 0; border-bottom: 1px solid var(--rule); background: none; font-size: 16px; }
 .zoom button:last-child { border-bottom: 0; }
@@ -131,8 +142,8 @@ button { cursor: pointer; }
 .tabs .label { margin-right: 4px; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--faint); }
 .tab { padding: 2px 10px; border: 0; border-radius: 999px; background: none; font-size: 13px; font-weight: 500; color: var(--soft); }
 .tab:hover { background: var(--paper); }
-.tab.on { background: var(--ink); color: var(--sheet); }
-.tab.on .count { color: #c9cfc9; }
+.tab.on { background: var(--brand); color: var(--sheet); }
+.tab.on .count { color: rgba(255, 255, 255, 0.78); }
 .toggle { display: flex; align-items: center; gap: 5px; margin-left: auto; font-size: 13px; color: var(--soft); cursor: pointer; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; max-height: 68px; overflow-y: auto; }
 .chip {
@@ -143,10 +154,11 @@ button { cursor: pointer; }
 .chip:disabled { opacity: 0.5; cursor: default; }
 
 .composer { display: flex; gap: 8px; align-items: flex-end; padding: 6px; border: 1px solid var(--rule); border-radius: 8px; background: var(--paper); }
-.composer:focus-within { border-color: var(--ink); }
+.composer:focus-within { border-color: var(--brand); box-shadow: 0 0 0 3px var(--marker-soft); }
 .composer textarea { flex: 1; min-height: 38px; max-height: 120px; padding: 8px 8px; border: 0; background: none; resize: none; field-sizing: content; }
 .composer textarea:focus { outline: none; }
 .primary { padding: 9px 22px; border: 0; border-radius: 5px; background: var(--marker); color: #fff; font-weight: 600; }
+.primary:hover:not(:disabled) { background: var(--brand-deep); }
 .primary:disabled { background: var(--rule); color: var(--soft); cursor: default; }
 
 @media (max-width: 820px) {
@@ -163,6 +175,6 @@ button { cursor: pointer; }
 .more:hover { background: var(--paper); }
 
 /* Numbered marks on image plans, drawn in the browser (CAD and IFC plans arrive as finished SVG). */
-.box { fill: rgba(242, 92, 5, 0.14); stroke: var(--marker); }
+.box { fill: rgba(30, 79, 216, 0.14); stroke: var(--marker); }
 .dot { fill: var(--marker); stroke: #fff; }
 .num { fill: #fff; font-weight: 600; text-anchor: middle; font-family: "Barlow", system-ui, sans-serif; }

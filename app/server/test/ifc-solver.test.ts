@@ -140,9 +140,9 @@ describe("solveIfc on a hand-written model", () => {
     expect(answer?.evidence?.kind).toBe("svg");
     const svg = answer?.evidence?.kind === "svg" ? answer.evidence.svg : "";
     // One highlighted room, the other room as an outline, two walls solid.
-    expect(svg.match(/fill="#ff7a00"/g)).toHaveLength(1);
-    expect(svg.match(/stroke="#c9c9c4"/g)!.length).toBeGreaterThanOrEqual(1);
-    expect(svg.match(/fill="#4b4b48"/g)).toHaveLength(2);
+    expect(svg.match(/fill="#2f6bff"/g)).toHaveLength(1);
+    expect(svg.match(/stroke="#c3cbdb"/g)!.length).toBeGreaterThanOrEqual(1);
+    expect(svg.match(/fill="#3b4459"/g)).toHaveLength(2);
     expect(svg).toContain("Kitchen (101)");
   });
 
