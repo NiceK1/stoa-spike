@@ -26,6 +26,8 @@ export interface ElementShape {
   area: number;
   /** Enclosed volume, m³. */
   volume: number;
+  /** Vertical extent, m. */
+  height: number;
   /** Footprint pieces with holes cut out, largest first. */
   shapes: Polygon[];
   /** One polygon standing for the whole element: its footprint when that is a single piece, otherwise its convex hull. */
@@ -141,6 +143,54 @@ export class IfcModel {
 
   close(): void {
     this.api.CloseModel(this.modelId);
+  }
+
+  /** Metres, m² and m³ per model unit. */
+  get units(): { length: number; area: number; volume: number } {
+    return { length: this.lengthScale, area: this.areaScale, volume: this.volumeScale };
+  }
+
+  /** Ids of every record of an IFC class, subclasses included. */
+  instances(type: number): number[] {
+    return this.ids(type);
+  }
+
+  /** A record with its attributes by name, as web-ifc reads it. */
+  record(id: number): any {
+    return this.line(id);
+  }
+
+  /** IFC class of a record, as 'IfcWallStandardCase'. */
+  className(id: number): string {
+    return this.api.GetNameFromTypeCode(this.api.GetLineType(this.modelId, id));
+  }
+
+  /** Arguments of a header record (WebIFC.FILE_NAME, FILE_SCHEMA, FILE_DESCRIPTION), as written in the file. */
+  headerLine(type: number): any[] {
+    return this.api.GetHeaderLine(this.modelId, type)?.arguments ?? [];
+  }
+
+  /** The type object of an element, if it has one. */
+  typeObject(id: number): number | undefined {
+    return this.types().get(id);
+  }
+
+  /** The object this one is a part of. */
+  wholeOfPart(id: number): number | undefined {
+    return this.wholeOf.get(id);
+  }
+
+  /** What an object directly holds: contained and aggregated objects, openings, and what fills them. */
+  contents(id: number): number[] {
+    return this.below.get(id) ?? [];
+  }
+
+  /** Quantity sets and property sets of an object; the property sets of its type come after its own. */
+  definitions(id: number): { quantities: number[]; properties: number[] } {
+    const { quantities, properties } = this.loadDefinitions();
+    const type = this.types().get(id);
+    const typeSets = type === undefined ? [] : ((this.line(type).HasPropertySets ?? []) as Ref[]).map((ref) => ref.value);
+    return { quantities: quantities.get(id) ?? [], properties: [...(properties.get(id) ?? []), ...typeSets] };
   }
 
   private ids(type: number): number[] {
@@ -420,7 +470,12 @@ export class IfcModel {
         const shapes = footprintShapes(mesh);
         // A footprint in several pieces (a wall cut through by a door, a door leaf beside its frame) is shown as its hull.
         const single = shapes.length > 0 && Math.abs(signedArea(shapes[0])) >= 0.9 * area;
-        shape = { area, volume: meshVolume(mesh), shapes, outline: single ? shapes[0] : planHull(mesh) };
+        let low = Infinity, high = -Infinity;
+        for (let i = 2; i < mesh.positions.length; i += 3) {
+          low = Math.min(low, mesh.positions[i]);
+          high = Math.max(high, mesh.positions[i]);
+        }
+        shape = { area, volume: meshVolume(mesh), height: high > low ? high - low : 0, shapes, outline: single ? shapes[0] : planHull(mesh) };
       }
       this.shapes.set(id, shape);
     }
