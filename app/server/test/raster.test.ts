@@ -68,6 +68,12 @@ describe("counting symbols on a raster drawing", () => {
     expect(answer.pipeline).toBe("vision-model");
   });
 
+  it("numbers the counted items in reading order", async () => {
+    const found = [box("window", 0.9, 150, 10), box("window", 0.9, 10, 12), box("window", 0.9, 80, 11), box("window", 0.9, 120, 60)];
+    const answer = await solveRaster(drawing, question, "count", { vision: vision(4), detector: pair(found, found), imageUrl: "/plan.png" });
+    expect(answer.evidence?.kind === "image" && answer.evidence.marks.map((m) => [m.n, m.x])).toEqual([[1, 10], [2, 80], [3, 150], [4, 120]]);
+  });
+
   it("counts doors with the all-class detector alone", async () => {
     const doors = (n: number) => Array.from({ length: n }, (_, i) => box("door", 0.9, 10 + 30 * i));
     const both: Detector = { ...model("floorplan-yolo11m-1280", doors(5)), members: [model("floorplan-yolo11m-1280", doors(5)), model("other", doors(3))] };

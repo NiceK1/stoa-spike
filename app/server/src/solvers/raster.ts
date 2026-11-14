@@ -155,6 +155,23 @@ const FREE_SCHEMA = {
 
 type Located = { x: number; y: number };
 
+/**
+ * Rows top to bottom, left to right within a row, so the numbers on the drawing read like text.
+ * Items whose centres differ in height by less than `tolerance` share a row.
+ */
+export function readingOrder<T>(items: T[], centre: (item: T) => Located, tolerance: number): T[] {
+  const byHeight = [...items].sort((a, b) => centre(a).y - centre(b).y);
+  const rows: T[][] = [];
+  for (const item of byHeight) {
+    const row = rows.at(-1);
+    if (row && centre(item).y - centre(row[0]).y < tolerance) row.push(item);
+    else rows.push([item]);
+  }
+  return rows.flatMap((row) => row.sort((a, b) => centre(a).x - centre(b).x));
+}
+/** Share of the image height within which two items count as one row. */
+const ROW = 0.03;
+
 /** One source's count of a target, with the items it counted. */
 export interface Tally {
   name: string;
@@ -237,7 +254,10 @@ export async function countSources(imagePath: string, target: Target, deps: Rast
   // (an elevation, a historic scan), their count would be a confident zero, so they are left out.
   const trusted = scanned !== null && scanned.filter((d) => d.score >= IN_DOMAIN_SCORE).length >= IN_DOMAIN_DETECTIONS;
   const counted = (model: Detector, all: Detection[]) =>
-    all.filter((d) => target.detectorClasses.includes(d.cls) && d.score >= model.thresholds[d.cls]).sort((a, b) => a.y - b.y || a.x - b.x);
+    readingOrder(
+      all.filter((d) => target.detectorClasses.includes(d.cls) && d.score >= model.thresholds[d.cls]),
+      (d) => ({ x: d.x + d.w / 2, y: d.y + d.h / 2 }), height * ROW,
+    );
 
   const sources: Source[] = [];
   if (detector && trusted && counts) {
@@ -285,7 +305,8 @@ export async function countSources(imagePath: string, target: Target, deps: Rast
 export async function solveRaster(imagePath: string, question: string, qtype: QuestionType, deps: RasterDeps): Promise<Answer> {
   const { width = 0, height = 0 } = await sharp(imagePath).metadata();
   const image = (marks: Mark[], caption: string) => ({ kind: "image" as const, imageUrl: deps.imageUrl, width, height, marks, caption });
-  const toMarks = (items: Located[]): Mark[] => items.map((item, i) => ({ n: i + 1, x: (item.x / 1000) * width, y: (item.y / 1000) * height }));
+  const toMarks = (items: Located[]): Mark[] =>
+    readingOrder(items, (item) => item, 1000 * ROW).map((item, i) => ({ n: i + 1, x: (item.x / 1000) * width, y: (item.y / 1000) * height }));
 
   if (qtype !== "count") {
     const { output } = await deps.vision.ask({ imagePath, system: FREE_SYSTEM, prompt: question, schema: FREE_SCHEMA });
