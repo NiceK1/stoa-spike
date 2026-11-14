@@ -85,6 +85,8 @@ const drawingKey = (d: Drawing) => (d.kind === "dataset" ? d.path : `upload:${d.
 export function App() {
   const [sources, setSources] = useState<Source[]>([]);
   const [listed, setListed] = useState(false);
+  /** False when the server runs with local models only, so free wording on image plans cannot be answered. */
+  const [hasVision, setHasVision] = useState(true);
   const [filter, setFilter] = useState("");
   /** How many drawings each source group lists; the full dataset has thousands per group. */
   const [limits, setLimits] = useState<Record<string, number>>({});
@@ -103,6 +105,7 @@ export function App() {
   const composer = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
+    fetch("/api/health").then((r) => r.json()).then((d) => setHasVision(d.vision !== "none")).catch(() => {});
     fetch("/api/dataset").then((r) => r.json()).then((d) => { setSources(d.sources); setListed(true); }).catch(() => setError("The server is not reachable."));
   }, []);
 
@@ -159,7 +162,7 @@ export function App() {
   const english = known.filter((k) => isEnglish(k.question));
   const offered = translations || english.length === 0 ? known : english;
   const kinds = KINDS.map((k) => ({ ...k, n: offered.filter((q) => kindOf(q.type) === k.type).length })).filter((k) => k.n > 0);
-  const free = drawing ? freeQuestions(drawing.kind === "dataset" ? drawing.path : null, drawing.kind === "upload" ? drawing.name : undefined) : [];
+  const free = drawing && hasVision ? freeQuestions(drawing.kind === "dataset" ? drawing.path : null, drawing.kind === "upload" ? drawing.name : undefined) : [];
   const chips = kind === "free" ? [] : kind ? offered.filter((q) => kindOf(q.type) === kind) : offered;
   const freeChips = kind === null || kind === "free" ? free : [];
 

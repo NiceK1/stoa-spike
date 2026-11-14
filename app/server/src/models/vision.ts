@@ -298,8 +298,20 @@ export class GeminiApiVision implements VisionModel {
   }
 }
 
-/** VISION_PROVIDER picks the provider: "claude-cli" (default, local), "anthropic-api", or "gemini-api". */
+/**
+ * No vision model: everything runs on this machine, image plans are answered by the local detectors alone.
+ * A question that only a vision model can answer fails with a message saying so.
+ */
+export class NoVision implements VisionModel {
+  readonly id = "none";
+  async ask(): Promise<VisionResult> {
+    throw new Error("This question needs a vision model, and the app is running with local models only (VISION_PROVIDER=none).");
+  }
+}
+
+/** VISION_PROVIDER picks the provider: "claude-cli" (default, local), "anthropic-api", "gemini-api", or "none" (local detectors only). */
 export function createVision(): VisionModel {
+  if (process.env.VISION_PROVIDER === "none") return new NoVision();
   if (process.env.VISION_PROVIDER === "anthropic-api") return new AnthropicApiVision();
   if (process.env.VISION_PROVIDER === "gemini-api") return new GeminiApiVision();
   return new ClaudeCliVision();
@@ -309,9 +321,11 @@ export function createVision(): VisionModel {
  * The model that turns a free-form question into a structured call. PLANNER_MODEL names it; a small model is enough,
  * and without the variable the vision model does this too.
  */
-export function createPlanner(): VisionModel {
+export function createPlanner(): VisionModel | null {
   const model = process.env.PLANNER_MODEL;
   const provider = process.env.PLANNER_PROVIDER ?? process.env.VISION_PROVIDER;
+  // Without a model, questions outside the fixed wording are not understood rather than failing.
+  if (provider === "none") return null;
   
   if (!model && !provider) return createVision();
   

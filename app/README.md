@@ -127,7 +127,7 @@ The server reads `../.env` and the environment:
 | Variable | Purpose |
 |---|---|
 | `STOA_DATASET` | dataset folder, default `../dataset` |
-| `VISION_PROVIDER` | `claude-cli` (default, the local `claude` CLI) or `anthropic-api` (needs `ANTHROPIC_API_KEY`) |
+| `VISION_PROVIDER` | `claude-cli` (default, the local `claude` CLI), `anthropic-api` (needs `ANTHROPIC_API_KEY`), `gemini-api` (needs `GEMINI_API_KEY`), or `none`: no cloud model at all, image plans answered by the detectors in `../models` (use with `RASTER_DETECTOR_TARGETS=all` and `RASTER_SYMBOL_VOTE=off`); questions only a vision model can answer then return an error |
 | `VISION_MODEL` | model id, default `claude-sonnet-5-5` |
 | `PLANNER_MODEL` | model that maps free-form questions onto operations, default the vision model; `PLANNER_EFFORT` sets its effort with the CLI |
 | `DETECTOR` | `onnx` (our weights in `../models`, the default when present), `roboflow` (needs `ROBOFLOW_API_KEY`), `none` |

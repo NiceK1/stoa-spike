@@ -85,7 +85,11 @@ function sample(): QuestionRow[] {
 }
 
 const vision = counted(createVision());
-const planner = counted(createPlanner());
+function fail(message: string): never {
+  throw new Error(message);
+}
+
+const planner = counted(createPlanner() ?? fail("eval-paraphrase measures the planner, which VISION_PROVIDER=none turns off"));
 const deps: Deps = { vision, planner, detector: createDetector(), fileUrl: () => "" };
 
 const rows = sample();

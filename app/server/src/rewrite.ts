@@ -29,6 +29,8 @@ const SCHEMA = {
 };
 
 export async function toEnglish(question: string, text: VisionModel): Promise<string | null> {
+  // Local-only mode has no model to translate with; the question is then tried as written.
+  if (text.id === "none") return null;
   const { output } = await text.ask({ system: SYSTEM, schema: SCHEMA, prompt: question });
   const rewritten = String(output.question ?? "").trim();
   return rewritten && rewritten !== question ? rewritten : null;
