@@ -338,81 +338,87 @@ export function App() {
               )}
             </header>
 
-            {error && <div className="notice" role="alert">{error}</div>}
-            {pending ? (
-              <div className="placard pending" aria-live="polite">
-                <div className="figure"><span className="spinner" /></div>
-                <div className="facts">
-                  <p className="asked">{pending}</p>
-                  <p className="time">Reading the drawing… vector drawings answer at once, images take up to 20 s.</p>
-                </div>
-              </div>
-            ) : reply && <Result reply={reply} />}
-
-            {evidence ? (
-              <Viewer
-                evidence={evidence}
-                title={drawing.kind === "dataset" ? title(drawing.path) : drawing.name}
-                file={drawing.kind === "dataset" ? fileName(drawing.path) : drawing.name}
-                type={extension(drawing.kind === "dataset" ? drawing.path : drawing.name)}
-              />
-            ) : (
-              <div className="empty">
-                <p>{preview === "loading" ? "Loading the drawing…" : "No flat preview for this file. Ask a question and the matching plan appears here."}</p>
-              </div>
-            )}
-
-            <section className="ask">
-              {(known.length > 0 || free.length > 0) && (
-                <div className="suggest">
-                  <div className="tabs" role="tablist" aria-label="Suggested questions">
-                    <span className="label">Try</span>
-                    <button role="tab" aria-selected={kind === null} className={kind === null ? "tab on" : "tab"} onClick={() => setKind(null)}>
-                      All <span className="count">{offered.length + free.length}</span>
-                    </button>
-                    {free.length > 0 && (
-                      <button role="tab" aria-selected={kind === "free"} className={kind === "free" ? "tab on" : "tab"} onClick={() => setKind("free")}>
-                        Your words <span className="count">{free.length}</span>
-                      </button>
-                    )}
-                    {kinds.map((k) => (
-                      <button
-                        key={k.type} role="tab" aria-selected={kind === k.type} className={kind === k.type ? "tab on" : "tab"}
-                        onClick={() => setKind(k.type)}
-                      >
-                        {k.label} <span className="count">{k.n}</span>
-                      </button>
-                    ))}
-                    {english.length > 0 && english.length < known.length && (
-                      <label className="toggle">
-                        <input type="checkbox" checked={translations} onChange={(e) => setTranslations(e.target.checked)} />
-                        Translations
-                      </label>
-                    )}
+            {/* The drawing takes the full height; the answer and the questions sit beside it, like a properties panel. */}
+            <div className="workspace">
+              <div className="drawing-area">
+                {evidence ? (
+                  <Viewer
+                    evidence={evidence}
+                    title={drawing.kind === "dataset" ? title(drawing.path) : drawing.name}
+                    file={drawing.kind === "dataset" ? fileName(drawing.path) : drawing.name}
+                    type={extension(drawing.kind === "dataset" ? drawing.path : drawing.name)}
+                  />
+                ) : (
+                  <div className="empty">
+                    <p>{preview === "loading" ? "Loading the drawing…" : "No flat preview for this file. Ask a question and the matching plan appears here."}</p>
                   </div>
-                  <div className="chips">
-                    {freeChips.map((q) => (
-                      <button key={q} className="chip free" onClick={() => ask(q)} disabled={pending !== null} title="Free wording, outside the dataset's templates">
-                        {q}
-                      </button>
-                    ))}
-                    {chips.map((k, i) => (
-                      <button key={i} className="chip" onClick={() => ask(k.question)} disabled={pending !== null} title={k.question}>
-                        {k.question}
-                      </button>
-                    ))}
+                )}
+              </div>
+              <aside className="inspector" aria-label="Answer and questions">
+                {error && <div className="notice" role="alert">{error}</div>}
+                {pending ? (
+                  <div className="placard pending" aria-live="polite">
+                    <div className="figure"><span className="spinner" /></div>
+                    <div className="facts">
+                      <p className="asked">{pending}</p>
+                      <p className="time">Reading the drawing… vector drawings answer at once, images take up to 20 s.</p>
+                    </div>
                   </div>
-                </div>
-              )}
-              <form className="composer" onSubmit={(e) => { e.preventDefault(); ask(question); }}>
-                <textarea
-                  ref={composer} rows={1} value={question} onChange={(e) => setQuestion(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(question); } }}
-                  placeholder="Ask about this drawing, e.g. How many windows are there?" aria-label="Question"
-                />
-                <button className="primary" disabled={pending !== null || !question.trim()}>Ask</button>
-              </form>
-            </section>
+                ) : reply && <Result reply={reply} />}
+
+                <section className="ask">
+                  {(known.length > 0 || free.length > 0) && (
+                    <div className="suggest">
+                      <div className="tabs" role="tablist" aria-label="Suggested questions">
+                        <span className="label">Try</span>
+                        <button role="tab" aria-selected={kind === null} className={kind === null ? "tab on" : "tab"} onClick={() => setKind(null)}>
+                          All <span className="count">{offered.length + free.length}</span>
+                        </button>
+                        {free.length > 0 && (
+                          <button role="tab" aria-selected={kind === "free"} className={kind === "free" ? "tab on" : "tab"} onClick={() => setKind("free")}>
+                            Your words <span className="count">{free.length}</span>
+                          </button>
+                        )}
+                        {kinds.map((k) => (
+                          <button
+                            key={k.type} role="tab" aria-selected={kind === k.type} className={kind === k.type ? "tab on" : "tab"}
+                            onClick={() => setKind(k.type)}
+                          >
+                            {k.label} <span className="count">{k.n}</span>
+                          </button>
+                        ))}
+                        {english.length > 0 && english.length < known.length && (
+                          <label className="toggle">
+                            <input type="checkbox" checked={translations} onChange={(e) => setTranslations(e.target.checked)} />
+                            Translations
+                          </label>
+                        )}
+                      </div>
+                      <div className="chips">
+                        {freeChips.map((q) => (
+                          <button key={q} className="chip free" onClick={() => ask(q)} disabled={pending !== null} title="Free wording, outside the dataset's templates">
+                            {q}
+                          </button>
+                        ))}
+                        {chips.map((k, i) => (
+                          <button key={i} className="chip" onClick={() => ask(k.question)} disabled={pending !== null} title={k.question}>
+                            {k.question}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <form className="composer" onSubmit={(e) => { e.preventDefault(); ask(question); }}>
+                    <textarea
+                      ref={composer} rows={1} value={question} onChange={(e) => setQuestion(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(question); } }}
+                      placeholder="Ask your own question" aria-label="Question"
+                    />
+                    <button className="primary" disabled={pending !== null || !question.trim()}>Ask</button>
+                  </form>
+                </section>
+              </aside>
+            </div>
           </>
         )}
       </main>
