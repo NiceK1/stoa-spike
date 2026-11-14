@@ -37,6 +37,30 @@ per question (next section). Vector answers are exact and labelled so; model ans
 Models sit behind two interfaces, `VisionModel` (`server/src/models/vision.ts`) and `Detector`
 (`server/src/models/detector.ts`), so a provider can be replaced without touching the pipelines.
 
+### The source of an answer
+
+Under the value the app shows a Source block of three lines. They come from the `source` field of the answer
+(`AnswerSource` in `server/src/types.ts`), which every pipeline fills where it computes the value:
+
+| Line | What it says | Example |
+|---|---|---|
+| Understood by | the interpreter model with the reading it returned; or the keyword parser with the reason no model read the question (bulk mode, no interpreter configured, its call failed); or the stated answer type, when that left nothing to interpret | `claude-cli:claude-haiku-5-5` as "net area of apartment A" |
+| Calculated by | every script or model that computed, counted, read or worded the value, each with what it did when several contributed; with no value, why nothing was calculated and what it would have taken | `CAD geometry script`; or `IFC facts script (web-ifc)`: extracted the model's facts as text, with `claude-cli:claude-sonnet-5-5`: wrote the answer from those facts |
+| From | the file the value was taken from (the vector twin, when the question was asked about a PDF or PNG of it) and what in it was used | `site3387_bldg5238_floor23498.dxf`: indoor room outlines inside unit A: 9 room outlines on layer ROOM_OUTLINE |
+
+Each name carries a tag for its tier, so a reader sees at a glance whether a model outside was involved:
+
+| Tag | `tier` | Who |
+|---|---|---|
+| our script | `script` | the keyword parser, the CAD geometry script, the IFC scripts (model records, stored quantities, geometry, facts), the sheet text script |
+| our model | `own-model` | the ONNX detectors, by model name, and the local Gemma interpreter |
+| self-hosted model | `self-hosted-model` | a model behind `VISION_PROVIDER=openai-compatible` |
+| external model | `external-model` | `claude-cli`, `anthropic-api`, `gemini-api`, the Roboflow detector, and any provider the app does not know |
+
+An answer with no value says in `needed` why nothing was calculated and what it would have taken; the block prints it
+as "Not calculated", and the note under the block then leaves that sentence out. The `method` sentence of an answer
+says the same as the source in one line; the client shows it when a server sends no `source`.
+
 ### Local first, the external vision model as the fallback
 
 Nothing our own models can do is sent to an external vision model. On a raster drawing the interpreter's call decides
@@ -50,10 +74,12 @@ the tier (`server/src/solvers/raster.ts`):
 | `count_other` (stairs, wardrobes, fireplaces) | external vision model | the detectors do not know the kind |
 | `read` (a text, a dimension, a schedule entry) | external vision model | the detectors count items and cannot read |
 
-The method line of every raster answer names the tier in plain words: `window symbols counted by our detectors
-(floorplan-symbols-yolo11l-1280), no external model`, against `staircases read by the external vision model
-claude-cli:claude-sonnet-5-5 because our detectors do not know this kind of item`. When several kinds are asked, each
-part says its own tier.
+The source of every raster answer names and tags the tier, and its `method` sentence says it in plain words: `window
+symbols counted by our detectors (floorplan-symbols-yolo11l-1280), no external model`, against `staircases read by the
+external vision model claude-cli:claude-sonnet-5-5 because our detectors do not know this kind of item`. A fallback
+model we host ourselves (`VISION_PROVIDER=openai-compatible`) is called the self-hosted vision model there, and a
+detector hosted elsewhere (`DETECTOR=roboflow`) an external detector. When several kinds are asked, each part says its
+own tier.
 
 With no external model configured (`VISION_PROVIDER=none`) a question of the fallback tier is not an error: the answer
 has no value, and its note says why, for example `No answer: this question needs an external vision model, because our
@@ -95,12 +121,12 @@ What the code does with a call:
   external vision model from the full question, because the detectors count on the whole drawing only; the method
   line says so.
 
-The method line of every answer says how the question was read and by whom, for example
-`understood as "count doors in apartment A" by claude-cli:claude-haiku-5-5; door symbols on layer DOOR; those lying
-in or reaching the outline of one of the 11 rooms in apartment A`.
+The first line of every answer's source says how the question was read and by whom, and the `method` sentence starts
+with the same, for example `understood as "count doors in apartment A" by claude-cli:claude-haiku-5-5; door symbols on
+layer DOOR; those lying in or reaching the outline of one of the 11 rooms in apartment A`.
 
-The keyword parsers read a question on their own in two cases only, and the method line then starts with
-`read by the keyword parser (...)`:
+The keyword parsers read a question on their own in two cases only. The source then names the keyword parser with
+the reason, and the method sentence starts with `read by the keyword parser (...)`:
 
 - **Bulk mode**, `INTERPRETER=templates` or `--interpreter templates` in the evaluation scripts: free, and how the
   dataset's own wording is scored in the tables below. `npm run eval` refuses to send more than 200 questions to the

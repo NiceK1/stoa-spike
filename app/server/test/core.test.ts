@@ -3,6 +3,7 @@ import { renderPlanSvg } from "../src/evidence.js";
 import { contains, polygonArea } from "../src/geometry.js";
 import { inferType, parseTakeoff } from "../src/questions.js";
 import { isCorrect } from "../src/scoring.js";
+import { tierOf } from "../src/source.js";
 import { Plan, parseDxf } from "../src/solvers/dxf.js";
 import { rasterTarget, rasterTargets, readByKeywords } from "../src/solvers/raster.js";
 import type { Polygon } from "../src/types.js";
@@ -28,6 +29,21 @@ describe("scoring", () => {
     expect(isCorrect("area", 100, 102.1)).toBe(false);
     expect(isCorrect("volume", 100, null)).toBe(false);
     expect(isCorrect("text", "office", "anything")).toBeNull();
+  });
+});
+
+describe("the tier of a model in an answer's source", () => {
+  it("follows the provider: our own weights, a model we host, or a model outside", () => {
+    expect(tierOf("onnx:floorplan-symbols-yolo11l-1280+floorplan-yolo11m-1280")).toBe("own-model");
+    expect(tierOf("gemma-local:interpreter-q8_0")).toBe("own-model");
+    expect(tierOf("openai-compatible:gemma-4-31b:min1024")).toBe("self-hosted-model");
+    for (const id of ["claude-cli:claude-sonnet-5-5", "anthropic-api:claude-haiku-5-5", "gemini-api:gemini-4-hydrogen", "roboflow:floor-plans/3"]) {
+      expect(tierOf(id), id).toBe("external-model");
+    }
+  });
+
+  it("takes a provider it does not know for an external one, never for ours", () => {
+    expect(tierOf("some-new-provider:model")).toBe("external-model");
   });
 });
 

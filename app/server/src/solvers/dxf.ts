@@ -3,9 +3,11 @@
  * Layers: ROOM_OUTLINE, UNIT_OUTLINE, WALL, DOOR, WINDOW, FIXTURE, ROOM_TEXT.
  */
 import { readFile } from "node:fs/promises";
+import { basename } from "node:path";
 import { contains, distanceTo, mid, polygonArea } from "../geometry.js";
 import type { Intent } from "../questions.js";
-import type { Point, Polygon } from "../types.js";
+import { SCRIPTS, script } from "../source.js";
+import type { Point, Polygon, Solved } from "../types.js";
 
 interface Entity {
   type: string;
@@ -245,6 +247,25 @@ export class Plan {
     return this.symbols(kind).shapes.filter((shape) => outlines.some((outline) => [...shape, mid(shape)].some((point) => distanceTo(outline, point) <= TOUCH)));
   }
 
+  /** How many of `shapes` lie on each layer of this plan, e.g. "5 room outlines on layer ROOM_OUTLINE". */
+  drawnOn(shapes: Polygon[]): string {
+    const layers: [string, string, Polygon[]][] = [
+      ["room outline", "ROOM_OUTLINE", this.roomOutlines],
+      ["apartment outline", "UNIT_OUTLINE", this.unitOutlines],
+      ["door symbol", "DOOR", this.doors],
+      ["window symbol", "WINDOW", this.windows],
+      ["sanitary symbol", "FIXTURE", [...this.toilets, ...this.washbasins, ...this.bathtubs, ...this.showers]],
+    ];
+    return layers
+      .map(([noun, layer, drawn]) => {
+        const onLayer = new Set(drawn);
+        const n = shapes.filter((shape) => onLayer.has(shape)).length;
+        return n > 0 ? `${n} ${noun}${n === 1 ? "" : "s"} on layer ${layer}` : "";
+      })
+      .filter(Boolean)
+      .join(", ");
+  }
+
   answer(intent: Intent): TakeoffResult | null {
     const { kind } = intent;
     if (kind === "count_rooms_labelled" && intent.name) {
@@ -303,6 +324,14 @@ const plans = new Map<string, Promise<Plan>>();
 export function loadPlan(dxfPath: string): Promise<Plan> {
   if (!plans.has(dxfPath)) plans.set(dxfPath, readFile(dxfPath, "utf8").then((source) => new Plan(parseDxf(source))));
   return plans.get(dxfPath)!;
+}
+
+/** The source of a value this solver computed: `what` was measured, and the shapes behind it by layer. */
+export function takeoffSource(dxfPath: string, plan: Plan, what: string, shapes: Polygon[]): Solved["source"] {
+  const drawn = plan.drawnOn(shapes);
+  // "door symbols on layer DOOR" says nothing that "2 door symbols on layer DOOR" does not.
+  const used = drawn && /^\w+ symbols on layer \w+(?:, \w+ symbols on layer \w+)*$/.test(what) ? drawn : [what, drawn].filter(Boolean).join(": ");
+  return { calculatedBy: [script(SCRIPTS.dxf)], from: { file: basename(dxfPath), used } };
 }
 
 /** True when the file uses the layer names this solver understands. */

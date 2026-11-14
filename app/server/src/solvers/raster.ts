@@ -6,12 +6,14 @@
  * the external one; without an external model such a question gets an answer with no value that says so.
  * A counted answer comes with numbered marks on the image, so a person can check each counted item.
  */
+import { basename } from "node:path";
 import sharp from "sharp";
 import type { Detector } from "../models/detector.js";
 import type { VisionModel } from "../models/vision.js";
 import { markedSentence, type RasterKind, type RasterReading } from "../planner.js";
 import { isLocate, isPlainRequest } from "../questions.js";
-import type { Answer, Mark, QuestionType } from "../types.js";
+import { model, tierOf } from "../source.js";
+import type { Answer, Mark, QuestionType, Solved } from "../types.js";
 
 export interface RasterDeps {
   vision: VisionModel;
@@ -20,6 +22,8 @@ export interface RasterDeps {
   imageUrl: string;
   /** Use the detector for the classes it offers. Off to measure the vision model alone. */
   useDetector?: boolean;
+  /** The drawing as the user knows it, when the image is a rendering or a turned copy of it. */
+  file?: string;
 }
 
 export interface Target {
@@ -225,16 +229,21 @@ const WHY = {
   unrecognised: "our detectors do not recognise this drawing, so their count would not be reliable",
 };
 
-const external = (vision: VisionModel, what: string, why: string) => `${what} read by the external vision model ${vision.id} because ${why}`;
+/** The fallback, named by its tier: a model we host ourselves is not an external one. */
+const fallback = (vision: VisionModel, what: string, why: string) =>
+  `${what} read by the ${tierOf(vision.id) === "self-hosted-model" ? "self-hosted" : "external"} vision model ${vision.id} because ${why}`;
 
 /** The answer to a question that only an external vision model could answer, when none is configured. */
-function unanswered(what: string, why: string, evidence: Answer["evidence"], kind?: string): Answer {
+function unanswered(file: string, what: string, why: string, evidence: Answer["evidence"], kind?: string): Solved {
   return {
     value: null, pipeline: "none", exact: false, kind, evidence,
     method: `${what} not counted or read: only an external vision model could, because ${why}, and none is configured`,
     note: `No answer: this question needs an external vision model, because ${why}, and the app is running with our local models only (VISION_PROVIDER=none).`,
+    source: { calculatedBy: [], needed: `an external vision model is needed, because ${why}; none is configured (VISION_PROVIDER=none)`, from: { file, used: "nothing" } },
   };
 }
+
+const several = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : noun.endsWith("x") ? "es" : "s"}`;
 
 /**
  * Rows top to bottom, left to right within a row, so the numbers on the drawing read like text.
@@ -257,8 +266,9 @@ const ROW = 0.03;
  * Answers a question as it was read: a count of known kinds on the whole drawing, a located count by the vision model
  * (other items, or known kinds limited to a part of the drawing), or a free reading.
  */
-export async function solveRaster(imagePath: string, question: string, reading: RasterReading, deps: RasterDeps): Promise<Answer> {
+export async function solveRaster(imagePath: string, question: string, reading: RasterReading, deps: RasterDeps): Promise<Solved> {
   const { call, locate, type } = reading;
+  const file = deps.file ?? basename(imagePath);
   const { width = 0, height = 0 } = await sharp(imagePath).metadata();
   const image = (marks: Mark[], caption: string) => ({ kind: "image" as const, imageUrl: deps.imageUrl, width, height, marks, caption });
   const toMarks = (items: Located[]): Mark[] =>
@@ -266,12 +276,13 @@ export async function solveRaster(imagePath: string, question: string, reading: 
 
   const noExternal = deps.vision.id === "none";
   if (call.operation === "read") {
-    if (noExternal) return unanswered("the drawing was", WHY.read, image([], "Source drawing"));
+    if (noExternal) return unanswered(file, "the drawing was", WHY.read, image([], "Source drawing"));
     const { output } = await deps.vision.ask({ imagePath, system: FREE_SYSTEM, prompt: question, schema: FREE_SCHEMA });
     const unmarked = locate ? "Nothing is marked: the answer was read from the drawing as a whole, not from items that can be pointed at." : "";
     return {
       value: type === "text" ? output.answer : (output.value ?? output.answer), unit: output.unit ?? undefined, pipeline: "vision-model", exact: false,
-      method: external(deps.vision, "the drawing", WHY.read), note: [output.explanation, unmarked].filter(Boolean).join(" ") || undefined, evidence: image([], "Source drawing"),
+      method: fallback(deps.vision, "the drawing", WHY.read), note: [output.explanation, unmarked].filter(Boolean).join(" ") || undefined, evidence: image([], "Source drawing"),
+      source: { calculatedBy: [model(deps.vision.id, `read the answer off the drawing, because ${WHY.read}`)], from: { file, used: "the drawing image as a whole" } },
     };
   }
 
@@ -279,20 +290,24 @@ export async function solveRaster(imagePath: string, question: string, reading: 
   if (call.operation === "count_other" || !call.whole) {
     const subject = call.operation === "count_other" ? call.items : `${targets.map((t) => t.plural).join(" and ")} in the part of the drawing the question names`;
     const why = call.operation === "count_other" ? WHY.other : WHY.part;
-    if (noExternal) return unanswered(`${subject} were`, why, image([], "Source drawing"), "other");
+    if (noExternal) return unanswered(file, `${subject} were`, why, image([], "Source drawing"), "other");
     const { output } = await deps.vision.ask({ imagePath, system: COUNT_SYSTEM, prompt: question, schema: COUNT_SCHEMA });
     const items: Located[] = output.items ?? [];
     return {
       value: items.length > 0 ? items.length : output.count, unit: "count", pipeline: "vision-model", exact: false, kind: "other",
-      method: external(deps.vision, subject, why),
+      method: fallback(deps.vision, subject, why),
       note: locate ? markedSentence(items.length, subject) : undefined,
       evidence: image(toMarks(items), "Each number is one counted item; positions are the model's estimate"),
+      source: {
+        calculatedBy: [model(deps.vision.id, `counted the ${subject}, because ${why}`)],
+        from: { file, used: `the drawing image; ${several(items.length, "position")} the model pointed at` },
+      },
     };
   }
 
-  const parts: { target: Target; answer: Answer; marks: Mark[] }[] = [];
+  const parts: { target: Target; answer: Solved; marks: Mark[] }[] = [];
   for (const target of targets) {
-    const answer = await countTarget(imagePath, target, deps, image, toMarks);
+    const answer = await countTarget(imagePath, file, target, deps, image, toMarks);
     parts.push({ target, answer, marks: answer.evidence?.kind === "image" ? answer.evidence.marks : [] });
   }
   const marked = (count: number, subject: string) =>
@@ -305,6 +320,12 @@ export async function solveRaster(imagePath: string, question: string, reading: 
     return answer.value === null ? answer : { ...answer, note: locate ? marked(marks.length, target.plural) : undefined };
   }
 
+  // Each kind keeps its own contributor and data, so the source shows which kind came from where.
+  const source: Solved["source"] = {
+    calculatedBy: parts.flatMap((part) => part.answer.source.calculatedBy),
+    needed: [...new Set(parts.flatMap((part) => part.answer.source.needed ?? []))].join("; ") || undefined,
+    from: { file, used: [...new Set(parts.filter((part) => part.answer.value !== null).map((part) => part.answer.source.from.used))].join("; ") || "nothing" },
+  };
   const open = parts.filter((part) => part.answer.value === null);
   if (open.length > 0) {
     const counted = parts.filter((part) => part.answer.value !== null);
@@ -315,6 +336,7 @@ export async function solveRaster(imagePath: string, question: string, reading: 
       method: parts.map((part) => part.answer.method).join("; "),
       note: [sofar, `Not counted: ${open.map((part) => part.target.plural).join(" and ")}.`, ...new Set(open.map((part) => part.answer.note))].filter(Boolean).join(" "),
       evidence: image(marks.map((mark, i) => ({ ...mark, n: i + 1 })), "Each mark is one counted item, labelled with its kind"),
+      source,
     };
   }
 
@@ -328,6 +350,7 @@ export async function solveRaster(imagePath: string, question: string, reading: 
     method: parts.map((part) => part.answer.method).join("; "),
     note: locate ? `${consists} ${marked(marks.length, subject)}` : consists,
     evidence: image(marks.map((mark, i) => ({ ...mark, n: i + 1 })), "Each mark is one counted item, labelled with its kind"),
+    source,
   };
 }
 
@@ -340,9 +363,9 @@ export async function solveRaster(imagePath: string, question: string, reading: 
  * symbols only and leaves room types and storeys to the vision model, for comparison; "none" switches them off.
  */
 async function countTarget(
-  imagePath: string, target: Target, deps: RasterDeps,
+  imagePath: string, file: string, target: Target, deps: RasterDeps,
   image: (marks: Mark[], caption: string) => Answer["evidence"], toMarks: (items: Located[]) => Mark[],
-): Promise<Answer> {
+): Promise<Solved> {
   const { height = 0 } = await sharp(imagePath).metadata();
   // Without an external model there is nobody to leave room types to.
   const scope = deps.useDetector === false ? "none" : deps.vision.id === "none" ? "all" : (process.env.RASTER_DETECTOR_TARGETS ?? "all");
@@ -363,29 +386,40 @@ async function countTarget(
         scanned.filter((d) => target.detectorClasses.includes(d.cls) && d.score >= detector.thresholds[d.cls]),
         (d) => ({ x: d.x + d.w / 2, y: d.y + d.h / 2 }), height * ROW,
       );
-      const by = [...new Set(target.detectorClasses.map((cls) => detector.nameFor?.(cls) ?? detector.id.split(":")[1]))].join(" and ");
+      // A detector that is not our own weights (a hosted one) is named with its provider, like any outside model.
+      const ours = tierOf(detector.id) === "own-model";
+      const by = ours ? [...new Set(target.detectorClasses.map((cls) => detector.nameFor?.(cls) ?? detector.id.split(":")[1]))].join(" and ") : detector.id;
       const what = target.id === "floor" ? "storey plans" : `${names} ${target.symbol ? "symbols" : "rooms"}`;
       return {
         value: boxes.length, unit: "count", pipeline: "detector", exact: false, kind: target.id,
-        method: `${what} counted by our detectors (${by}), no external model`,
+        method: ours ? `${what} counted by our detectors (${by}), no external model` : `${what} counted by the external detector ${by}`,
         evidence: image(
           boxes.map((d, i) => ({ n: i + 1, x: d.x, y: d.y, w: d.w, h: d.h, label: `${d.cls.replace("_", " ")}, ${Math.round(d.score * 100)}% confidence` })),
           `Each box is one counted ${names}`,
         ),
+        source: {
+          calculatedBy: [model(detector.id, `counted the ${target.plural}`, by)],
+          from: { file, used: `${several(boxes.length, "detection box")} of class ${target.detectorClasses.join(" and ")} on the drawing image` },
+        },
       };
     }
     why = WHY.unrecognised;
   }
 
-  if (deps.vision.id === "none") return unanswered(`${target.plural} were`, why, image([], "Source drawing"), target.id);
+  if (deps.vision.id === "none") return unanswered(file, `${target.plural} were`, why, image([], "Source drawing"), target.id);
   const { output } = await deps.vision.ask({ imagePath, system: inventorySystem(), schema: INVENTORY_SCHEMA, prompt: INVENTORY_PROMPT });
-  const method = external(deps.vision, target.plural, why);
+  const method = fallback(deps.vision, target.plural, why);
+  const calculatedBy = [model(deps.vision.id, `counted the ${target.plural}, because ${why}`)];
   if (target.id === "floor") {
-    return { value: output.floors, unit: "count", pipeline: "vision-model", exact: false, kind: target.id, method, evidence: image([], "Source drawing") };
+    return {
+      value: output.floors, unit: "count", pipeline: "vision-model", exact: false, kind: target.id, method, evidence: image([], "Source drawing"),
+      source: { calculatedBy, from: { file, used: "the drawing image as a whole" } },
+    };
   }
   const points: Located[] = target.categories.flatMap((category) => output[category] ?? []);
   return {
     value: points.length, unit: "count", pipeline: "vision-model", exact: false, kind: target.id, method,
     evidence: image(toMarks(points), "Each number is one counted item; positions are the model's estimate"),
+    source: { calculatedBy, from: { file, used: `the drawing image; ${several(points.length, "position")} in the model's inventory of the drawing` } },
   };
 }

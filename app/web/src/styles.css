@@ -171,6 +171,24 @@ button { cursor: pointer; }
 .tag { display: inline-block; margin-right: 8px; padding: 1px 8px; border-radius: 3px; color: #fff; font: 600 13px/18px var(--display); letter-spacing: 0.02em; }
 .tag.exact { background: var(--exact); }
 .tag.estimate { background: var(--estimate); }
+/* Source of an answer: who understood the question, what calculated the value, from which data.
+   The tier tags are outlined for our own work and filled amber for a model outside, so that one stands out. */
+.source {
+  display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 5px 12px; margin: 8px 0 10px; padding: 9px 0;
+  border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); font-size: 14px; line-height: 1.4;
+}
+.source dt { color: var(--faint); font: 500 13px/20px var(--display); letter-spacing: 0.04em; text-transform: uppercase; }
+.source dd { margin: 0; min-width: 0; color: var(--soft); overflow-wrap: anywhere; }
+.source dd b { color: var(--ink); font-weight: 600; }
+.source .by + .by { margin-top: 4px; }
+.tier {
+  display: inline-block; margin-right: 6px; padding: 0 5px; border: 1px solid currentColor; border-radius: 3px;
+  font: 600 11px/16px var(--display); letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; vertical-align: 1px;
+}
+.tier.script { color: var(--exact); }
+.tier.own-model { color: var(--brand); }
+.tier.self-hosted-model { color: var(--soft); }
+.tier.external-model { color: #fff; background: var(--estimate); border-color: var(--estimate); }
 .check { font-weight: 600; }
 .check.ok { color: var(--exact); }
 .check.off { color: var(--off); }

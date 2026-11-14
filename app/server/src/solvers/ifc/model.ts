@@ -120,7 +120,7 @@ export class IfcModel {
   private origin: [number, number] | null = null;
   private typeOf: Map<number, number> | null = null;
 
-  constructor(private readonly api: WebIFC.IfcAPI, private readonly modelId: number) {
+  constructor(private readonly api: WebIFC.IfcAPI, private readonly modelId: number, /** Name of the file the model was read from. */ readonly file = "") {
     this.schema = api.GetModelSchema(modelId);
     [this.lengthScale, this.areaScale, this.volumeScale] = this.readUnits();
 
@@ -545,7 +545,7 @@ async function openModel(path: string): Promise<IfcModel> {
   let modelId = -1;
   try {
     modelId = api.OpenModel(data, { COORDINATE_TO_ORIGIN: false });
-    return new IfcModel(api, modelId);
+    return new IfcModel(api, modelId, basename(path));
   } catch (cause) {
     if (modelId >= 0) api.CloseModel(modelId);
     throw new Error(`${basename(path)} could not be read as an IFC model`, { cause });

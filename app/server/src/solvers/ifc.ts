@@ -4,7 +4,8 @@
  */
 import { basename } from "node:path";
 import type { IfcCall, IfcMenu } from "../planner.js";
-import type { Answer, Evidence, QuestionType } from "../types.js";
+import { SCRIPTS, script } from "../source.js";
+import type { Contributor, Evidence, QuestionType, Solved } from "../types.js";
 import { planEvidence, type StoreyGroup } from "./ifc/drawing.js";
 import { answerText, roomsOf, type Room } from "./ifc/facts.js";
 import { longSide } from "./ifc/footprint.js";
@@ -66,7 +67,7 @@ const loose = (name: string) => name.normalize("NFKC").toLowerCase().replace(/\s
 const plural = (n: number, kind: ElementKind) => `${n} ${NOUNS[kind][n === 1 ? 0 : 1]}`;
 
 /** Answers a take-off question from an IFC model, or returns null when the question is not understood. */
-export async function solveIfc(ifcPath: string, question: string, qtype: QuestionType): Promise<Answer | null> {
+export async function solveIfc(ifcPath: string, question: string, qtype: QuestionType): Promise<Solved | null> {
   const intent = parseIfcQuestion(question, qtype);
   if (!intent) return null;
   const model = await loadModel(ifcPath);
@@ -79,13 +80,34 @@ export async function solveIfc(ifcPath: string, question: string, qtype: Questio
   }
 }
 
-function result(kind: string, value: number, unit: string, method: string, evidence?: Evidence, note?: string): Answer {
-  return { value, unit, pipeline: PIPELINE, exact: true, kind, method, evidence, note };
+/** What a value was taken from in the model, and by which of our scripts; the model's records when none is named. */
+function taken(model: IfcModel, used: string, ...by: Contributor[]): Solved["source"] {
+  return { calculatedBy: by.length > 0 ? by : [script(SCRIPTS.ifcRecords)], from: { file: model.file, used } };
+}
+
+/**
+ * The scripts behind the net floor areas of these rooms. A room's area is the quantity its IfcSpace stores, else its
+ * plan footprint, so one answer can draw on both; rooms without an area are not counted.
+ */
+function areaBy(model: IfcModel, rooms: number[]): Contributor[] {
+  const areas = rooms.flatMap((id) => model.floorArea(id) ?? []);
+  const stored = areas.filter((area) => area.stored).length;
+  const measured = areas.length - stored;
+  if (measured === 0) return stored > 0 ? [script(SCRIPTS.ifcStored, areas.length === 1 ? "the NetFloorArea of the room" : "the NetFloorArea of each room")] : [];
+  if (stored === 0) return [script(SCRIPTS.ifcGeometry, areas.length === 1 ? "measured the room's plan footprint" : "measured each room's plan footprint")];
+  return [
+    script(SCRIPTS.ifcStored, `the NetFloorArea of ${stored} of the ${areas.length} rooms`),
+    script(SCRIPTS.ifcGeometry, `measured the plan footprint of the other ${measured}`),
+  ];
+}
+
+function result(source: Solved["source"], kind: string, value: number, unit: string, method: string, evidence?: Evidence, note?: string): Solved {
+  return { value, unit, pipeline: PIPELINE, exact: true, kind, method, evidence, note, source };
 }
 
 /** The question was understood but the model cannot answer it; says why instead of handing over to a guessing pipeline. */
-function unanswered(kind: string, method: string, evidence?: Evidence): Answer {
-  return { value: null, pipeline: PIPELINE, exact: true, kind, method, evidence };
+function unanswered(model: IfcModel, kind: string, method: string, evidence?: Evidence): Solved {
+  return { value: null, pipeline: PIPELINE, exact: true, kind, method, evidence, source: { calculatedBy: [], needed: method, from: { file: model.file, used: "nothing" } } };
 }
 
 /** The storey with this name; without a name, the storey whose name appears in the question. */
@@ -96,9 +118,9 @@ function findStorey(model: IfcModel, name: string | null, question = ""): Storey
   return model.storeys.filter((storey) => mentions(question, storey.name)).sort((a, b) => b.name.length - a.name.length)[0];
 }
 
-function noStorey(kind: string, model: IfcModel, name: string | null): Answer {
+function noStorey(kind: string, model: IfcModel, name: string | null): Solved {
   const names = model.storeys.map((storey) => `'${storey.name}'`).join(", ");
-  return unanswered(kind, name === null ? `the question names no storey; the model has ${names}` : `the model has no storey named '${name}'; it has ${names}`);
+  return unanswered(model, kind, name === null ? `the question names no storey; the model has ${names}` : `the model has no storey named '${name}'; it has ${names}`);
 }
 
 /**
@@ -122,7 +144,7 @@ function findRooms(model: IfcModel, storey: Storey | undefined, label: string): 
   return [];
 }
 
-function roomArea(model: IfcModel, room: string, storeyName: string | null): Answer | null {
+function roomArea(model: IfcModel, room: string, storeyName: string | null): Solved | null {
   const kind = "area_room";
   let storey = storeyName !== null ? findStorey(model, storeyName) : undefined;
   if (storeyName !== null && !storey && findStorey(model, room)) {
@@ -136,24 +158,25 @@ function roomArea(model: IfcModel, room: string, storeyName: string | null): Ans
   if (rooms.length === 0) {
     // An area question that names only a storey, in wording this solver does not know: not ours to guess which area.
     if (storeyName === null && findStorey(model, room)) return null;
-    return unanswered(kind, `no room named '${room}' ${where}`);
+    return unanswered(model, kind, `no room named '${room}' ${where}`);
   }
   if (rooms.length > 1) {
     const home = storey ?? model.storeyOf(rooms[0].id);
     const candidates = rooms.map((each) => each.id).filter((id) => model.storeyOf(id)?.id === home?.id);
     return unanswered(
-      kind, `${rooms.length} rooms are named '${room}' ${where}; add the room number or the storey`,
+      model, kind, `${rooms.length} rooms are named '${room}' ${where}; add the room number or the storey`,
       planEvidence(model, [{ storey: home, ids: candidates }], `Rooms named '${room}'${home ? ` on ${home.name}` : ""}`, (id) => roomLabel(model.space(id))),
     );
   }
 
   const [space] = rooms;
   const area = model.floorArea(space.id);
-  if (!area) return unanswered(kind, `room '${roomLabel(space)}' has neither a stored floor area nor geometry in the model`);
+  if (!area) return unanswered(model, kind, `room '${roomLabel(space)}' has neither a stored floor area nor geometry in the model`);
   const home = storey ?? model.storeyOf(space.id);
   const value = round(area.value, 2);
   const source = area.stored ? "the NetFloorArea quantity stored on its IfcSpace" : "the plan footprint of its IfcSpace geometry";
   return result(
+    taken(model, `1 IfcSpace, room '${roomLabel(space)}'${home ? ` on storey ${home.name}` : ""}`, ...areaBy(model, [space.id])),
     kind, value, "m2",
     `net floor area of room '${roomLabel(space)}'${home ? ` on ${home.name}` : ""}, from ${source}`,
     planEvidence(
@@ -164,7 +187,7 @@ function roomArea(model: IfcModel, room: string, storeyName: string | null): Ans
   );
 }
 
-function storeyRoomArea(model: IfcModel, storeyName: string | null, question: string): Answer {
+function storeyRoomArea(model: IfcModel, storeyName: string | null, question: string): Solved {
   const kind = "area_storey_rooms";
   const storey = findStorey(model, storeyName, question);
   if (!storey) return noStorey(kind, model, storeyName);
@@ -172,7 +195,7 @@ function storeyRoomArea(model: IfcModel, storeyName: string | null, question: st
   const rooms = model.elements("space", storey);
   const areas = new Map(rooms.map((id) => [id, model.floorArea(id)]));
   const measured = rooms.filter((id) => areas.get(id));
-  if (measured.length === 0) return unanswered(kind, `no rooms (IfcSpace) with an area on ${storey.name}`);
+  if (measured.length === 0) return unanswered(model, kind, `no rooms (IfcSpace) with an area on ${storey.name}`);
 
   const total = round(measured.reduce((sum, id) => sum + areas.get(id)!.value, 0), 2);
   const stored = measured.filter((id) => areas.get(id)!.stored).length;
@@ -181,6 +204,7 @@ function storeyRoomArea(model: IfcModel, storeyName: string | null, question: st
     : stored === 0 ? "the plan footprint of each IfcSpace"
     : `the stored NetFloorArea of ${stored} and the plan footprint of the other ${measured.length - stored}`;
   return result(
+    taken(model, `${measured.length} IfcSpace room${measured.length === 1 ? "" : "s"} on storey ${storey.name}`, ...areaBy(model, measured)),
     kind, total, "m2",
     `sum of the net floor areas of the ${plural(measured.length, "space")} on ${storey.name}, from ${source}`,
     planEvidence(
@@ -210,7 +234,7 @@ function located(model: IfcModel, element: ElementKind, storey: Storey | undefin
   return { all, groups };
 }
 
-function count(model: IfcModel, intent: Extract<IfcIntent, { kind: "count" }>, question: string): Answer {
+function count(model: IfcModel, intent: Extract<IfcIntent, { kind: "count" }>, question: string): Solved {
   const { element } = intent;
   const ifcClass = NOUNS[element][2];
   const storey = intent.scope === "model" ? undefined : findStorey(model, intent.name) ?? findStorey(model, null, question);
@@ -220,6 +244,7 @@ function count(model: IfcModel, intent: Extract<IfcIntent, { kind: "count" }>, q
   if (storey) {
     const label = element === "space" && all.length <= MAX_LABELLED ? (id: number) => model.space(id).number || model.space(id).name : undefined;
     return result(
+      taken(model, `${all.length} ${ifcClass} elements on storey ${storey.name}`),
       `count_${element}_storey`, all.length, "count",
       `${ifcClass} elements on storey ${storey.name}`,
       planEvidence(model, groups, `The ${plural(all.length, element)} on ${storey.name}`, label),
@@ -230,6 +255,7 @@ function count(model: IfcModel, intent: Extract<IfcIntent, { kind: "count" }>, q
   const drawn = groups.filter(({ storey: each, ids }) => ids.length > 0 || (each && model.elements("space", each).length > 0));
   const breakdown = drawn.map(({ storey: each, ids }) => `${each?.name ?? "outside the storeys"} ${ids.length}`).join(", ");
   return result(
+    taken(model, `${all.length} ${ifcClass} elements in the whole model${breakdown ? ` (${breakdown})` : ""}`),
     `count_${element}_model`, all.length, "count",
     `${ifcClass} elements in the whole model${breakdown ? ` (${breakdown})` : ""}`,
     planEvidence(model, drawn, `The ${plural(all.length, element)} of the model; storeys left to right, top to bottom: ${breakdown}`),
@@ -237,7 +263,7 @@ function count(model: IfcModel, intent: Extract<IfcIntent, { kind: "count" }>, q
 }
 
 /** Several element classes in one answer: each counted as on its own, the total with what it consists of, all marked. */
-function countSeveral(model: IfcModel, elements: ElementKind[], storeyName: string | null): Answer {
+function countSeveral(model: IfcModel, elements: ElementKind[], storeyName: string | null): Solved {
   const kind = `count_${elements.join("+")}_${storeyName === null ? "model" : "storey"}`;
   const storey = storeyName === null ? undefined : findStorey(model, storeyName);
   if (storeyName !== null && !storey) return noStorey(kind, model, storeyName);
@@ -251,6 +277,7 @@ function countSeveral(model: IfcModel, elements: ElementKind[], storeyName: stri
     .filter((group) => group.ids.length > 0);
   const where = storey ? `on storey ${storey.name}` : "in the whole model";
   return result(
+    taken(model, `${parts.map((part) => `${part.all.length} ${NOUNS[part.element][2]}`).join(" and ")} elements ${where}`),
     kind, total, "count",
     `${parts.map((part) => NOUNS[part.element][2]).join(" and ")} elements ${where}`,
     planEvidence(model, groups, `The ${parts.map((part) => plural(part.all.length, part.element)).join(" and ")} ${where}`, total <= MAX_LABELLED ? (id) => kindOf.get(id) ?? "" : undefined),
@@ -259,7 +286,7 @@ function countSeveral(model: IfcModel, elements: ElementKind[], storeyName: stri
 }
 
 /** A selection of rooms, counted, added up, averaged, listed, or narrowed to its largest or smallest room. */
-function selectRooms(model: IfcModel, call: Extract<IfcCall, { operation: "rooms" }>, type: QuestionType, question: string): Answer {
+function selectRooms(model: IfcModel, call: Extract<IfcCall, { operation: "rooms" }>, type: QuestionType, question: string): Solved {
   const { rooms: names, pick, measure } = call;
   const storey = call.storey === null ? undefined : findStorey(model, call.storey);
   if (call.storey !== null && !storey) return noStorey("rooms", model, call.storey);
@@ -267,7 +294,7 @@ function selectRooms(model: IfcModel, call: Extract<IfcCall, { operation: "rooms
 
   // The dataset's own operations, so that a reworded dataset question is computed exactly like the original.
   if (pick === "all" && measure === "area" && names.length === 1 && findRooms(model, storey, names[0]).length <= 1) {
-    return roomArea(model, names[0], call.storey) ?? unanswered("area_room", `no room named '${names[0]}' ${where}`);
+    return roomArea(model, names[0], call.storey) ?? unanswered(model, "area_room", `no room named '${names[0]}' ${where}`);
   }
   if (pick === "all" && measure === "area" && names.length === 0 && storey) return storeyRoomArea(model, call.storey, question);
   if (pick === "all" && measure === "count" && names.length === 0) {
@@ -280,7 +307,7 @@ function selectRooms(model: IfcModel, call: Extract<IfcCall, { operation: "rooms
   if (names.length > 0) {
     const found = names.map((name) => ({ name, ids: findRooms(model, storey, name).map((space) => space.id) }));
     const absent = found.filter((each) => each.ids.length === 0).map((each) => `'${each.name}'`);
-    if (absent.length > 0) return unanswered("rooms", `the model has no room named ${absent.join(", ")} ${where}`);
+    if (absent.length > 0) return unanswered(model, "rooms", `the model has no room named ${absent.join(", ")} ${where}`);
     selected = [...new Set(found.flatMap((each) => each.ids))].flatMap((id) => byId.get(id) ?? []);
   }
   const which = names.length > 0 ? `rooms named ${names.map((name) => `'${name}'`).join(", ")}` : "rooms";
@@ -289,12 +316,13 @@ function selectRooms(model: IfcModel, call: Extract<IfcCall, { operation: "rooms
       model, model.storeys.map((each) => ({ storey: each, ids: rooms.filter((room) => room.storey.id === each.id).map((room) => room.id) })).filter((group) => group.ids.length > 0),
       caption, label && rooms.length <= MAX_LABELLED ? (id) => label(byId.get(id)!) : undefined,
     );
-  const text = (kind: string, value: string, method: string, evidence?: Evidence): Answer => ({ value, pipeline: PIPELINE, exact: true, kind, method, evidence });
+  const roomsUsed = (found: Room[]) => `${found.length} IfcSpace ${which} ${where}`;
+  const text = (source: Solved["source"], kind: string, value: string, method: string, evidence?: Evidence): Solved => ({ value, pipeline: PIPELINE, exact: true, kind, method, evidence, source });
   const withArea = (room: Room) => `${room.label} · ${room.area.toFixed(2)} m²`;
 
   if (pick !== "all") {
     const measured = selected.filter((room) => room.area > 0);
-    if (measured.length === 0) return unanswered("rooms", `none of the ${which} ${where} has an area in the model`);
+    if (measured.length === 0) return unanswered(model, "rooms", `none of the ${which} ${where} has an area in the model`);
     const extreme = measured.reduce((best, room) => ((pick === "largest" ? room.area > best.area : room.area < best.area) ? room : best)).area;
     // Rooms that print the same area tie; naming one of them would be arbitrary.
     const chosen = measured.filter((room) => room.area.toFixed(2) === extreme.toFixed(2));
@@ -302,22 +330,22 @@ function selectRooms(model: IfcModel, call: Extract<IfcCall, { operation: "rooms
     const method = `comparison of the net floor areas of the ${measured.length} ${which} ${where}`;
     const evidence = drawn(chosen, `The ${pick} of the ${which} ${where}: ${named}`, withArea);
     if (type === "area") {
-      return result(`area_${pick}_room`, round(extreme, 2), "m2", `${method}; the ${pick} is ${named}`, evidence, chosen.length > 1 ? `${chosen.length} rooms tie at ${extreme.toFixed(2)} m².` : undefined);
+      return result(taken(model, roomsUsed(measured), ...areaBy(model, measured.map((room) => room.id))), `area_${pick}_room`, round(extreme, 2), "m2", `${method}; the ${pick} is ${named}`, evidence, chosen.length > 1 ? `${chosen.length} rooms tie at ${extreme.toFixed(2)} m².` : undefined);
     }
-    return text(`${pick}_room`, chosen.length > 1 ? `${named}: ${extreme.toFixed(2)} m² each (a tie)` : `${named}, ${extreme.toFixed(2)} m²`, method, evidence);
+    return text(taken(model, roomsUsed(measured), ...areaBy(model, measured.map((room) => room.id))), `${pick}_room`, chosen.length > 1 ? `${named}: ${extreme.toFixed(2)} m² each (a tie)` : `${named}, ${extreme.toFixed(2)} m²`, method, evidence);
   }
 
   if (measure === "count") {
-    return result("count_rooms_selected", selected.length, "count", `IfcSpace ${which} ${where}`, drawn(selected, `The ${selected.length} ${which} ${where}`, (room) => room.tag));
+    return result(taken(model, roomsUsed(selected)), "count_rooms_selected", selected.length, "count", `IfcSpace ${which} ${where}`, drawn(selected, `The ${selected.length} ${which} ${where}`, (room) => room.tag));
   }
   if (measure === "list") {
     const shown = selected.slice(0, 60).map((room) => `${room.label}${room.area > 0 ? `, ${room.area.toFixed(2)} m²` : ""}${storey ? "" : ` (${room.storey.name})`}`);
     if (selected.length > shown.length) shown.push(`and ${selected.length - shown.length} more`);
-    return text("list_rooms", shown.join("\n") || "none", `IfcSpace ${which} ${where}, largest first`, drawn(selected, `The ${selected.length} ${which} ${where}`, (room) => room.tag));
+    return text(taken(model, roomsUsed(selected), script(SCRIPTS.ifcRecords, "listed the rooms"), ...areaBy(model, selected.map((room) => room.id))), "list_rooms", shown.join("\n") || "none", `IfcSpace ${which} ${where}, largest first`, drawn(selected, `The ${selected.length} ${which} ${where}`, (room) => room.tag));
   }
 
   const measured = selected.filter((room) => room.area > 0);
-  if (measured.length === 0) return unanswered("rooms", `none of the ${which} ${where} has an area in the model`);
+  if (measured.length === 0) return unanswered(model, "rooms", `none of the ${which} ${where} has an area in the model`);
   const sum = measured.reduce((total, room) => total + room.area, 0);
   const notes = [
     measure === "area" && measured.length > 1 && measured.length <= 12 ? `The total consists of ${measured.map((room) => `${room.label} ${room.area.toFixed(2)} m²`).join(", ")}.` : "",
@@ -325,6 +353,7 @@ function selectRooms(model: IfcModel, call: Extract<IfcCall, { operation: "rooms
   ].filter(Boolean).join(" ");
   const value = round(measure === "average" ? sum / measured.length : sum, 2);
   return result(
+    taken(model, roomsUsed(measured), ...areaBy(model, measured.map((room) => room.id))),
     measure === "average" ? "area_rooms_average" : "area_rooms_selected", value, "m2",
     `${measure === "average" ? "mean" : "sum"} of the net floor areas of the ${measured.length} ${which} ${where} (stored NetFloorArea, or the plan footprint)`,
     drawn(measured, `The ${measured.length} ${which} ${where}, ${value.toFixed(2)} m² ${measure === "average" ? "on average" : "together"}`, withArea),
@@ -356,7 +385,7 @@ export async function ifcMenu(ifcPath: string): Promise<IfcMenu> {
  * Runs a call the interpreter chose. `type` decides between a figure and a name where a call allows both.
  * Null for a call this solver does not compute: a question about the model's facts, or one the model cannot answer.
  */
-export async function solveIfcCall(ifcPath: string, call: IfcCall, type: QuestionType, question: string): Promise<Answer | null> {
+export async function solveIfcCall(ifcPath: string, call: IfcCall, type: QuestionType, question: string): Promise<Solved | null> {
   if (call.operation === "model_facts" || call.operation === "none") return null;
   const model = await loadModel(ifcPath);
   switch (call.operation) {
@@ -369,16 +398,17 @@ export async function solveIfcCall(ifcPath: string, call: IfcCall, type: Questio
   }
 }
 
-function storeyTotal(model: IfcModel, intentKind: keyof typeof TOTALS, storeyName: string | null, question: string): Answer {
+function storeyTotal(model: IfcModel, intentKind: keyof typeof TOTALS, storeyName: string | null, question: string): Solved {
   const { element, quantity, unit, symbol, kind, what } = TOTALS[intentKind];
   const [, elements, ifcClass] = NOUNS[element];
   const storey = findStorey(model, storeyName, question);
   if (!storey) return noStorey(kind, model, storeyName);
 
   const ids = model.elements(element, storey);
-  if (ids.length === 0) return unanswered(kind, `no ${elements} (${ifcClass}) on ${storey.name}`);
+  if (ids.length === 0) return unanswered(model, kind, `no ${elements} (${ifcClass}) on ${storey.name}`);
   const values = new Map(ids.map((id) => [id, model.quantity(id, quantity)]));
   let source = `the ${quantity} quantity stored on each ${ifcClass}`;
+  let by = script(SCRIPTS.ifcStored, `the ${quantity} of each ${ifcClass}`);
   const notes: string[] = [];
   const geometry = FROM_GEOMETRY[quantity];
   if (geometry && ids.every((id) => values.get(id) === null)) {
@@ -387,17 +417,19 @@ function storeyTotal(model: IfcModel, intentKind: keyof typeof TOTALS, storeyNam
       values.set(id, shape ? geometry.measure(shape) : null);
     }
     source = geometry.source;
+    by = script(SCRIPTS.ifcGeometry, `measured ${geometry.source}`);
     if (geometry.note) notes.push(geometry.note);
   }
   const measured = ids.filter((id) => values.get(id) !== null);
   if (measured.length === 0) {
-    return unanswered(kind, `the ${elements} on ${storey.name} carry no stored ${quantity} quantity, and ${what} is not derived from geometry`);
+    return unanswered(model, kind, `the ${elements} on ${storey.name} carry no stored ${quantity} quantity, and ${what} is not derived from geometry`);
   }
   if (measured.length < ids.length) notes.push(`${ids.length - measured.length} ${elements} have no ${quantity} and are left out.`);
 
   const total = round(measured.reduce((sum, id) => sum + values.get(id)!, 0), 3);
   const labelled = measured.length <= MAX_LABELLED;
   return result(
+    taken(model, `${measured.length} ${ifcClass} elements on storey ${storey.name}`, by),
     kind, total, unit,
     `sum of the ${what} of the ${plural(measured.length, element)} on ${storey.name}, from ${source}`,
     planEvidence(

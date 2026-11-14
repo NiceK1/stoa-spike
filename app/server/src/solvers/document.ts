@@ -3,10 +3,12 @@
  * a language model answers from the text rows and names the rows it used, and those rows are boxed on the page.
  */
 import { readFile } from "node:fs/promises";
+import { basename } from "node:path";
 import sharp from "sharp";
 import type { VisionModel } from "../models/vision.js";
 import { rasterize } from "../rasterize.js";
-import type { Answer, Mark, QuestionType } from "../types.js";
+import { SCRIPTS, model, script } from "../source.js";
+import type { Mark, QuestionType, Solved } from "../types.js";
 
 export interface Row {
   id: number;
@@ -87,12 +89,24 @@ const SCHEMA = {
   additionalProperties: false,
 };
 
+/** Row ids in order with runs folded: "3-5, 9". */
+function ranges(ids: number[]): string {
+  const sorted = [...new Set(ids)].sort((a, b) => a - b);
+  const runs: [number, number][] = [];
+  for (const id of sorted) {
+    const run = runs.at(-1);
+    if (run && id === run[1] + 1) run[1] = id;
+    else runs.push([id, id]);
+  }
+  return runs.map(([first, last]) => (first === last ? `${first}` : `${first}-${last}`)).join(", ");
+}
+
 /** Fewer text rows than this means the sheet is mostly graphics and the image pipeline should take it. */
 export const MIN_ROWS = 12;
 
 export async function solveDocument(
   pdfPath: string, question: string, qtype: QuestionType, deps: { text: VisionModel; fileUrl(path: string): string },
-): Promise<Answer | null> {
+): Promise<Solved | null> {
   const { rows, pageWidth, pageHeight } = await extractRows(pdfPath);
   if (rows.length < MIN_ROWS) return null;
 
@@ -112,9 +126,17 @@ export async function solveDocument(
     .map((row, i) => ({ n: i + 1, x: row.x * sx, y: row.y * sy, w: row.w * sx, h: row.h * sy, label: row.text.slice(0, 120) }));
 
   const numeric = qtype !== "text" && typeof output.value === "number";
+  const used = (output.rows as number[]).filter((id) => byId.has(id));
   return {
     value: numeric ? output.value : output.answer, unit: output.unit ?? undefined, pipeline: "sheet-text", exact: false, kind: `sheet_${qtype}`,
     method: `read from the sheet's text by ${deps.text.id}, ${marks.length} rows used`, note: output.explanation,
     evidence: { kind: "image", imageUrl: deps.fileUrl(image), width, height, marks, caption: "Each box is a row of the sheet the answer is based on" },
+    source: {
+      calculatedBy: [
+        script(SCRIPTS.sheetText, `extracted the ${rows.length} text rows of the page with their positions`),
+        model(deps.text.id, "worked out the answer from those rows and named the rows it used"),
+      ],
+      from: { file: basename(pdfPath), used: used.length > 0 ? `page 1, text row${used.length === 1 ? "" : "s"} ${ranges(used)} of ${rows.length}` : `page 1, its ${rows.length} text rows; the model named none as the basis` },
+    },
   };
 }

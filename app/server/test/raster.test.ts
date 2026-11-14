@@ -159,6 +159,63 @@ describe("room types and storeys on a raster drawing", () => {
   });
 });
 
+describe("the source of a raster answer", () => {
+  const STAIRS = { call: { operation: "count_other" as const, items: "staircases" }, locate: false, type: "count" as const };
+
+  it("names the detector that counted as our own model, and its boxes as the data", async () => {
+    const answer = await count(WINDOWS, { vision: vision(9), detector: routed(windows(4)) });
+    expect(answer.source).toEqual({
+      calculatedBy: [{ name: "symbols", tier: "own-model", did: "counted the windows" }],
+      from: { file: "plan.png", used: "4 detection boxes of class window on the drawing image" },
+    });
+  });
+
+  it("lists every detector with the kind it counted when several kinds are asked", async () => {
+    const found = [...windows(3), box("door", 0.9, 10, 60)];
+    const reading = { call: { operation: "count_known" as const, targets: ["window", "door"], whole: true }, locate: false, type: "count" as const };
+    const answer = await solveRaster(drawing, "doors and windows", reading, { vision: vision(0), detector: routed(found), imageUrl: "/plan.png" });
+    expect(answer.source.calculatedBy).toEqual([
+      { name: "symbols", tier: "own-model", did: "counted the windows" },
+      { name: "rooms", tier: "own-model", did: "counted the doors" },
+    ]);
+    expect(answer.source.from.used).toBe("3 detection boxes of class window on the drawing image; 1 detection box of class door on the drawing image");
+  });
+
+  it("names the model a fallback went to, its tier and the reason", async () => {
+    const external = { ...vision(7), id: "claude-cli:claude-sonnet-5-5" };
+    const answer = await count(WINDOWS, { vision: external, detector: routed(windows(6, 0.55)) });
+    expect(answer.source).toEqual({
+      calculatedBy: [{ name: "claude-cli:claude-sonnet-5-5", tier: "external-model", did: "counted the windows, because our detectors do not recognise this drawing, so their count would not be reliable" }],
+      from: { file: "plan.png", used: "the drawing image; 7 positions in the model's inventory of the drawing" },
+    });
+    const hosted = { ...vision(7), id: "openai-compatible:gemma-4-31b" };
+    const ours = await solveRaster(drawing, "how many staircases?", STAIRS, { vision: hosted, detector: null, imageUrl: "/plan.png" });
+    expect(ours.source.calculatedBy).toMatchObject([{ name: "openai-compatible:gemma-4-31b", tier: "self-hosted-model" }]);
+    expect(ours.method).toBe("staircases read by the self-hosted vision model openai-compatible:gemma-4-31b because our detectors do not know this kind of item");
+  });
+
+  it("does not call a detector hosted elsewhere ours", async () => {
+    const hosted: Detector = { id: "roboflow:floor-plans/3", thresholds: THRESHOLDS, detect: async () => windows(4) };
+    const answer = await count(WINDOWS, { vision: vision(9), detector: hosted });
+    expect(answer).toMatchObject({ value: 4, pipeline: "detector" });
+    expect(answer.source.calculatedBy).toEqual([{ name: "roboflow:floor-plans/3", tier: "external-model", did: "counted the windows" }]);
+    expect(answer.method).toBe("window symbols counted by the external detector roboflow:floor-plans/3");
+  });
+
+  it("says what it would have taken when no external model is configured", async () => {
+    const none = await solveRaster(drawing, "how many staircases?", STAIRS, { vision: noVision, detector: routed(windows(4)), imageUrl: "/plan.png" });
+    expect(none.source).toEqual({
+      calculatedBy: [], from: { file: "plan.png", used: "nothing" },
+      needed: "an external vision model is needed, because our detectors do not know this kind of item; none is configured (VISION_PROVIDER=none)",
+    });
+    // One kind counted, the other not: the source keeps the detector and says what is missing.
+    const reading = { call: { operation: "count_known" as const, targets: ["window", "floor"], whole: true }, locate: false, type: "count" as const };
+    const partly = await solveRaster(drawing, "windows and storeys", reading, { vision: noVision, detector: routed(windows(4), { window: 0.5 }), imageUrl: "/plan.png" });
+    expect(partly.source.calculatedBy).toMatchObject([{ name: "symbols", tier: "own-model" }]);
+    expect(partly.source.needed).toContain("because our detectors do not offer storeys");
+  });
+});
+
 describe("what the detectors cannot do", () => {
   const solve = (question: string, call: RasterReading["call"], vision: VisionModel, detector: Detector | null = routed(windows(4))) =>
     solveRaster(drawing, question, { call, locate: false, type: call.operation === "read" ? "text" : "count" }, { vision, detector, imageUrl: "/plan.png" });

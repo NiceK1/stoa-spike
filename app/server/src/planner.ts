@@ -142,6 +142,8 @@ export interface PlannedTakeoff extends Reading {
   /** What was counted or measured, as a plural noun phrase. */
   subject?: string;
   highlights: Polygon[];
+  /** The shapes the value was picked from, when only the picked ones are highlighted. */
+  compared?: Polygon[];
   cutouts?: Polygon[][];
   labels?: string[];
 }
@@ -354,7 +356,7 @@ export function runTakeoff(call: Record<string, any>, plan: Plan): PlannedTakeof
     }
     return exact(understood, {
       value: chosen.length > 1 ? `${names}: ${m2(extreme)} m² each (a tie)` : `${names}, ${m2(extreme)} m²`,
-      method: `outlines of the ${measured.length} ${scope}, compared by area`, ...shown,
+      method: `outlines of the ${measured.length} ${scope}, compared by area`, ...shown, compared: shapesOf(measured).highlights,
     });
   }
   if (measure === "list") {

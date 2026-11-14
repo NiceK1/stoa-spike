@@ -3,11 +3,14 @@
  * catalogue; a first call picks the sections the question needs when the whole does not fit, a second one answers
  * from those sections only.
  */
+import { basename } from "node:path";
 import type { VisionModel } from "../../models/vision.js";
-import type { Answer, QuestionType } from "../../types.js";
+import { SCRIPTS, model, script } from "../../source.js";
+import type { QuestionType, Solved } from "../../types.js";
 import { loadCatalogue, type Selection } from "./catalogue.js";
 
 const FACTS_LIMIT = 50_000;
+const FACTS = "header and project records, element inventory, types, materials, quantities, spaces and systems";
 const MAX_CLASSES = 8;
 
 const SELECT_SYSTEM =
@@ -71,13 +74,17 @@ export async function factsFor(ifcPath: string, question: string, text: VisionMo
   return named ? `${facts}\n\nRecords of the objects the question names:\n${named}` : facts;
 }
 
-export async function answerFromDigest(ifcPath: string, question: string, qtype: QuestionType, text: VisionModel, related?: string): Promise<Answer> {
+export async function answerFromDigest(ifcPath: string, question: string, qtype: QuestionType, text: VisionModel, related?: string): Promise<Solved> {
   const facts = await factsFor(ifcPath, question, text);
   const prompt = `Question: ${question}\n\nModel facts:\n${facts}${related ? `\n\nFacts on the question's topic, from a fixed rule:\n${related}` : ""}`;
   const { output } = await text.ask({ system: ANSWER_SYSTEM, schema: ANSWER_SCHEMA, prompt });
   const numeric = qtype !== "text" && typeof output.value === "number";
   return {
     value: numeric ? output.value : output.answer, unit: output.unit ?? undefined, pipeline: "ifc-facts", exact: false, kind: `ifc_facts_${qtype}`,
-    method: `answered by ${text.id} from facts extracted from the building model (header and project records, element inventory, types, materials, quantities, spaces and systems)`,
+    method: `answered by ${text.id} from facts extracted from the building model (${FACTS})`,
+    source: {
+      calculatedBy: [script(SCRIPTS.ifcFacts, "extracted the model's facts as text"), model(text.id, "wrote the answer from those facts")],
+      from: { file: basename(ifcPath), used: FACTS },
+    },
   };
 }

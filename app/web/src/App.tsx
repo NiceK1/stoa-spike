@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as api from "./api";
 import type { Drawing } from "./api";
+import { SourceBlock, noteBeside, type AnswerSource } from "./SourceBlock";
 
 interface Mark { n: number; x: number; y: number; w?: number; h?: number; label?: string }
 type Evidence =
@@ -8,6 +9,8 @@ type Evidence =
   | { kind: "image"; imageUrl: string; width: number; height: number; marks: Mark[]; caption: string };
 interface Answer {
   value: number | string | null; unit?: string; pipeline: string; method: string; exact: boolean; evidence?: Evidence; note?: string;
+  /** Not sent by every server; without it the method sentence is shown. */
+  source?: AnswerSource;
 }
 interface Reply {
   answer: Answer; seconds: number; expected: { value: number | string; unit: string | null; correct: boolean | null } | null;
@@ -502,6 +505,7 @@ function Result({ reply }: { reply: Reply }) {
   const { answer, expected, seconds, question } = reply;
   const unit = answer.unit && answer.unit !== "count" ? answer.unit.replace("m2", "m²").replace("m3", "m³") : "";
   const long = typeof answer.value === "string" && answer.value.length > 12;
+  const note = noteBeside(answer.note, answer.source);
   return (
     <header className="placard">
       <div className={long ? "figure text" : "figure"}>
@@ -512,9 +516,10 @@ function Result({ reply }: { reply: Reply }) {
         <p className="asked">{question}</p>
         <p>
           <span className={answer.exact ? "tag exact" : "tag estimate"}>{answer.exact ? "Exact" : "Estimate"}</span>
-          {PIPELINES[answer.pipeline] ?? answer.pipeline}: {answer.method}.
+          {PIPELINES[answer.pipeline] ?? answer.pipeline}{answer.source ? "." : `: ${answer.method}.`}
         </p>
-        {answer.note && <p className="note">{answer.note}</p>}
+        {answer.source && <SourceBlock source={answer.source} />}
+        {note && <p className="note">{note}</p>}
         <p className="time">
           {expected && expected.correct !== null && (
             <span className={expected.correct ? "check ok" : "check off"}>

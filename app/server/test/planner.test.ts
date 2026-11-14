@@ -214,6 +214,70 @@ describe("a question about a layered DXF plan, read by the keyword parser", () =
   });
 });
 
+describe("the source of an answer about a layered DXF plan", () => {
+  it("names the interpreter with its reading, the script that measured, and the shapes it measured", async () => {
+    const planner = model("claude-cli:claude-haiku-5-5", call({ operation: "area_apartment", apartments: ["A"], answer_type: "area" }));
+    const answer = await ask({ file: plan, question: "how big is flat A?" }, deps(planner));
+    expect(answer).toMatchObject({ value: 25, pipeline: "dxf-geometry" });
+    expect(answer.source).toEqual({
+      understoodBy: { by: "model", name: "claude-cli:claude-haiku-5-5", tier: "external-model", reading: "net area of apartment A" },
+      calculatedBy: [{ name: "CAD geometry script", tier: "script" }],
+      from: { file: "floor.dxf", used: "indoor room outlines inside unit A: 3 room outlines on layer ROOM_OUTLINE" },
+    });
+    // A client that does not know `source` shows this sentence.
+    expect(answer.method).toBe(`understood as "net area of apartment A" by claude-cli:claude-haiku-5-5; indoor room outlines inside unit A`);
+  });
+
+  it("counts the shapes the value was worked out from, not only the ones it marks", async () => {
+    const largest = await onPlan("which room is the largest?", { operation: "rooms", pick: "largest", answer_type: "text" });
+    expect(numbers(svgOf(largest))).toEqual(["1 · 1.01 Zimmer"]);
+    expect(largest.source.from.used).toBe("outlines of the 6 rooms, compared by area: 6 room outlines on layer ROOM_OUTLINE");
+    const symbols = await onPlan("how many doors and windows?", { operation: "count_symbols", symbols: ["doors", "windows"] });
+    expect(symbols.source.from.used).toBe("2 door symbols on layer DOOR, 3 window symbols on layer WINDOW");
+  });
+
+  it("names the keyword parser and why no model read the question", async () => {
+    const doors = "How many doors are drawn on this floor plan?";
+    const bulk = await ask({ file: plan, question: doors }, { ...deps(takeoff({ operation: "none" })), interpreter: "templates" });
+    expect(bulk.source).toEqual({
+      understoodBy: { by: "keyword-parser", name: "Keyword parser", tier: "script", why: "bulk mode, INTERPRETER=templates" },
+      calculatedBy: [{ name: "CAD geometry script", tier: "script" }],
+      from: { file: "floor.dxf", used: "2 door symbols on layer DOOR" },
+    });
+    expect((await ask({ file: plan, question: doors }, deps(null))).source.understoodBy.why).toBe("no interpreter model is configured");
+    const failing: VisionModel = { id: "broken-planner", ask: async () => { throw new Error("spawn claude ENOENT"); } };
+    expect((await ask({ file: plan, question: doors }, deps(failing))).source.understoodBy).toMatchObject({
+      by: "keyword-parser", why: "the interpreter broken-planner gave no usable call: spawn claude ENOENT",
+    });
+  });
+
+  it("says why nothing was calculated when the drawing does not have what was asked", async () => {
+    const answer = await onPlan("area of apartment C", { operation: "area_apartment", apartments: ["C"], answer_type: "area" });
+    expect(answer).toMatchObject({ value: null, pipeline: "none" });
+    expect(answer.source).toMatchObject({ understoodBy: { by: "model", name: "fake-planner" }, calculatedBy: [], from: { file: "floor.dxf", used: "nothing" } });
+    expect(answer.source.needed).toContain("This drawing does not have apartment C");
+    // A wording the keyword parser does not know, with no interpreter to read it.
+    const unread = await ask({ file: plan, question: "window count" }, deps(null));
+    expect(unread.source).toMatchObject({ understoodBy: { by: "keyword-parser" }, calculatedBy: [], from: { file: "floor.dxf" } });
+    expect(unread.source.needed).toContain("an interpreter model is needed");
+    // A file no pipeline takes: nothing read the question either.
+    const unknown = await ask({ file: plan.replace(/floor\.dxf$/, "notes.xyz"), question: "how many doors?" }, deps(takeoff({ operation: "none" })));
+    expect(unknown).toMatchObject({ value: null, pipeline: "none", method: "no pipeline for .xyz files" });
+    expect(unknown.source).toMatchObject({ understoodBy: { by: "nobody" }, calculatedBy: [], from: { file: "notes.xyz", used: "nothing" } });
+  });
+
+  it("does not blame the wording when a DXF has none of the layers the CAD script reads", async () => {
+    const sketch = plan.replace(/floor\.dxf$/, "sketch.dxf");
+    writeFileSync(sketch, "0\nSECTION\n2\nENTITIES\n0\nLINE\n8\n0\n10\n0\n20\n0\n11\n5\n21\n5\n0\nENDSEC\n0\nEOF\n");
+    const planner = takeoff({ operation: "count_symbols", symbols: ["doors"] });
+    const answer = await ask({ file: sketch, question: "how many doors?" }, deps(planner));
+    expect(planner.requests).toHaveLength(0);
+    expect(answer).toMatchObject({ value: null, pipeline: "none" });
+    expect(answer.source).toMatchObject({ understoodBy: { by: "nobody" }, calculatedBy: [], from: { file: "sketch.dxf", used: "nothing" } });
+    expect(answer.source.needed).toBe("the DXF file has no labelled room outlines on the layers ROOM_OUTLINE and ROOM_TEXT, which the CAD geometry script reads");
+  });
+});
+
 describe("a question about a raster drawing", () => {
   const inventory = { floors: 1, bedrooms: [{ x: 100, y: 200 }, { x: 600, y: 200 }], toilet_bowls: [{ x: 500, y: 500 }], showers: [{ x: 300, y: 300 }], bathtubs: [] };
   const vision = () =>
@@ -268,6 +332,20 @@ describe("a question about a raster drawing", () => {
     const answer = await ask({ file: image, question: "what scale is this drawn at?", type: "text" }, deps(planner, vision()));
     expect(answer.value).toBe("Scale 1:100");
     expect(planner.requests).toHaveLength(0);
+  });
+
+  it("tags the model that counted as external in the source, next to who understood the question", async () => {
+    const eyes = { ...vision(), id: "gemini-api:gemini-4-hydrogen" };
+    const answer = await ask({ file: image, question: "how many staircases?" }, deps(reading({ operation: "count_other", items: "staircases" }), eyes));
+    expect(answer.source).toEqual({
+      understoodBy: { by: "model", name: "fake-planner", tier: "external-model", reading: "count staircases" },
+      calculatedBy: [{ name: "gemini-api:gemini-4-hydrogen", tier: "external-model", did: "counted the staircases, because our detectors do not know this kind of item" }],
+      from: { file: "plan.png", used: "the drawing image; 1 position the model pointed at" },
+    });
+    // A stated answer type leaves nothing to interpret: the source says so instead of naming a reader.
+    const stated = await ask({ file: image, question: "what scale is this drawn at?", type: "text" }, deps(reading({}), eyes));
+    expect(stated.source.understoodBy).toMatchObject({ by: "stated-type", tier: "script" });
+    expect(stated.source.calculatedBy).toMatchObject([{ name: "gemini-api:gemini-4-hydrogen", tier: "external-model" }]);
   });
 
   it("falls back to the keyword patterns without an interpreter model", async () => {

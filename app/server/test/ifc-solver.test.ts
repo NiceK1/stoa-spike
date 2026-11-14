@@ -112,6 +112,24 @@ describe("solveIfc on a hand-written model", () => {
     expect(answer?.method).toContain("NetFloorArea");
   });
 
+  it("says in the source whether a value was stored in the model or measured from its geometry", async () => {
+    const stored = await solveIfc(house, "What is the net floor area of the room 'Hall (102)' on 'Ground floor', in m²?", "area");
+    expect(stored?.source).toEqual({
+      calculatedBy: [{ name: "IFC stored quantities", tier: "script", did: "the NetFloorArea of the room" }],
+      from: { file: "house.ifc", used: "1 IfcSpace, room 'Hall (102)' on storey Ground floor" },
+    });
+    const measured = await solveIfc(house, "What is the net floor area of the room 'Kitchen (101)' on 'Ground floor', in m²?", "area");
+    expect(measured?.source.calculatedBy).toEqual([{ name: "IFC geometry script (web-ifc)", tier: "script", did: "measured the room's plan footprint" }]);
+    const both = await solveIfc(house, "What is the total net floor area of all rooms on 'Ground floor' in m²?", "area");
+    expect(both?.source.calculatedBy).toEqual([
+      { name: "IFC stored quantities", tier: "script", did: "the NetFloorArea of 1 of the 2 rooms" },
+      { name: "IFC geometry script (web-ifc)", tier: "script", did: "measured the plan footprint of the other 1" },
+    ]);
+    expect(both?.source.from.used).toBe("2 IfcSpace rooms on storey Ground floor");
+    const missing = await solveIfc(house, "What is the net floor area of the room 'Sauna' on 'Ground floor', in m²?", "area");
+    expect(missing?.source).toMatchObject({ calculatedBy: [], needed: "no room named 'Sauna' on Ground floor", from: { file: "house.ifc", used: "nothing" } });
+  });
+
   it("totals the rooms of one storey only", async () => {
     const answer = await solveIfc(house, "Hvad er det samlede nettoareal af alle rum på 'Ground floor' i m²?", "area");
     expect(answer).toMatchObject({ value: 17.5, kind: "area_storey_rooms" });
@@ -245,9 +263,59 @@ describe("a question about a building model, read by the interpreter", () => {
   it("says that the model does not have a storey or a room instead of answering for another", async () => {
     const storey = await about("doors in the attic?", { operation: "count_elements", elements: ["wall"], missing: ["attic"] });
     expect(storey).toMatchObject({ value: null, pipeline: "none", note: "The building model does not have 'attic'. Its storeys are 'Ground floor', 'Upper floor'." });
+    expect(storey.source).toMatchObject({ calculatedBy: [], needed: "The building model does not have 'attic'.", from: { file: "house.ifc", used: "nothing" } });
     const room = await about("area of the sauna and the kitchen", { operation: "rooms", rooms: ["Sauna", "Kitchen"], measure: "area", answer_type: "area" });
     expect(room.value).toBeNull();
     expect(room.method).toContain("the model has no room named 'Sauna' in the model");
+  });
+
+  it("gives the source of a count: the interpreter's reading, our script, and the elements counted", async () => {
+    const answer = await about("how many walls downstairs?", { operation: "count_elements", elements: ["wall"], storey: "Ground floor" });
+    expect(answer.value).toBe(2);
+    expect(answer.source).toEqual({
+      understoodBy: { by: "model", name: "fake-planner", tier: "external-model", reading: expect.stringContaining("count walls") },
+      calculatedBy: [{ name: "IFC model script (web-ifc)", tier: "script" }],
+      from: { file: "house.ifc", used: "2 IfcWall elements on storey Ground floor" },
+    });
+  });
+
+  it("names only the scripts the areas of the selected rooms came from", async () => {
+    const largest = await about("which room is the largest?", { operation: "rooms", pick: "largest", answer_type: "text" });
+    expect(largest.source).toMatchObject({
+      calculatedBy: [
+        { name: "IFC stored quantities", tier: "script", did: "the NetFloorArea of 1 of the 3 rooms" },
+        { name: "IFC geometry script (web-ifc)", tier: "script", did: "measured the plan footprint of the other 2" },
+      ],
+      from: { file: "house.ifc", used: "3 IfcSpace rooms in the model" },
+    });
+    // Neither of these two rooms stores an area, so the stored quantities are not named.
+    const measured = await about("kitchen and bedroom together", { operation: "rooms", rooms: ["Kitchen", "Bedroom"], measure: "area", answer_type: "area" });
+    expect(measured.value).toBe(27);
+    expect(measured.source.calculatedBy).toEqual([{ name: "IFC geometry script (web-ifc)", tier: "script", did: "measured each room's plan footprint" }]);
+  });
+
+  it("names both the script that extracted the facts and the model that worded the answer", async () => {
+    const answer = await about("what are the walls made of?", { operation: "model_facts", answer_type: "text" });
+    expect(answer.source.calculatedBy).toEqual([
+      { name: "IFC facts script (web-ifc)", tier: "script", did: "extracted the model's facts as text" },
+      { name: "fake-writer", tier: "external-model", did: "wrote the answer from those facts" },
+    ]);
+    expect(answer.source.from.file).toBe("house.ifc");
+    const none: VisionModel = { id: "none", ask: async () => { throw new Error("This question needs a vision model"); } };
+    const unanswered = await ask({ file: house, question: "what are the walls made of?" }, { vision: none, planner: null, detector: null, fileUrl: () => "" });
+    expect(unanswered.source).toMatchObject({ understoodBy: { by: "keyword-parser" }, calculatedBy: [], from: { file: "house.ifc", used: "nothing" } });
+    expect(unanswered.source.needed).toContain("an external language model is needed");
+  });
+
+  it("names the model that reworded a question for the keyword parser", async () => {
+    const english = "How many walls are shown on the floor plan of 'Ground floor'?";
+    const translator: VisionModel = { id: "anthropic-api:claude-haiku-5-5", ask: async () => ({ output: { question: english }, seconds: 0, costUsd: 0, cached: false }) };
+    const answer = await ask({ file: house, question: "Zenbat horma daude 'Ground floor' solairuan?", type: "count" }, { vision: translator, planner: null, detector: null, fileUrl: () => "" });
+    expect(answer.value).toBe(2);
+    expect(answer.source.understoodBy).toEqual({
+      by: "keyword-parser", name: "Keyword parser", tier: "script", why: "no interpreter model is configured",
+      helper: { name: "anthropic-api:claude-haiku-5-5", tier: "external-model", did: `rewrote the question in English as "${english}" for the keyword parser` },
+    });
   });
 
   it("hands a question about the model's facts to the fact-sheet writer", async () => {
