@@ -57,6 +57,9 @@ export function rasterTarget(question: string): Target | null {
 
 const CATEGORIES = [...new Set(TARGETS.flatMap((t) => t.categories))];
 
+const IN_DOMAIN_SCORE = 0.6;
+const IN_DOMAIN_DETECTIONS = 3;
+
 const INVENTORY_BASE = [
   "You take an inventory of an architectural floor plan. Open the image with the Read tool before answering.",
   "Go through the plan room by room and record every item of each category exactly once, with the position of its centre:",
@@ -153,7 +156,7 @@ export async function solveRaster(imagePath: string, question: string, qtype: Qu
   if (qtype !== "count") {
     const { output } = await deps.vision.ask({ imagePath, system: FREE_SYSTEM, prompt: question, schema: FREE_SCHEMA });
     return {
-      value: output.value ?? output.answer, unit: output.unit ?? undefined, pipeline: "vision-model", exact: false,
+      value: qtype === "text" ? output.answer : (output.value ?? output.answer), unit: output.unit ?? undefined, pipeline: "vision-model", exact: false,
       method: `read from the drawing by ${deps.vision.id}`, note: output.explanation, evidence: image([], "Source drawing"),
     };
   }
@@ -163,11 +166,15 @@ export async function solveRaster(imagePath: string, question: string, qtype: Qu
   // storeys to the vision model; "all" gives the detector everything it knows; "none" switches it off.
   const scope = deps.useDetector === false ? "none" : (process.env.RASTER_DETECTOR_TARGETS ?? "symbols");
   const detector = deps.detector;
-  if (
+  const detections =
     detector && target && scope !== "none" && (scope === "all" || target.symbol) &&
     target.detectorClasses.every((cls) => cls in detector.thresholds)
-  ) {
-    const found = (await detector.detect(imagePath))
+      ? await detector.detect(imagePath)
+      : null;
+  // The detector knows one drawing style. On a drawing where it recognises almost nothing with confidence
+  // (an elevation, a historic scan), its count would be a confident zero, so the vision model answers instead.
+  if (detector && target && detections && detections.filter((d) => d.score >= IN_DOMAIN_SCORE).length >= IN_DOMAIN_DETECTIONS) {
+    const found = detections
       .filter((d) => target.detectorClasses.includes(d.cls) && d.score >= detector.thresholds[d.cls])
       .sort((a, b) => a.y - b.y || a.x - b.x);
     const marks = found.map((d, i) => ({
@@ -176,7 +183,7 @@ export async function solveRaster(imagePath: string, question: string, qtype: Qu
     const names = target.detectorClasses.map((cls) => cls.replace("_", " ")).join(" and ");
     return {
       value: found.length, unit: "count", pipeline: "detector", exact: false, kind: target.id,
-      method: `${names} symbols found by ${detector.id}`,
+      method: `${names} symbols found by the detector ${detector.id.split(":")[1]}`,
       evidence: image(marks, `Each box is one counted ${names}`),
     };
   }
