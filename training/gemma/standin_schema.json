@@ -1,0 +1,12 @@
+{
+  "type": "object",
+  "properties": {
+    "operation": { "enum": ["count_kind", "count_rooms", "area_rooms", "area_apartment", "none"] },
+    "kinds": { "type": "array", "items": { "type": "string" } },
+    "labels": { "type": "array", "items": { "type": "string" } },
+    "apartment": { "type": ["string", "null"] },
+    "show": { "type": "boolean" }
+  },
+  "required": ["operation", "kinds", "labels", "apartment", "show"],
+  "additionalProperties": false
+}

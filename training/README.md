@@ -62,6 +62,8 @@ venv/bin/python export_onnx.py runs/m1280/weights/best.pt 1280 <name>
 Credentials are read from `~/.ssh/verda_stoa_api.json`, never from the repo.
 `verda.py delete <instance-id> [volume-id ...]` deletes the instance, then its volumes permanently, and prints
 `DELETED_OK` (exit 0) only when a fresh listing shows none of them, trash included; it can be repeated.
+`verda.py create ... --spot` creates a spot instance. An eviction removes the instance and leaves its OS volume
+detached and billed, so its teardown needs the volume id as well.
 
 ## Scoring
 
@@ -86,13 +88,29 @@ therefore keeps a third part:
   each worker runs one experiment at a time with `CUDA_VISIBLE_DEVICES` set and writes
   `/data/sweep/results/<name>.json`. A failed run gets a result file too and does not hold up the queue.
 - `status.py` prints the queue and `ALL_DONE` when it is empty. `batch_status.py <names>` does the same for runs
-  spread over two instances, with `push.sh` copying results from a short-lived instance to the long-lived one.
+  spread over two instances, with `push.sh` copying results, best weights and each run's latest checkpoint
+  (`runs/<name>/weights/last.pt`) from a short-lived instance to the long-lived one.
 
 ```
 venv/bin/python sweep/build_sweep.py
 venv/bin/python sweep/submit.py sweep/batches/batch1.json
 venv/bin/python sweep/status.py
 rm sweep/queue/pending/<name>.json              # take an experiment out of the queue before it starts
+```
+
+## Windows as runs
+
+Whether the panes of one window are annotated separately differs between drawings (`sweep/probes.py convention`),
+so the box target for windows is inconsistent. `sweep/build_winrun.py` writes `yolo_winrun`: touching windows in line
+become one `window_run` box in every drawing, doors are `door` (swing), `door_other` (sliding, folding, roll-up) and
+`doorway` (no leaf, never counted). Its `count_rules.json` makes `eval_counts.py` count a run as the panes that
+`sweep/panes.py` reads from it under the drawing rule in `/data/sweep/panes/rule.json`, and gives the door classes
+one shared threshold. `sweep/probes.py` also holds the paired comparison of runs, the unit gate and the door sheets.
+
+```
+venv/bin/python sweep/probes.py paired base drawsafe y26l
+venv/bin/python sweep/build_winrun.py
+venv/bin/python sweep/panes.py prepare && venv/bin/python sweep/panes.py train && venv/bin/python sweep/panes.py export
 ```
 
 ## Licences

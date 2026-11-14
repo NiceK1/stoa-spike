@@ -7,6 +7,8 @@ Credentials are read from ~/.ssh/verda_stoa_api.json ({"client_id": ..., "client
     python verda.py keys             # SSH keys
     python verda.py list             # instances, volumes and trashed volumes in the project
     python verda.py create <type> <image> <location> [--disk GB] [--name NAME] [--spot]
+                                     # --spot: an eviction removes the instance and leaves its OS volume detached,
+                                     # still billed; delete it with `delete <instance-id> <volume-id>`
     python verda.py wait <instance-id>         # blocks until the instance runs, prints its IP
     python verda.py delete <instance-id> [volume-id ...]
                                      # deletes the instance and its volumes permanently; prints DELETED_OK and exits 0
@@ -135,7 +137,7 @@ def main():
     p.add_argument("args", nargs="*")
     p.add_argument("--disk", type=int, default=200)
     p.add_argument("--name", default="stoa-train")
-    p.add_argument("--spot", action="store_true")
+    p.add_argument("--spot", action="store_true", help="spot instance; its OS volume survives an eviction")
     a = p.parse_args()
     token = login()
 
@@ -176,9 +178,12 @@ def main():
     elif a.command == "create":
         instance_type, image, location = a.args
         keys = [k["id"] for k in call("GET", "/sshkeys", token=token)]
+        os_volume = {"name": a.name + "-os", "size": a.disk}
+        if a.spot:
+            os_volume["on_spot_discontinue"] = "keep_detached"
         body = {"instance_type": instance_type, "image": image, "ssh_key_ids": keys, "hostname": a.name,
                 "description": "stoa floor-plan detector training", "location_code": location,
-                "os_volume": {"name": a.name + "-os", "size": a.disk}, "is_spot": a.spot}
+                "os_volume": os_volume, "is_spot": a.spot}
         try:
             print("created instance id:", call("POST", "/instances", body, token))
         except ApiError as e:
