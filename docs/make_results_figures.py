@@ -12,13 +12,13 @@ sys.path.insert(0, str(HERE))  # -I keeps the script's folder off the import pat
 from make_training_figure import (AXIS, BORDER, CARD, FONT, GRID, INK, INK2, MUTED, RUN_COLOR, SURFACE,  # noqa: E402
                                   WASH, Svg, text_width, wrap)
 
-# ---------------------------------------------------------------- measurements, 14 November 2026
+# ---------------------------------------------------------------- measurements
 
 TOTAL_QUESTIONS = 127_044
 PARTS = [
     {"name": "Raster floor plans (images)",
-     "how": "trained detectors count the symbols; one vision-model reading gives room types and storeys",
-     "questions": 85_514, "right": 1_548, "asked": 1_781, "sample": True,
+     "how": "our own trained detectors count every kind; no outside model is called",
+     "questions": 85_514, "right": 1_530, "asked": 1_781, "sample": True,
      "basis": "200 held-out drawings the detectors never saw"},
     {"name": "Swiss apartment floors (vector)", "how": "exact geometry code, no model calls",
      "questions": 37_584, "right": 37_376, "asked": 37_584, "basis": "every question measured"},
@@ -32,31 +32,32 @@ PARTS = [
 ]
 
 RASTER_DRAWINGS, RASTER_ASKED = 200, 1_781
-# who answers: (key, label, right, calls per drawing, note on the calls)
+# who answers: (key, label, right, outside calls per drawing, what those calls cost)
 WHO = [
-    ("vision", "Vision model alone (Sonnet 5.5)", 1_373, "1", "on every drawing"),
-    ("detectors", "Our trained detectors alone", 1_530, "0", "none"),
-    ("default", "Default: detectors count the symbols, one vision reading gives room types and storeys", 1_548,
-     "0 or 1", "0 for a symbol question, 1 once a room type or storey is asked"),
-    ("vote", "Detectors and the vision model vote on every symbol", 1_569, "1",
-     "on every drawing, for about one point more: removed on 14 November"),
+    ("sonnet", "Outside vision model alone: Claude Sonnet 5.5", 1_373, "1", "about $0.009 and 5 seconds per drawing"),
+    ("gemini", "Outside vision model alone: Gemini 4 Hydrogen", 1_516, "1",
+     "about $0.07 and half a minute per drawing"),
+    ("detectors", "Blueline only: our trained detectors answer every kind", 1_530, "0",
+     "nothing leaves the server; 3 seconds of CPU per drawing"),
+    ("best", "Best accuracy: the detectors and one Gemini reading vote on symbols, Gemini reads room types", 1_585,
+     "1", "about $0.07 and half a minute per drawing"),
 ]
-# kind: asked, vision model alone, detectors alone, default
+# kind: asked, Gemini 4 Hydrogen alone, our detectors alone, best accuracy
 SYMBOL_KINDS = {
-    "toilet bowls": (200, 181, 188, 188),
-    "sinks": (199, 143, 174, 174),
-    "showers and bathtubs": (182, 130, 162, 162),
-    "doors": (156, 52, 119, 119),
-    "windows": (200, 59, 97, 97),
+    "toilet bowls": (200, 184, 188, 193),
+    "sinks": (199, 164, 174, 180),
+    "showers and bathtubs": (182, 155, 162, 168),
+    "doors": (156, 106, 119, 120),
+    "windows": (200, 85, 97, 102),
 }
 ROOM_KINDS = {
-    "storeys": (200, 196, 191, 196),
+    "storeys": (200, 198, 191, 198),
     "WC rooms": (98, 97, 95, 97),
-    "kitchens": (129, 125, 118, 125),
-    "saunas": (137, 129, 133, 129),
-    "balconies": (61, 58, 55, 58),
-    "bedrooms": (125, 116, 111, 116),
-    "bathrooms": (94, 87, 87, 87),
+    "kitchens": (129, 127, 118, 127),
+    "saunas": (137, 134, 133, 134),
+    "balconies": (61, 59, 55, 59),
+    "bedrooms": (125, 115, 111, 115),
+    "bathrooms": (94, 92, 87, 92),
 }
 
 STEP_ASKED, STEP_DRAWINGS = 280, 30
@@ -87,6 +88,10 @@ WHO_COLOR = {"vision": ORANGE, "detectors": AQUA, "default": BLUE, "vote": NEUTR
 WHO_LEGEND = {"vision": "vision model alone", "detectors": "trained detectors alone",
               "default": "default: detectors for symbols, vision model for room types",
               "vote": "detectors and vision model vote (removed)"}
+RESULT_COLOR = {"sonnet": NEUTRAL, "gemini": ORANGE, "detectors": AQUA, "best": BLUE}
+RESULT_LEGEND = {"gemini": "outside vision model alone (Gemini 4 Hydrogen)",
+                 "detectors": "Blueline only: our trained detectors",
+                 "best": "Best accuracy: detectors and one Gemini reading per drawing"}
 
 
 class Figure(Svg):
@@ -118,11 +123,11 @@ class Figure(Svg):
         self.text(x + 7, y, s, size=11.5, fill=INK2, weight=700, extra=' letter-spacing="0.6"')
         return w
 
-    def legend(self, x, y, keys, size=14):
+    def legend(self, x, y, keys, size=14, colors=WHO_COLOR, names=WHO_LEGEND):
         for key in keys:
-            self.rect(x, y - 10, 12, 12, fill=WHO_COLOR[key], r=3)
-            self.text(x + 18, y + 1, WHO_LEGEND[key], size=size, fill=INK2)
-            x += 18 + text_width(WHO_LEGEND[key], size) + 26
+            self.rect(x, y - 10, 12, 12, fill=colors[key], r=3)
+            self.text(x + 18, y + 1, names[key], size=size, fill=INK2)
+            x += 18 + text_width(names[key], size) + 26
         return x
 
 
@@ -211,18 +216,18 @@ def dataset_panel(svg, y):
 
 def who_panel(svg, y):
     x0, full, calls_x = 430, 290, 890
-    svg.text(MARGIN, y, "Who answers a raster question, and what it costs in hosted vision-model calls", size=17.5,
+    svg.text(MARGIN, y, "Who answers a raster question, and what it costs in calls to an outside model", size=17.5,
              weight=700)
     y += 23
     svg.text(MARGIN, y, f"The same {RASTER_DRAWINGS} held-out drawings and {RASTER_ASKED:,} questions for every "
-                        "row. The detectors need no hosted model.", size=14, fill=INK2)
+                        "row. Our detectors need no outside model.", size=14, fill=INK2)
     y += 28
     svg.text(x0, y, f"questions answered right, of {RASTER_ASKED:,}", size=13.5, fill=INK2)
-    svg.text(calls_x, y, "vision-model calls per drawing", size=13.5, fill=INK2)
+    svg.text(calls_x, y, "outside calls per drawing", size=13.5, fill=INK2)
     top = y + 10
     heights = []
     for key, label, right, calls, note in WHO:
-        lines = max(len(wrap(label, x0 - MARGIN - 24, 15, key == "default")),
+        lines = max(len(wrap(label, x0 - MARGIN - 24, 15, key == "detectors")),
                     len(wrap(note, W - MARGIN - calls_x - 62, 13.5)))
         heights.append(22 + 19 * lines)
     bottom = top + sum(heights) + 4
@@ -230,12 +235,12 @@ def who_panel(svg, y):
     y = top + 4
     for (key, label, right, calls, note), h in zip(WHO, heights):
         mid = y + h / 2
-        parts = wrap(label, x0 - MARGIN - 24, 15, key == "default")
+        parts = wrap(label, x0 - MARGIN - 24, 15, key == "detectors")
         for i, part in enumerate(parts):
             svg.text(MARGIN, mid + 5 - (len(parts) - 1) * 9.5 + i * 19, part, size=15,
-                     weight=700 if key == "default" else 400)
+                     weight=700 if key == "detectors" else 400)
         length = full * right / RASTER_ASKED
-        svg.bar(x0, mid - 7, length, 14, WHO_COLOR[key])
+        svg.bar(x0, mid - 7, length, 14, RESULT_COLOR[key])
         value = share(right, RASTER_ASKED)
         svg.text(x0 + length + 8, mid + 5, value, size=15, weight=700)
         svg.text(x0 + length + 8 + text_width(value, 15, True) + 7, mid + 5, f"{right:,}", size=13.5, fill=INK2)
@@ -267,9 +272,9 @@ def kinds_card(svg, title, how, kinds, x, y, w, h, note=""):
         svg.text(x0 - 12, mid - 1, kind, size=14.5, anchor="end")
         svg.text(x0 - 12, mid + 16, f"of {asked}", size=13, fill=INK2, anchor="end")
         by = mid - (3 * thick + 2 * gap) / 2
-        for key, right in zip(("vision", "detectors", "default"), rights):
+        for key, right in zip(("gemini", "detectors", "best"), rights):
             length = full * right / asked
-            svg.bar(x0, by, length, thick, WHO_COLOR[key])
+            svg.bar(x0, by, length, thick, RESULT_COLOR[key])
             svg.text(x0 + length + 6, by + thick - 0.5, str(right), size=13.5, weight=600)
             svg.text(x0 + length + 6 + text_width(str(right), 13.5, True) + 5, by + thick - 0.5,
                      whole_percent(right, asked), size=13, fill=INK2)
@@ -279,43 +284,45 @@ def kinds_card(svg, title, how, kinds, x, y, w, h, note=""):
 
 
 def kinds_panel(svg, y):
-    svg.text(MARGIN, y, "By kind of question: the detectors make the difference on drawn symbols; windows and doors "
-                        "are where errors remain", size=17.5, weight=700)
+    svg.text(MARGIN, y, "By kind of question: our detectors lead on drawn symbols, the outside model on room types; "
+                        "windows and doors stay hard", size=17.5, weight=700)
     y += 23
     y = svg.para(MARGIN, y, f"Bar: share of the questions of that kind answered with exactly the right count, on the "
                             f"same {RASTER_DRAWINGS} held-out drawings. The figure at the bar is that count.",
                  W - 2 * MARGIN, 14, pitch=19)
     y += 27
-    svg.legend(MARGIN, y, ("vision", "detectors", "default"))
+    svg.legend(MARGIN, y, ("gemini", "detectors", "best"), colors=RESULT_COLOR, names=RESULT_LEGEND)
     y += 16
     gap = 20
     w = (W - 2 * MARGIN - gap) / 2
     h = 64 + len(ROOM_KINDS) * KIND_PITCH + 32
     windows, doors = SYMBOL_KINDS["windows"], SYMBOL_KINDS["doors"]
-    kinds_card(svg, "Drawn symbols", "the default counts them with the detectors: no model call", SYMBOL_KINDS,
-               MARGIN, y, w, h,
-               note=f"Still open: windows {windows[3]} of {windows[0]} and doors {doors[3]} of {doors[0]}. A bigger "
-                    "detector and gentler augmentation did not move them: see docs/training-history.png.")
-    kinds_card(svg, "Room types and storeys", "the default takes them from the one vision reading per drawing",
+    kinds_card(svg, "Drawn symbols", "Best accuracy takes the middle of three counts: two detectors, one reading",
+               SYMBOL_KINDS, MARGIN, y, w, h,
+               note=f"Still open: windows {windows[2]} of {windows[0]} and doors {doors[2]} of {doors[0]} with our "
+                    "detectors alone. A bigger detector and gentler augmentation did not move them: see "
+                    "docs/training-history.png.")
+    kinds_card(svg, "Room types and storeys", "Best accuracy takes them from the outside reading of the drawing",
                ROOM_KINDS, MARGIN + w + gap, y, w, h)
     return y + h
 
 
 def results():
     for kinds in (SYMBOL_KINDS, ROOM_KINDS):
-        for asked, vision, detectors, default in kinds.values():
-            assert default in (vision, detectors) and max(vision, detectors, default) <= asked
+        for asked, *rights in kinds.values():
+            assert max(rights) <= asked
     columns = list(zip(*list(SYMBOL_KINDS.values()) + list(ROOM_KINDS.values())))
-    assert [sum(c) for c in columns] == [RASTER_ASKED] + [right for _, _, right, _, _ in WHO[:3]]
+    right_of = {key: right for key, _, right, _, _ in WHO}
+    assert [sum(c) for c in columns] == [RASTER_ASKED] + [right_of[key] for key in ("gemini", "detectors", "best")]
     assert sum(p["questions"] for p in PARTS) == TOTAL_QUESTIONS
 
     svg = Figure()
     swiss, raster = PARTS[1], PARTS[0]
     y = header(svg,
-               f'Code alone answers the vector drawings {share(swiss["right"], swiss["asked"])} right; raster floor '
-               f'plans reach {whole_percent(raster["right"], raster["asked"])}, and counting a drawn symbol needs no '
-               f'model call',
-               f"Where the solution stands on the Stoa dataset, measured 14 November 2026. Scored with the dataset's "
+               f'Code alone answers the vector drawings {share(swiss["right"], swiss["asked"])} right; our own detectors '
+               f'answer raster floor plans {whole_percent(raster["right"], raster["asked"])} right with no outside '
+               f'model, {whole_percent(right_of["best"], RASTER_ASKED)} with one outside reading per drawing',
+               f"Where the solution stands on the Stoa dataset, measured 15 November 2026. Scored with the dataset's "
                f"rules: counts exact; areas, lengths and volumes within 2%.")
     y = dataset_panel(svg, y + 44)
     y = who_panel(svg, y + 30)
