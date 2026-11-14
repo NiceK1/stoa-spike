@@ -101,6 +101,22 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [kind, setKind] = useState<string | null>(null);
   const [translations, setTranslations] = useState(false);
+  /** Whether the drawing list is shown; remembered in this browser between visits. */
+  const [registerOpen, setRegisterOpen] = useState(() => {
+    try { return localStorage.getItem("blueline.register") !== "closed"; } catch { return true; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("blueline.register", registerOpen ? "open" : "closed"); } catch { /* storage unavailable */ }
+  }, [registerOpen]);
+  // On a narrow screen the list sits above the drawing and has no flap, so it is always shown there.
+  const [narrow, setNarrow] = useState(() => window.matchMedia("(max-width: 820px)").matches);
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 820px)");
+    const update = () => setNarrow(query.matches);
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  const listShown = registerOpen || narrow;
   const [examplesOpen, setExamplesOpen] = useState(false);
   const examples = useRef<HTMLDivElement>(null);
   const search = useRef<HTMLInputElement>(null);
@@ -139,7 +155,12 @@ export function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
-      if (e.key === "/" && !typing) { e.preventDefault(); search.current?.focus(); }
+      if (e.key === "/" && !typing) {
+        e.preventDefault();
+        // A hidden list opens first; the search box is focused once it is back.
+        setRegisterOpen(true);
+        setTimeout(() => search.current?.focus(), 0);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -245,77 +266,88 @@ export function App() {
   const evidence = reply?.answer.evidence ?? (preview === "loading" ? null : preview);
 
   return (
-    <div className="layout">
-      <aside className="browser">
-        <header className="brand">
-          {/* The wordmark leads back to the landing page: index.html in the online demo, "/" on the local server. */}
-          {(() => {
-            const inner = (<><Logo /><div><h1>Blueline</h1><span className="tagline">Take-off check</span></div></>);
-            return <a className="wordmark" href={api.STATIC ? "index.html" : "/"} title="Back to the Blueline home page">{inner}</a>;
-          })()}
-          <p className="lede">Pick a drawing, ask how many or how much. Every counted item is marked so you can check it.</p>
-        </header>
-        <div className="search">
-          <input
-            ref={search} className="field" type="search" placeholder="Search drawings" value={filter}
-            onChange={(e) => setFilter(e.target.value)} aria-label="Search drawings"
-          />
-          {!filter && <kbd>/</kbd>}
-        </div>
-        <div className="files" role="listbox" aria-label="Drawings" ref={list}>
-          {drawing?.kind === "upload" && (
-            <div>
-              <div className="group">Your upload</div>
-              <button className="file chosen" role="option" aria-selected>
-                <span className="name">{drawing.name}</span>
-                <span className="meta"><span className="badge">{extension(drawing.name)}</span></span>
-              </button>
+    <div className={listShown ? "layout" : "layout register-closed"}>
+      {/* The drawing register folds away to the left; the flap on its edge opens and closes it. */}
+      <div className={listShown ? "register" : "register closed"}>
+        <div className="register-clip" inert={!listShown}>
+          <aside className="browser">
+            <header className="brand">
+              {/* The wordmark leads back to the landing page: index.html in the online demo, "/" on the local server. */}
+              {(() => {
+                const inner = (<><Logo /><div><h1>Blueline</h1><span className="tagline">Take-off check</span></div></>);
+                return <a className="wordmark" href={api.STATIC ? "index.html" : "/"} title="Back to the Blueline home page">{inner}</a>;
+              })()}
+              <p className="lede">Pick a drawing, ask how many or how much. Every counted item is marked so you can check it.</p>
+            </header>
+            <div className="search">
+              <input
+                ref={search} className="field" type="search" placeholder="Search drawings" value={filter}
+                onChange={(e) => setFilter(e.target.value)} aria-label="Search drawings"
+              />
+              {!filter && <kbd>/</kbd>}
             </div>
-          )}
-          {shown.map((s) => (
-            <div key={s.source}>
-              <div className="group">{SOURCE_NAMES[s.source] ?? s.source}<span className="count">{s.files.length}</span></div>
-              {s.files.slice(0, limits[s.source] ?? PAGE).map((f) => {
-                const chosen = drawing?.kind === "dataset" && drawing.path === f.path;
-                const asked = history[f.path]?.length ?? 0;
-                return (
-                  <button
-                    key={f.path} role="option" aria-selected={chosen} className={chosen ? "file chosen" : "file"}
-                    onClick={() => choose({ kind: "dataset", path: f.path })} title={f.path}
-                  >
-                    <span className="name">{title(f.path)}</span>
-                    <span className="meta">
-                      <span className="badge">{extension(f.path)}</span>
-                      <span className="fname">{fileName(f.path)}</span>
-                      <span className="count">{asked > 0 ? `${asked} asked · ` : ""}{f.questions} q</span>
-                    </span>
+            <div className="files" role="listbox" aria-label="Drawings" ref={list}>
+              {drawing?.kind === "upload" && (
+                <div>
+                  <div className="group">Your upload</div>
+                  <button className="file chosen" role="option" aria-selected>
+                    <span className="name">{drawing.name}</span>
+                    <span className="meta"><span className="badge">{extension(drawing.name)}</span></span>
                   </button>
-                );
-              })}
-              {s.files.length > (limits[s.source] ?? PAGE) && (
-                <button className="more" onClick={() => setLimits((l) => ({ ...l, [s.source]: (l[s.source] ?? PAGE) + PAGE }))}>
-                  Show {Math.min(PAGE, s.files.length - (limits[s.source] ?? PAGE))} more of {s.files.length - (limits[s.source] ?? PAGE)}
-                </button>
+                </div>
               )}
+              {shown.map((s) => (
+                <div key={s.source}>
+                  <div className="group">{SOURCE_NAMES[s.source] ?? s.source}<span className="count">{s.files.length}</span></div>
+                  {s.files.slice(0, limits[s.source] ?? PAGE).map((f) => {
+                    const chosen = drawing?.kind === "dataset" && drawing.path === f.path;
+                    const asked = history[f.path]?.length ?? 0;
+                    return (
+                      <button
+                        key={f.path} role="option" aria-selected={chosen} className={chosen ? "file chosen" : "file"}
+                        onClick={() => choose({ kind: "dataset", path: f.path })} title={f.path}
+                      >
+                        <span className="name">{title(f.path)}</span>
+                        <span className="meta">
+                          <span className="badge">{extension(f.path)}</span>
+                          <span className="fname">{fileName(f.path)}</span>
+                          <span className="count">{asked > 0 ? `${asked} asked · ` : ""}{f.questions} q</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                  {s.files.length > (limits[s.source] ?? PAGE) && (
+                    <button className="more" onClick={() => setLimits((l) => ({ ...l, [s.source]: (l[s.source] ?? PAGE) + PAGE }))}>
+                      Show {Math.min(PAGE, s.files.length - (limits[s.source] ?? PAGE))} more of {s.files.length - (limits[s.source] ?? PAGE)}
+                    </button>
+                  )}
+                </div>
+              ))}
+              {sources.length > 0 && shown.length === 0 && <p className="hint">No drawing matches “{filter}”.</p>}
+              {!listed && !error && <p className="hint">Loading drawings…</p>}
+              {listed && sources.length === 0 && <p className="hint">No drawings in the dataset folder yet.</p>}
             </div>
-          ))}
-          {sources.length > 0 && shown.length === 0 && <p className="hint">No drawing matches “{filter}”.</p>}
-          {!listed && !error && <p className="hint">Loading drawings…</p>}
-          {listed && sources.length === 0 && <p className="hint">No drawings in the dataset folder yet.</p>}
+            {api.STATIC ? (
+              <p className="demo-note">
+                Online demo: answers to each drawing's listed questions, computed in advance.{" "}
+                <a href="https://github.com/NiceK1/stoa-spike" target="_blank" rel="noreferrer">Run it yourself</a> to upload drawings and ask your own.
+              </p>
+            ) : (
+              <label className="upload">
+                <input type="file" accept=".png,.jpg,.jpeg,.pdf,.dxf,.ifc,.svg" onChange={(e) => chooseUpload(e.target.files?.[0])} />
+                <span>＋ Upload your own drawing</span>
+                <small>PDF, PNG, JPG, DXF, IFC</small>
+              </label>
+            )}
+          </aside>
         </div>
-        {api.STATIC ? (
-          <p className="demo-note">
-            Online demo: answers to each drawing's listed questions, computed in advance.{" "}
-            <a href="https://github.com/NiceK1/stoa-spike" target="_blank" rel="noreferrer">Run it yourself</a> to upload drawings and ask your own.
-          </p>
-        ) : (
-          <label className="upload">
-            <input type="file" accept=".png,.jpg,.jpeg,.pdf,.dxf,.ifc,.svg" onChange={(e) => chooseUpload(e.target.files?.[0])} />
-            <span>＋ Upload your own drawing</span>
-            <small>PDF, PNG, JPG, DXF, IFC</small>
-          </label>
-        )}
-      </aside>
+        <button
+          type="button" className="flap" onClick={() => setRegisterOpen((o) => !o)} aria-expanded={registerOpen}
+          aria-label={registerOpen ? "Hide the drawing list" : "Show the drawing list"} title={registerOpen ? "Hide the drawing list" : "Show the drawing list"}
+        >
+          <svg viewBox="0 0 12 20" aria-hidden="true"><path d="M8 4 3 10l5 6" /></svg>
+        </button>
+      </div>
 
       <main className="stage">
         {!drawing ? (
