@@ -6,17 +6,23 @@ lengths and volumes within 2%).
 
 - **Vector drawings** (DXF floor plans, IFC models with numeric answers) are answered by plain geometry code, with no
   model calls: 99.4% right on each, measured on every question.
-- **Raster floor plans**: detectors we trained count the drawn symbols with no model call, and one vision-model
-  reading per drawing gives room types and storeys: 86.9% right on 200 held-out drawings.
+- **Raster floor plans**: detectors we trained count every kind the dataset asks about, with no call to an outside
+  model: 85.9% right on 200 held-out drawings, where a hosted vision model alone gets 77.1% to 85.1%. One outside
+  reading per drawing on top of the detectors gives 89.0%.
 - **Practice drawing sheets and IFC free-text questions** are answered from the sheet's text layer and from facts
   extracted by code, worded by a language model.
 - **Any wording**: a small language model turns each question into a structured call that the exact scripts run.
+  A Gemma we fine-tuned does this on the CPU in under a second, at no cost.
+
+All measurements, with what each answer costs and how long it takes: [docs/results.md](docs/results.md).
 
 ![Results on the full Stoa dataset, 14 November 2026. By code alone: Swiss apartment floors 37,376 of 37,584 right (99.4%), IFC numeric answers 3,044 of 3,062 (99.4%). Raster floor plans: 1,548 of 1,781 (86.9%) on 200 held-out drawings, against 77.1% for the vision model alone. Below: vision-model calls per drawing for each way of answering, and raster accuracy per kind of question.](docs/results.png)
 
 Raster numbers are measured on 200 drawings the detectors never saw; the "about 90%" for the whole dataset is a
 projection from them. Our detectors beat the vision model on drawn symbols and need no hosted call; windows (97 of
-200) and doors (119 of 156) are where errors remain.
+200) and doors (119 of 156) are where errors remain. The figure is from 14 November, when one vision-model reading
+per drawing still gave the room types (86.9%); since then the detectors answer every kind alone (85.9%), and the
+current numbers are in [docs/results.md](docs/results.md).
 
 ![How the solution got here, 13 and 14 November 2026. Raster score on one fixed sample of 30 drawings, in seven steps: from 198 to 237 of 280 questions right. Reworded questions answered right: from 103 to 236 of 250 once a language model interprets the question. IFC numeric answers: from 89.4% to 99.4%.](docs/progress.png)
 
