@@ -4,6 +4,7 @@ Loss is computed on the assistant turn only; the prompt is rendered with the tok
 """
 import argparse
 import json
+import random
 import time
 
 import torch
@@ -16,9 +17,9 @@ class PairDataset(torch.utils.data.Dataset):
     def __init__(self, rows, tok, schema, max_length):
         self.items = []
         self.dropped = 0
-        for row in rows:
-            prompt = tok(prompt_text(tok, row), add_special_tokens=False).input_ids
-            completion = tok(completion_text(row, schema), add_special_tokens=False).input_ids
+        prompts = tok([prompt_text(tok, row) for row in rows], add_special_tokens=False).input_ids
+        completions = tok([completion_text(row, schema) for row in rows], add_special_tokens=False).input_ids
+        for prompt, completion in zip(prompts, completions):
             if len(prompt) + len(completion) > max_length:
                 self.dropped += 1
                 continue
@@ -47,12 +48,30 @@ def collate(pad_id):
     return fn
 
 
+def length_batched(items, batch_size, seed=0):
+    """Shuffled batches of similar length: the prompts range from 250 to 1,000 tokens, and padding would double the work."""
+    rng = random.Random(seed)
+    order = list(range(len(items)))
+    rng.shuffle(order)
+    chunk = batch_size * 64
+    batches = []
+    for start in range(0, len(order), chunk):
+        part = sorted(order[start:start + chunk], key=lambda i: len(items[i][0]))
+        batches += [part[i:i + batch_size] for i in range(0, len(part), batch_size)]
+    rng.shuffle(batches)
+    return [items[i] for batch in batches for i in batch]
+
+
 class CompletionLossTrainer(Trainer):
     """Projects only the completion positions onto the vocabulary.
 
     Gemma's vocabulary has 262k entries, so logits for every prompt position cost
     about 1 MB per token and dominate memory and time.
     """
+
+    def _get_train_sampler(self, *args, **kwargs):
+        # The dataset is already in length-batched order.
+        return torch.utils.data.SequentialSampler(self.train_dataset)
 
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         labels = inputs["labels"][:, 1:]
@@ -71,7 +90,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True)
     ap.add_argument("--train", required=True)
-    ap.add_argument("--schema", required=True)
+    ap.add_argument("--schema", default="", help="fixes the key order; leave out when the pairs carry it")
     ap.add_argument("--out", required=True)
     ap.add_argument("--epochs", type=float, default=2)
     ap.add_argument("--batch-size", type=int, default=32)
@@ -87,9 +106,10 @@ def main():
     tok = AutoTokenizer.from_pretrained(args.model)
     schema = load_schema(args.schema)
     data = PairDataset(load_pairs(args.train, args.limit), tok, schema, args.max_length)
+    data.items = length_batched(data.items, args.batch_size)
     lengths = sorted(len(ids) for ids, _ in data.items)
     print(f"examples {len(data)} dropped_too_long {data.dropped} "
-          f"tokens p50 {lengths[len(lengths) // 2]} max {lengths[-1]}", flush=True)
+          f"tokens p50 {lengths[len(lengths) // 2]} max {lengths[-1]} total {sum(lengths)}", flush=True)
 
     # float32 weights with bf16 autocast: at lr 5e-5 most updates would round away in bf16 weights
     model = AutoModelForCausalLM.from_pretrained(args.model, dtype=torch.float32)

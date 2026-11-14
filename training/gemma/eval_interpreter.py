@@ -5,6 +5,7 @@ checked for token-identical prompts.
 """
 import argparse
 import json
+import re
 import time
 from collections import defaultdict
 
@@ -39,18 +40,82 @@ def generate(model, tok, prompts, max_new_tokens, batch_size, allowed_fn=None):
     return outputs
 
 
-def score(rows, outputs):
+def normal(call):
+    """The call without what a correct reading may vary: the free-text reason, the order of lists, the case of free words."""
+    if not isinstance(call, dict):
+        return None
+    out = {}
+    for key, value in call.items():
+        if key == "reason":
+            continue
+        if isinstance(value, list):
+            value = sorted(str(v).lower() if key == "missing" else str(v) for v in value)
+        if key == "items":
+            value = str(value).strip().lower()
+        out[key] = value
+    return out
+
+
+# The fields each operation reads; the app ignores the others (see runTakeoff, planRaster and planIfc in app/server/src/planner.ts).
+USED = {
+    "dxf": {
+        "count_symbols": ["symbols", "labels", "room_numbers", "apartments", "missing", "locate"],
+        "count_apartments": ["locate"],
+        "rooms": ["labels", "room_numbers", "apartments", "pick", "measure", "missing", "broader_label", "locate", "answer_type"],
+        "area_apartment": ["apartments", "missing", "locate"],
+        "area_floor": ["locate"],
+        "compare": ["symbols", "labels", "room_numbers", "apartments", "measure", "missing"],
+        "none": [],
+    },
+    "raster": {"count_known": ["targets", "whole_drawing", "locate"], "count_other": ["items", "locate"], "read": ["answer_type"]},
+    "ifc": {
+        "count_elements": ["elements", "storey", "missing", "locate"],
+        "rooms": ["rooms", "storey", "pick", "measure", "missing", "locate", "answer_type"],
+        "storey_total": ["quantity", "storey", "missing"],
+        "model_facts": ["answer_type"],
+        "none": [],
+    },
+}
+NAMED = re.compile("^(room|apartment) +")
+
+
+def effective(call, kind):
+    """The call reduced to what its operation reads, with 'room 9.99' and '9.99' in missing taken as the same."""
+    call = normal(call)
+    fields = USED.get(kind, {}).get(call.get("operation")) if call else None
+    if fields is None:
+        return call
+    out = {"operation": call["operation"], **{f: call.get(f) for f in fields}}
+    if isinstance(out.get("missing"), list):
+        out["missing"] = sorted(NAMED.sub("", word) for word in out["missing"])
+    return out
+
+
+def matches(text, row, reduce=False):
+    try:
+        call = json.loads(text)
+    except json.JSONDecodeError:
+        return False
+    kind = row.get("type", "?")
+    return effective(call, kind) == effective(row["call"], kind) if reduce else normal(call) == normal(row["call"])
+
+
+def score(rows, outputs, reduce=False):
     groups = defaultdict(lambda: [0, 0])
     valid = 0
     for row, text in zip(rows, outputs):
         try:
-            call = json.loads(text)
+            json.loads(text)
             valid += 1
         except json.JSONDecodeError:
-            call = None
-        hit = call == row["call"]
-        for key in ("all", "lang=" + row.get("lang", "?"), "family=" + row.get("family", "?"),
-                    "op=" + row["call"].get("operation", "?")):
+            pass
+        hit = matches(text, row, reduce)
+        kind = row.get("type", "?")
+        keys = ["all", "type=" + kind, "lang=" + row.get("lang", "?"), "family=" + row.get("family", "?"),
+                "type+family=" + kind + "/" + row.get("family", "?"), "op=" + kind + "." + row["call"].get("operation", "?")]
+        if row.get("family") == "reworded":
+            keys.append("style=" + row.get("template", "?"))
+        for key in keys:
             groups[key][0] += hit
             groups[key][1] += 1
     return {"valid_json": valid, **{k: f"{h}/{n}" for k, (h, n) in sorted(groups.items())}}
@@ -60,8 +125,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True)
     ap.add_argument("--heldout", required=True)
-    ap.add_argument("--schema", required=True)
-    ap.add_argument("--max-new-tokens", type=int, default=80)
+    ap.add_argument("--schema", default="")
+    ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--max-new-tokens", type=int, default=200)
     ap.add_argument("--batch-size", type=int, default=50)
     ap.add_argument("--constrained-limit", type=int, default=50,
                     help="rows decoded under the schema (lm-format-enforcer is slow on a 262k vocabulary); 0 skips it")
@@ -76,7 +142,7 @@ def main():
     tok = AutoTokenizer.from_pretrained(args.model)
     tok.padding_side = "left"
     model = AutoModelForCausalLM.from_pretrained(args.model, dtype=torch.float32).to("cuda").eval()
-    rows = load_pairs(args.heldout)
+    rows = load_pairs(args.heldout, args.limit)
     schema = load_schema(args.schema)
     prompts = [prompt_text(tok, row) for row in rows]
 
@@ -89,6 +155,7 @@ def main():
     start = time.time()
     free = generate(model, tok, prompts, args.max_new_tokens, args.batch_size)
     report["free"] = score(rows, free)
+    report["free_fields_used"] = score(rows, free, reduce=True)
     report["free_seconds"] = round(time.time() - start, 1)
     print(json.dumps(report, indent=1, ensure_ascii=False), flush=True)
     constrained = []
@@ -111,8 +178,9 @@ def main():
     if args.predictions_out:
         with open(args.predictions_out, "w", encoding="utf-8") as f:
             for i, row in enumerate(rows):
-                f.write(json.dumps({"question": row["question"], "gold": row["call"], "free": free[i],
-                                    "constrained": constrained[i] if i < len(constrained) else None},
+                f.write(json.dumps({"question": row["question"], "gold": row["call"], "free": free[i], "hit": matches(free[i], row), "hit_used": matches(free[i], row, True),
+                                    "constrained": constrained[i] if i < len(constrained) else None,
+                                    **{k: row.get(k) for k in ("type", "family", "template", "lang", "drawing", "asked")}},
                                    ensure_ascii=False) + "\n")
 
 

@@ -9,6 +9,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { readJson, writeJsonAtomic } from "../cache.js";
 import { cacheDir } from "../config.js";
+import { GemmaLocal } from "./gemma.js";
 
 export interface VisionRequest {
   /** Leave out for a text-only question. */
@@ -87,7 +88,7 @@ export class ClaudeCliVision implements VisionModel {
   }
 }
 
-async function cacheKey(id: string, request: VisionRequest): Promise<string> {
+export async function cacheKey(id: string, request: VisionRequest): Promise<string> {
   const hash = createHash("sha256").update(JSON.stringify([id, request.system, request.prompt, request.schema]));
   if (request.imagePath) hash.update(await readFile(request.imagePath));
   return hash.digest("hex").slice(0, 32);
@@ -335,6 +336,8 @@ export function createPlanner(): VisionModel | null {
   
   if (provider === "anthropic-api") return new AnthropicApiVision(model);
   if (provider === "gemini-api") return new GeminiApiVision(model);
+  // The tuned Gemma on this machine's CPU; PLANNER_MODEL may give the GGUF file.
+  if (provider === "gemma-local") return new GemmaLocal(model && /\.gguf$/i.test(model) ? model : undefined);
   
   // Default to Claude CLI if no provider specified but model is set
   return new ClaudeCliVision(model, process.env.PLANNER_EFFORT);

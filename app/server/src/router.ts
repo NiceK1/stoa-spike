@@ -20,7 +20,7 @@ import { isLayeredPlan, loadPlan, type Plan, type TakeoffResult } from "./solver
 import { describeIfcIntent, elementWords, parseIfcQuestion } from "./solvers/ifc/question.js";
 import { RASTER_KINDS, TARGETS, rasterTarget, readByKeywords, solveRaster } from "./solvers/raster.js";
 import sharp from "sharp";
-import type { Answer, AskInput, Evidence } from "./types.js";
+import type { Answer, AskInput, Evidence, QuestionType } from "./types.js";
 
 export interface Deps {
   vision: VisionModel;
@@ -116,6 +116,25 @@ export async function preview(file: string, deps: Pick<Deps, "fileUrl">): Promis
   return { kind: "image", caption: "The drawing", imageUrl: deps.fileUrl(image), width, height, marks: [] };
 }
 
+/** The keyword parser's reading of a question about a layered plan, in words, as the interpreter gets it; null when it has none. */
+export function takeoffHint(question: string, plan: Plan, type?: QuestionType): string | null {
+  const guess = parseTakeoff(question, type ?? inferType(question));
+  if (guess) return describeIntent(guess);
+  // Without a template reading, the keyword parser still spots the plan's room numbers in the question.
+  const named = plan.vocabulary().numbers.filter((number) => new RegExp(String.raw`(?<![\w.])${number.replace(/\./g, "\\.")}(?![\w]|\.\d)`).test(question));
+  return named.length > 0 ? `a question about room${named.length > 1 ? "s" : ""} ${named.join(", ")}` : null;
+}
+
+export function rasterHint(question: string): string | null {
+  const target = rasterTarget(question);
+  return target ? `count the ${target.plural} on the whole drawing` : null;
+}
+
+export function ifcHint(question: string, type?: QuestionType): string | null {
+  const guess = parseIfcQuestion(question, type ?? inferType(question));
+  return guess ? describeIfcIntent(guess) : null;
+}
+
 export async function ask(input: AskInput, deps: Deps): Promise<Answer> {
   const reader = readerOf(deps);
   const extension = extname(input.file).toLowerCase();
@@ -138,10 +157,7 @@ export async function ask(input: AskInput, deps: Deps): Promise<Answer> {
   if (dxf) {
     const plan = await loadPlan(dxf);
     if (isLayeredPlan(plan)) {
-      const guess = parseTakeoff(input.question, input.type ?? inferType(input.question));
-      // Without a template reading, the keyword parser still spots the plan's room numbers in the question.
-      const named = guess ? [] : plan.vocabulary().numbers.filter((number) => new RegExp(String.raw`(?<![\w.])${number.replace(/\./g, "\\.")}(?![\w]|\.\d)`).test(input.question));
-      const hint = guess ? describeIntent(guess) : named.length > 0 ? `a question about room${named.length > 1 ? "s" : ""} ${named.join(", ")}` : null;
+      const hint = takeoffHint(input.question, plan, input.type);
       const planned = await interpret(reader, (model) => planTakeoff(input.question, plan, model, hint));
       if (planned) {
         const method = `${byModel(planned.understood, reader.model!)}; ${planned.method}`;
@@ -190,7 +206,7 @@ export async function ask(input: AskInput, deps: Deps): Promise<Answer> {
     // drawing then reads the question as well.
     const fixed: RasterReading | null = input.type !== undefined && input.type !== "count" ? { call: { operation: "read" }, locate: false, type: input.type } : null;
     const target = rasterTarget(input.question);
-    const read = carried ?? fixed ?? (await interpret(reader, (model) => planRaster(input.question, RASTER_KINDS, model, target ? `count the ${target.plural} on the whole drawing` : null)));
+    const read = carried ?? fixed ?? (await interpret(reader, (model) => planRaster(input.question, RASTER_KINDS, model, rasterHint(input.question))));
     let reading: RasterReading;
     let how: string;
     let asked = input.type ?? read?.type;
@@ -241,8 +257,7 @@ async function askIfcByModel(ifc: string, input: AskInput, deps: Deps, reader: R
   if (!reader.model) return null;
   // Loaded on demand: the IFC engine is heavy and the other pipelines should not wait for it.
   const { ifcMenu, solveIfc, solveIfcCall } = await import("./solvers/ifc.js");
-  const guess = parseIfcQuestion(input.question, input.type ?? inferType(input.question));
-  const read = await interpret(reader, async (model) => planIfc(input.question, await ifcMenu(ifc), model, guess ? describeIfcIntent(guess) : null));
+  const read = await interpret(reader, async (model) => planIfc(input.question, await ifcMenu(ifc), model, ifcHint(input.question, input.type)));
   if (!read) return null;
   const how = byModel(read.understood, reader.model!);
   const type = input.type ?? read.type;

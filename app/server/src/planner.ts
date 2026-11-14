@@ -4,7 +4,7 @@
  * parameters, whether the user asked to be shown things, and the answer type. Code then computes the answer and the
  * marks. The model is asked through the text side of VisionModel with a JSON schema, so any model can take its place.
  */
-import type { VisionModel } from "./models/vision.js";
+import type { VisionModel, VisionRequest } from "./models/vision.js";
 import { SYMBOL_KINDS, isIndoor, type Plan, type Room, type SymbolKind } from "./solvers/dxf.js";
 import type { ElementKind } from "./solvers/ifc/question.js";
 import type { Polygon, QuestionType } from "./types.js";
@@ -20,6 +20,7 @@ const LOCATE_RULE =
   "Such a request is the count of those things with locate true. A question that asks how many or how much has locate false.";
 const WORDING_RULE = "The question may be in any language, casual, terse or misspelt; choose the reading a person on site would mean.";
 
+/** The menu is the last paragraph: the local interpreter (models/gemma.ts) moves it in front of the question. */
 function request(question: string, hint: string | null, menu: string): string {
   return [`Question: ${question}`, ...(hint ? [`A keyword parser reads this as: ${hint}.`] : []), "", menu].join("\n");
 }
@@ -155,9 +156,14 @@ const shapesOf = (rooms: Room[]) => {
 const SINGULAR: Record<SymbolKind, string> = { doors: "door", windows: "window", toilets: "toilet", washbasins: "washbasin", bathtubs: "bathtub", showers: "shower" };
 const APARTMENT_WORD = /^(?:apartment|flat|unit|wohnung|whg\.?|app\.?|appartement|appartamento)\s*/i;
 
+/** What the interpreter is sent for a question about a layered plan. */
+export function takeoffRequest(question: string, plan: Plan, hint: string | null = null): VisionRequest {
+  return { system: TAKEOFF_SYSTEM, schema: takeoffSchema(plan), prompt: request(question, hint, takeoffMenu(plan)) };
+}
+
 /** Asks the interpreter for a call on this plan and runs it. Throws UnusableCall when the output names no runnable call. */
 export async function planTakeoff(question: string, plan: Plan, planner: VisionModel, hint: string | null = null): Promise<PlannedTakeoff> {
-  const { output } = await planner.ask({ system: TAKEOFF_SYSTEM, schema: takeoffSchema(plan), prompt: request(question, hint, takeoffMenu(plan)) });
+  const { output } = await planner.ask(takeoffRequest(question, plan, hint));
   const planned = runTakeoff(output, plan);
   const chosen = list(output.labels).filter((label) => !question.toLowerCase().includes(label.toLowerCase()));
   if (planned.value === null || chosen.length === 0) return planned;
@@ -169,7 +175,8 @@ export async function planTakeoff(question: string, plan: Plan, planner: VisionM
   return { ...planned, exact: planned.exact && output.broader_label !== true, note: [planned.note, matched].filter(Boolean).join(" ") };
 }
 
-function runTakeoff(call: Record<string, any>, plan: Plan): PlannedTakeoff {
+/** Computes a call on a plan. Throws UnusableCall when it names nothing runnable. */
+export function runTakeoff(call: Record<string, any>, plan: Plan): PlannedTakeoff {
   const vocabulary = plan.vocabulary();
   const reading = { locate: call.locate === true, type: typeOf(call.answer_type, ["count", "area", "text"]) };
   const missing = list(call.missing).map((word) => `'${word}'`);
@@ -416,8 +423,8 @@ const RASTER_SYSTEM = [
   "- Fields the operation does not use: targets [], whole_drawing true, items ''.",
 ].join("\n");
 
-/** Maps a question about a raster drawing onto known countable kinds, a generic located count, or a free reading. */
-export async function planRaster(question: string, kinds: RasterKind[], planner: VisionModel, hint: string | null = null): Promise<RasterReading> {
+/** What the interpreter is sent for a question about a drawing image. */
+export function rasterRequest(question: string, kinds: RasterKind[], hint: string | null = null): VisionRequest {
   const schema = {
     type: "object",
     properties: {
@@ -432,7 +439,12 @@ export async function planRaster(question: string, kinds: RasterKind[], planner:
     additionalProperties: false,
   };
   const menu = `Kinds for count_known:\n${kinds.map((k) => `- ${k.id}: ${k.description}`).join("\n")}`;
-  const { output } = await planner.ask({ system: RASTER_SYSTEM, schema, prompt: request(question, hint, menu) });
+  return { system: RASTER_SYSTEM, schema, prompt: request(question, hint, menu) };
+}
+
+/** Maps a question about a raster drawing onto known countable kinds, a generic located count, or a free reading. */
+export async function planRaster(question: string, kinds: RasterKind[], planner: VisionModel, hint: string | null = null): Promise<RasterReading> {
+  const { output } = await planner.ask(rasterRequest(question, kinds, hint));
   const reading = { locate: output.locate === true, type: typeOf(output.answer_type, ["count", "area", "length", "text"]) };
   const targets = [...new Set(list(output.targets).filter((id) => kinds.some((k) => k.id === id)))];
   if (output.operation === "count_known" && targets.length > 0) return { ...reading, call: { operation: "count_known", targets, whole: output.whole_drawing !== false } };
@@ -547,9 +559,14 @@ export function ifcMenuText(menu: IfcMenu, question: string): string {
   ].join("\n");
 }
 
+/** What the interpreter is sent for a question about a building model. */
+export function ifcRequest(question: string, menu: IfcMenu, hint: string | null = null): VisionRequest {
+  return { system: IFC_SYSTEM, schema: ifcSchema(menu), prompt: request(question, hint, ifcMenuText(menu, question)) };
+}
+
 /** Asks the interpreter for a call on this model. Throws UnusableCall when the output names no runnable call. */
 export async function planIfc(question: string, menu: IfcMenu, planner: VisionModel, hint: string | null = null): Promise<IfcReading> {
-  const { output } = await planner.ask({ system: IFC_SYSTEM, schema: ifcSchema(menu), prompt: request(question, hint, ifcMenuText(menu, question)) });
+  const { output } = await planner.ask(ifcRequest(question, menu, hint));
   const reading = { locate: output.locate === true, type: typeOf(output.answer_type, ["count", "area", "length", "volume", "text"]), missing: list(output.missing) };
   const storey = sentence(output.storey) || null;
   const on = storey ? `on '${storey}'` : "in the whole model";

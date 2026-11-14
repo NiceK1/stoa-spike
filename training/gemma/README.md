@@ -102,3 +102,40 @@ const text = await completion.generateCompletion(model.tokenize(prompt, true), {
 At the measured rate, 60,000 pairs for 2 epochs take about 95 minutes; that rate was measured while the GPU was shared three ways.
 
 Not done: the E2B LoRA run (training speed, memory, tuned accuracy). For that tier note that Gemma 4 uses different turn tokens (`<|turn>` ... `<turn|>`) and node-llama-cpp's built-in "Gemma 4" chat wrapper inserts `<|think|>` after the system turn, so the prompt must again be built by hand and checked against Python token ids.
+
+## The real run (14 November 2026)
+
+Pairs come from the app itself, so that the prompt has one renderer: `app/scripts/interp-pairs.ts` writes
+`train.jsonl` and `test.jsonl` with the request builders of `planner.ts`, the hint functions of `router.ts` and the
+prompt renderer of `server/src/models/gemma.ts`. The developer turn is the first line of the type's instruction, a
+one-line schema hint and the drawing's menu; the user turn is the question with the keyword parser's reading. The call
+keeps its keys in schema order, so no schema file is passed (`--schema` is optional now). Test rows also carry the
+whole request, for `app/scripts/interp-eval.ts`, which scores any `PLANNER_PROVIDER` on them.
+
+```bash
+# PC, from app/: pairs (337 hosted calls for the rewordings, cached afterwards)
+STOA_DATASET=../dataset-full PLANNER_MODEL=claude-haiku-5-5 npx tsx scripts/interp-pairs.ts --out <dir>
+# instance: waits for the GPU, trains, scores, converts
+SKIP_UNTUNED=1 ./run_real.sh 0.85 24
+# PC, from app/: token parity after the conversion, then the same held-out rows in Node
+npx tsx scripts/gemma-parity.ts ../models/interpreter/interpreter-q8_0.gguf <dir>/test.jsonl real_parity.json
+PLANNER_PROVIDER=gemma-local npx tsx scripts/interp-eval.ts --pairs <dir>/test.jsonl --limit 200
+```
+
+| | |
+|---|---|
+| Training pairs | 53,632: dataset wording 5,835, constructed 30,927, reworded 16,870; DXF 29,817, IFC 17,726, raster 6,089 |
+| Held-out pairs | 1,257 from 40 plans and 4+3 models outside training, test-only templates and the `heldout` rewording styles |
+| Prompt length | median 498 tokens, longest 1,428 (IFC menus); the call is 30 to 65 tokens |
+| Training | 0.85 epoch at batch 24, 24.9 minutes on the free A100 (30.5 examples/s), peak 55 GB, loss 0.41 to 0.0017 |
+| Untuned, 200 held-out rows | 0 exact, 0 valid JSON |
+| Tuned, free decoding, 1,257 rows | 1,075 exact (85.5%): dataset wording 199/201, constructed 359/397, reworded 517/659 |
+| Token parity Python against Node | identical (953 tokens) |
+
+More traps:
+
+- **Memory grows with the prompt.** Batch 32 ran out of 80 GB on a batch of 1,400-token IFC prompts 20% into the
+  first attempt; batch 24 peaks at 55 GB. `train_interpreter.py` now batches by length.
+- **Speed is the transformer body, not the vocabulary.** A step of 24 x 700 tokens takes 0.34 s without the output
+  layer and 0.37 s with it; a full epoch of these pairs is about 29 minutes.
+- **Log lines arrive late** through the `grep` in `run_real.sh`; the trainer's lines are only flushed at the end.

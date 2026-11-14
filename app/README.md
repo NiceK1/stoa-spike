@@ -120,6 +120,66 @@ drawings 89 of the 90 reworded questions were read as the kind of the original; 
 MH") was read as a count limited to part of the drawing and answered by the vision model. The 14 raster misses are
 counting errors that the dataset's wording has as well.
 
+### A local interpreter: fine-tuned FunctionGemma on the CPU
+
+`PLANNER_PROVIDER=gemma-local` replaces the hosted interpreter by a small open model inside the Node process:
+FunctionGemma 270M, fine-tuned on this app's own question-to-call pairs, as a 292 MB GGUF file (q8_0) run on the CPU
+with `node-llama-cpp` (`server/src/models/gemma.ts`). Nothing leaves the machine and a call costs nothing. The planner
+and the router are unchanged. The provider puts the first line of the instruction, a one-line summary of the schema and
+the drawing's menu into the developer turn, and the question with the keyword parser's reading into the user turn,
+exactly as in training. A grammar built from the request's JSON schema constrains the output, so a call is always
+valid and names only this drawing's labels, apartments and storeys. A missing model file or an unusable call leaves
+the question to the keyword parser, like any other interpreter failure.
+
+```bash
+# the weights are not in the repository: put the GGUF file at models/interpreter/interpreter-q8_0.gguf
+PLANNER_PROVIDER=gemma-local npm start
+# or name the file; PLANNER_THREADS sets the CPU threads (default 8, or fewer cores)
+PLANNER_PROVIDER=gemma-local PLANNER_MODEL=C:/models/interpreter-q8_0.gguf npm start
+```
+
+Haiku against the local Gemma on the same questions, answered by the app end to end (14 November 2026; the raster
+sample is the 24 drawings of `raster-dev.txt` now on disk):
+
+| Sample | Questions | claude-haiku-5-5 | Local Gemma | What the local model missed |
+|---|---|---|---|---|
+| Reworded, Swiss apartment floors, 24 plans | 120 | 120 | 119 | "all the bedrooms" matched to 'Soggiorno' on a plan that labels them 'Camera da letto' |
+| Reworded, raster floor plans | 72 | 65 | 64 | three misreadings that add kinds nobody asked for ("bedrooms makuuhuone MH number", two questions with typos about kitchens and sinks); the other five are counting errors that the dataset's wording has as well |
+| Reworded, IFC models, 20 models | 40 | 40 | 40 | |
+| Dataset wording, Swiss, 30 plans, English | 150 | 150 | 150 | |
+| Dataset wording, Swiss, German, French and Italian | 20 | 20 | 20 | |
+| Dataset wording, raster, English | 72 | 65 | 65 | the same seven counting errors |
+| Dataset wording, raster, Finnish | 12 | 11 | 11 | the same counting error |
+| Dataset wording, IFC, 30 models and sheets, English | 58 | 57 | 56 | a room name with an apostrophe ('IMMUNIZ'N ROOM (1D40)') cut at the apostrophe; the other is a wall-area miss both share |
+| Dataset wording, IFC, other languages | 12 | 11 | 11 | the same wall-area miss |
+
+The reworded samples use the development styles, which the model was trained on (on other plans; the IFC models are
+partly the same). On held-out pairs, from plans and models outside training, test-only question templates and
+rewording styles kept for the test (`heldout` in `server/src/paraphrase.ts`), it is weaker than Haiku:
+
+| Held-out pairs, the call compared field by field | Pairs | Untuned FunctionGemma | Local Gemma | claude-haiku-5-5 (first 200) |
+|---|---|---|---|---|
+| Whole call, all pairs (Python, free decoding) | 1,257 | 0 of 200 | 1,075 (85.5%) | |
+| Whole call, first 200 pairs (Node, q8_0, grammar) | 200 | | 174 (87.0%) | 160 (80.0%) |
+| Fields the operation reads, first 200 pairs | 200 | | 174 (87.0%) | 188 (94.0%) |
+| ... dataset wording | 36 | | 35 | 33 |
+| ... constructed questions | 62 | | 57 | 58 |
+| ... reworded in the held-out styles | 102 | | 82 (80.4%) | 97 (95.1%) |
+| ... layered DXF / IFC / raster | 94 / 59 / 47 | | 89 / 54 / 31 | 88 / 57 / 43 |
+
+Haiku loses whole-call matches to fields its operation does not read (`measure` on an apartment area, `""` written
+out), which the second measure ignores. The local model's misses on all 1,257 pairs: it copies an item it never saw
+in training wrongly into `items` (raster `count_other` 11 of 54), it misses a show-request that avoids the words show,
+mark and where (19 of 62), it is weak in languages outside its training (Polish, Danish, Norwegian, Portuguese, Dutch,
+Estonian: 71 of 119), and it drops the second kind in "compare the number of X with the number of Y". Dataset wording
+is read right 199 times of 201, constructed questions 359 of 397, held-out rewordings 517 of 659.
+
+One interpretation takes 0.9 seconds on a laptop CPU (i7-11800H, 8 threads; median 0.93, nineteen in twenty under
+1.4) against 4.6 seconds for Haiku through the CLI; the model loads in about a second on the first question. The
+prompt is 300 to 1,400 tokens and the call 30 to 65. How the pairs were built and the model trained:
+`training/gemma/README.md`; `scripts/interp-pairs.ts` writes the pairs, `scripts/interp-eval.ts` scores any
+interpreter on the held-out ones, `scripts/gemma-parity.ts` checks the tokens after a conversion.
+
 ## Measured
 
 Scored with the dataset's rules (counts exact; areas, lengths and volumes within 2%) on 14 November 2026, in bulk
@@ -184,7 +244,7 @@ The server reads `../.env` and the environment:
 | `STOA_DATASET` | dataset folder, default `../dataset` |
 | `VISION_PROVIDER` | `claude-cli` (default, the local `claude` CLI), `anthropic-api` (needs `ANTHROPIC_API_KEY`), `gemini-api` (needs `GEMINI_API_KEY`), or `none`: no cloud model at all, image plans answered by the detectors in `../models`, which then count every class they know, and questions read by the keyword parsers; questions only a vision model can answer then return an error |
 | `VISION_MODEL` | model id, default `claude-sonnet-5-5` |
-| `PLANNER_MODEL` | the interpreter model that reads every question, default the vision model; a small one is enough (measured: `claude-haiku-5-5`). `PLANNER_PROVIDER` picks its provider (default the vision provider; `none` leaves the keyword parsers), `PLANNER_EFFORT` its effort with the CLI |
+| `PLANNER_MODEL` | the interpreter model that reads every question, default the vision model; a small one is enough (measured: `claude-haiku-5-5`). `PLANNER_PROVIDER` picks its provider (default the vision provider; `gemma-local` is the fine-tuned Gemma on this machine's CPU, with `PLANNER_MODEL` as the optional path of its GGUF file; `none` leaves the keyword parsers), `PLANNER_EFFORT` its effort with the CLI |
 | `INTERPRETER` | `templates` is the bulk mode: the keyword parsers read the questions and no interpreter is asked |
 | `DETECTOR` | `onnx` (our weights in `../models`, the default when present), `roboflow` (needs `ROBOFLOW_API_KEY`), `none` |
 | `RASTER_DETECTOR_TARGETS` | `symbols` (default: the detectors count drawn symbols, the vision model reads room types and storeys), `all` (detectors also count the room types and storeys they know), `none` |

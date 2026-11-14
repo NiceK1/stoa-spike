@@ -7,12 +7,15 @@ A pair file is JSONL, one object per line:
   lang, family, ...  optional tags, only used for per-group scores
 
 The assistant turn is `call` serialised compactly with keys in schema order, which is
-also the order a JSON-schema grammar forces at inference.
+also the order a JSON-schema grammar forces at inference. Pairs written by the app
+(app/scripts/interp-pairs.ts) carry their keys in schema order already and are used without a schema file.
 """
 import json
 
 
 def load_schema(path):
+    if not path:
+        return None
     with open(path, encoding="utf-8") as f:
         return json.load(f)
 
@@ -29,7 +32,7 @@ def load_pairs(path, limit=0):
 
 
 def call_to_json(call, schema):
-    ordered = {k: call[k] for k in schema["properties"]}
+    ordered = {k: call[k] for k in schema["properties"]} if schema else call
     return json.dumps(ordered, ensure_ascii=False, separators=(",", ":"))
 
 
