@@ -1,0 +1,11 @@
+[
+ {"name": "base", "weights": "yolo11l.pt", "imgsz": 1280, "epochs": 60, "batch": 16, "data": "/data/sweep/data/yolo_sym", "train": ["fliplr=0.5", "flipud=0.5"]},
+ {"name": "thick", "weights": "yolo11l.pt", "imgsz": 1280, "epochs": 60, "batch": 16, "data": "/data/sweep/data/yolo_sym_thick", "train": ["fliplr=0.5", "flipud=0.5"]},
+ {"name": "rooms", "weights": "yolo11l.pt", "imgsz": 1280, "epochs": 60, "batch": 16, "data": "/data/sweep/data/yolo_rooms", "train": [], "export": "floorplan-rooms-yolo11l-1280-sweep"},
+ {"name": "wd1600", "weights": "yolo11l.pt", "imgsz": 1600, "epochs": 60, "batch": 16, "data": "/data/sweep/data/yolo_wd", "train": ["fliplr=0.5", "flipud=0.5"]},
+ {"name": "nomosaic", "weights": "yolo11l.pt", "imgsz": 1280, "epochs": 60, "batch": 16, "data": "/data/sweep/data/yolo_sym", "train": ["fliplr=0.5", "flipud=0.5", "mosaic=0.0"]},
+ {"name": "noflipud", "weights": "yolo11l.pt", "imgsz": 1280, "epochs": 60, "batch": 16, "data": "/data/sweep/data/yolo_sym", "train": ["fliplr=0.5", "flipud=0.0"]},
+ {"name": "rtdetr", "weights": "/data/sweep/weights/rtdetr-l.pt", "imgsz": 1280, "epochs": 60, "batch": 16, "data": "/data/sweep/data/yolo_sym", "train": ["fliplr=0.5", "flipud=0.5", "optimizer=AdamW", "lr0=0.0001", "weight_decay=0.0001", "warmup_bias_lr=0.0", "momentum=0.9"]},
+ {"name": "v9e", "weights": "/data/sweep/weights/yolov9e.pt", "imgsz": 1280, "epochs": 60, "batch": 8, "data": "/data/sweep/data/yolo_sym", "train": ["fliplr=0.5", "flipud=0.5"]},
+ {"name": "long", "weights": "yolo11l.pt", "imgsz": 1280, "epochs": 150, "batch": 16, "data": "/data/sweep/data/yolo_sym", "train": ["fliplr=0.5", "flipud=0.5", "patience=60"]}
+]
