@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { askFields, callsOutside, describeChoice, hintOf, measuredOf, modeOf, parseChoice, settle, understandsFreeWording, type ModesInfo } from "../../web/src/modes.js";
+import { askFields, callsOutside, describeChoice, hintOf, measuredOf, modeOf, parseChoice, settle, taglineOf, understandsFreeWording, type ModesInfo } from "../../web/src/modes.js";
 import type { Detector } from "../src/models/detector.js";
 import { createModes } from "../src/modes.js";
 
@@ -68,6 +68,8 @@ describe("what the pill says about a choice", () => {
 
   it("adds a few words to the mode's name", () => {
     expect(hintOf(DEMO, { mode: "blueline" })).toBe("nothing leaves this server");
+    expect(DEMO.modes.map(taglineOf)).toEqual(["Our own models. Free, nothing is sent out.", "Adds outside models. About $0.02 a drawing.", "Choose the models yourself."]);
+    expect(taglineOf(mode(OURS_ONLY, "best"))).toBe("No outside model can run on this server.");
     expect(hintOf(DEMO, { mode: "best" })).toBe("auto: best model per question");
     expect(hintOf(DEMO, { mode: "custom" })).toBe("Blueline interpreter + no outside reader");
     expect(hintOf(DEMO, { mode: "custom", interpreter: "haiku", reader: "gemini" })).toBe("Claude Haiku 5.5 + Gemini 4 Hydrogen");

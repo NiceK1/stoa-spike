@@ -317,10 +317,14 @@ button { cursor: pointer; }
 /* Who answers. One line carries the meaning in the pill, its panel and the ask-again button: a closed blue outline
    while only Blueline's own models and scripts answer, a broken amber one when a question may go to an outside model. */
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.mode-row { flex: 0 0 100%; display: flex; min-width: 0; padding: 0 1px 1px; }
+/* With the pill, the question box is the text field over one bar: who answers on the left, Ask on the right. */
+.composer:has(.mode-row) { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 8px; padding: 6px 7px 7px; }
+.composer:has(.mode-row) textarea { grid-column: 1 / -1; }
+.composer:has(.mode-row) .primary { grid-area: 2 / 2; height: 32px; padding: 0 22px; }
+.mode-row { grid-area: 2 / 1; display: flex; min-width: 0; }
 .mode-pill {
-  position: relative; display: inline-flex; align-items: center; gap: 7px; min-width: 0; max-width: 100%; height: 28px; padding: 0 9px 0 8px;
-  border: 0; border-radius: 14px; background: var(--sheet); color: var(--brand); font: 600 15px/1 var(--display); letter-spacing: 0.01em;
+  position: relative; display: inline-flex; align-items: center; gap: 7px; min-width: 0; max-width: 100%; height: 32px; padding: 0 11px 0 10px;
+  border: 0; border-radius: 16px; background: var(--sheet); color: var(--brand); font: 600 16px/1 var(--display); letter-spacing: 0.01em;
   white-space: nowrap; transition: color 0.3s ease, background-color 0.3s ease;
 }
 .mode-pill:hover, .mode-pill[aria-expanded="true"] { background: var(--marker-soft); }
@@ -345,59 +349,63 @@ button { cursor: pointer; }
 .mode-glyph .door { transition: opacity 0.2s ease; }
 .mode-glyph.outside .dot { transform: translateX(10.3px); }
 .mode-glyph.outside .door { opacity: 0; }
-.mode-name { flex: none; }
-.mode-hint {
-  min-width: 0; padding-left: 8px; overflow: hidden; text-overflow: ellipsis; border-left: 1px solid var(--rule);
-  font-weight: 500; font-size: 14px; color: var(--soft);
-}
-.mode-pill.outside .mode-hint { border-left-color: rgba(138, 90, 0, 0.35); color: inherit; }
+.mode-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .mode-caret { flex: none; width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; transition: transform 0.15s; }
 .mode-pill[aria-expanded="true"] .mode-caret { transform: rotate(180deg); }
 
-/* The panel pops up above the question box and may reach over the drawing; on a phone it is a sheet from the bottom edge. */
+/* The list of modes pops up above the question box. What a mode is made of stays out of the list: it shows in a card
+   beside it for the mode under the pointer or with the focus. On a phone the list is a sheet and the card opens in it. */
 .mode-scrim { display: none; }
-.mode-panel {
-  position: absolute; right: -1.5px; bottom: calc(100% + 8px); z-index: 6; display: grid; gap: 10px; align-content: start;
-  width: min(430px, calc(100vw - 32px)); max-height: min(82vh, 760px); padding: 0 14px 14px; overflow-y: auto; cursor: default;
-  background: var(--sheet); border: 1px solid var(--rule); border-radius: 10px; box-shadow: 0 12px 34px rgba(20, 45, 110, 0.18);
-  animation: mode-rise 0.16s ease-out;
-}
+.mode-pop { position: absolute; right: -1.5px; bottom: calc(100% + 8px); z-index: 6; cursor: default; animation: mode-rise 0.16s ease-out; }
 @keyframes mode-rise { from { opacity: 0; transform: translateY(6px); } }
-/* The title and the way out stay in view while a long line-up scrolls under them. */
-.mode-head {
-  position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  margin: 0 -14px -4px; padding: 12px 14px 6px; background: var(--sheet);
+.mode-panel, .mode-details {
+  background: var(--sheet); border: 1px solid var(--rule); border-radius: 12px; box-shadow: 0 12px 34px rgba(20, 45, 110, 0.18);
 }
-.mode-head h2 { margin: 0; font: 600 20px/1.2 var(--display); letter-spacing: 0.005em; }
-.mode-done { padding: 4px 12px; border: 1px solid var(--rule); border-radius: 6px; background: var(--sheet); font: 600 15px/1.2 var(--display); color: var(--brand); }
-.mode-done:hover { border-color: var(--brand); background: var(--marker-soft); }
-.mode-notice { margin: 0; padding: 8px 12px; border-left: 4px solid var(--estimate); background: var(--outside-soft); font-size: 13.5px; line-height: 1.4; }
-.mode-options { display: grid; gap: 8px; }
-.mode-option { border: 1.5px solid var(--rule); border-radius: 9px; }
-.mode-option.on, .mode-option:hover { border-color: var(--brand); }
-.mode-option.outside.on, .mode-option.outside:hover { border-color: var(--estimate); }
-.mode-option.outside.on { border-style: dashed; }
-.mode-choice { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 3px 9px; padding: 10px 12px; cursor: pointer; }
-.mode-choice input, .pick input { margin: 0; accent-color: var(--brand); }
+.mode-panel { width: min(352px, calc(100vw - 32px)); padding: 6px; }
+.mode-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 6px 8px 10px; }
+.mode-head h2 { margin: 0; font: 600 17px/1.2 var(--display); letter-spacing: 0.02em; color: var(--soft); }
+.mode-done { padding: 3px 10px; border: 0; border-radius: 6px; background: none; font: 600 15px/1.2 var(--display); color: var(--brand); }
+.mode-done:hover { background: var(--marker-soft); }
+.mode-notice { margin: 0 4px 6px; padding: 8px 10px; border-left: 4px solid var(--estimate); background: var(--outside-soft); font-size: 13px; line-height: 1.4; }
+.mode-options { display: grid; gap: 2px; }
+.mode-option { position: relative; border: 1.5px solid transparent; border-radius: 9px; }
+.mode-option:hover { background: var(--paper); }
+.mode-option.on { border-color: var(--brand); background: var(--marker-soft); }
+.mode-option.outside.on { border-color: var(--estimate); border-style: dashed; background: var(--outside-soft); }
+.mode-choice { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: baseline; gap: 1px 9px; padding: 8px 40px 9px 10px; cursor: pointer; }
+.mode-choice input { align-self: center; margin: 0; accent-color: var(--brand); }
 .mode-option.outside .mode-choice input { accent-color: var(--estimate); }
-.mode-title { display: flex; align-items: center; gap: 8px; font: 600 18px/1.2 var(--display); letter-spacing: 0.005em; }
-.mode-option .mode-glyph { color: var(--brand); }
-.mode-option.outside .mode-glyph { color: var(--estimate); }
-.mode-about { grid-column: 2 / -1; font-size: 13.5px; line-height: 1.4; color: var(--soft); }
-.mode-measured { display: block; margin-top: 3px; color: var(--ink); }
-.lineup { display: grid; gap: 9px; margin: 0 12px 12px 34px; padding-top: 10px; border-top: 1px solid var(--rule); }
-.lineup p { margin: 0; }
-.mode-summary { font-size: 13.5px; font-weight: 500; line-height: 1.4; color: var(--brand); }
-.lineup-head { font: 600 15px/1.2 var(--display); letter-spacing: 0.01em; }
-.row { min-width: 0; margin: 0; padding: 0; border: 0; font-size: 14px; line-height: 1.45; }
-.row-title { margin: 0 0 1px; padding: 0; font-size: 12.5px; color: var(--soft); }
-.row .engine b { font-weight: 600; color: var(--ink); }
-.row-note { font-size: 13px; color: var(--soft); }
-.row-note::first-letter { text-transform: uppercase; }
-.pick { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 0 8px; padding: 3px 0; cursor: pointer; }
-.pick.unavailable { cursor: default; }
-.pick.unavailable .engine { opacity: 0.55; }
-.pick .why { grid-column: 2; font-size: 12.5px; line-height: 1.35; color: var(--soft); }
+.mode-title { display: flex; align-items: center; gap: 7px; font: 600 18px/1.2 var(--display); letter-spacing: 0.005em; }
+.mode-title .badge { color: var(--estimate); border-color: rgba(138, 90, 0, 0.4); }
+.mode-share { font: 600 18px/1.2 var(--display); font-variant-numeric: tabular-nums; color: var(--ink); }
+.mode-about { grid-column: 2 / -1; font-size: 13px; line-height: 1.35; color: var(--soft); }
+.mode-info {
+  position: absolute; top: 9px; right: 9px; width: 20px; height: 20px; padding: 0; border: 1px solid var(--rule); border-radius: 50%;
+  background: var(--sheet); font: italic 600 13px/1 Georgia, serif; color: var(--soft);
+}
+.mode-info:hover, .mode-info[aria-expanded="true"] { border-color: var(--brand); color: var(--brand); }
+.picks { display: grid; gap: 6px; padding: 2px 10px 10px 32px; }
+.pick { display: grid; gap: 2px; font-size: 12.5px; color: var(--soft); }
+.pick select {
+  width: 100%; height: 30px; padding: 0 6px; border: 1px solid var(--rule); border-radius: 6px; background: var(--sheet);
+  font: 500 14px/1.2 "Barlow", system-ui, sans-serif; color: var(--ink);
+}
+.pick select:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+.mode-foot { margin: 0; padding: 8px 10px 6px; font-size: 12px; line-height: 1.35; color: var(--faint); }
+
+.mode-details { position: absolute; right: calc(100% + 8px); bottom: 0; width: 320px; padding: 12px 14px 13px; font-size: 13px; line-height: 1.4; color: var(--soft); }
+.mode-details h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font: 600 18px/1.2 var(--display); color: var(--brand); }
+.mode-details.outside h3 { color: var(--estimate); }
+.mode-details p { margin: 0; }
+.mode-details dl { display: grid; gap: 7px; margin: 9px 0; padding: 9px 0; border-block: 1px solid var(--rule); }
+.job dt { font-size: 12px; color: var(--faint); }
+.job dd { margin: 0; }
+.job .engine { display: flex; align-items: center; gap: 7px; font-size: 13.5px; }
+.job .engine .tier { text-transform: none; letter-spacing: 0.02em; }
+.job .engine b { font-weight: 600; color: var(--ink); }
+.job-note { font-size: 12px; color: var(--faint); }
+.job-note::first-letter { text-transform: uppercase; }
+.mode-details .measured b { color: var(--ink); }
 
 /* Asking again in a mode that calls outside models wears the outside line. */
 .retry { margin: 10px 0 8px; }
@@ -410,7 +418,7 @@ button { cursor: pointer; }
 
 @media (prefers-reduced-motion: reduce) {
   .mode-pill, .mode-edge rect, .mode-glyph, .mode-glyph .dot, .mode-glyph .door, .mode-caret { transition: none; }
-  .mode-pill.busy .mode-edge rect, .mode-panel { animation: none; }
+  .mode-pill.busy .mode-edge rect, .mode-pop { animation: none; }
 }
 
 /* Numbered marks on image plans, drawn in the browser (CAD and IFC plans arrive as finished SVG). */
@@ -427,7 +435,8 @@ button { cursor: pointer; }
 @media (max-width: 1100px) {
   .workspace { grid-template-columns: 1fr; grid-template-rows: minmax(420px, 1fr) auto; }
   .inspector { border-left: 0; border-top: 1px solid var(--rule); }
-  .mode-panel { left: -1.5px; right: auto; }
+  .mode-pop { left: -1.5px; right: auto; }
+  .mode-details { left: calc(100% + 8px); right: auto; }
 }
 
 @media (max-width: 820px) {
@@ -448,12 +457,11 @@ button { cursor: pointer; }
 }
 
 @media (max-width: 640px) {
-  .mode-hint { display: none; }
   .mode-scrim { display: block; position: fixed; inset: 0; z-index: 8; background: rgba(10, 39, 102, 0.42); }
-  .mode-panel {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 9; width: auto; max-height: 86dvh; padding: 0 16px 24px;
-    border-width: 1px 0 0; border-radius: 16px 16px 0 0; box-shadow: 0 -12px 34px rgba(10, 39, 102, 0.25);
+  .mode-pop {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 9; max-height: 86dvh; overflow-y: auto; padding: 8px 10px 20px;
+    background: var(--sheet); border-top: 1px solid var(--rule); border-radius: 16px 16px 0 0; box-shadow: 0 -12px 34px rgba(10, 39, 102, 0.25);
   }
-  .mode-head { margin: 0 -16px -4px; padding: 14px 16px 6px; }
-  .lineup { margin-left: 12px; }
+  .mode-panel, .mode-details { position: static; width: auto; border: 0; box-shadow: none; }
+  .mode-details { margin: 4px 6px 0; padding: 12px 10px 0; border-top: 1px solid var(--rule); border-radius: 0; }
 }

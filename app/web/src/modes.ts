@@ -88,6 +88,13 @@ export function hintOf(info: ModesInfo, choice: Choice): string {
   return mode.outside ? "outside models are called" : "nothing leaves this server";
 }
 
+/** A mode in a few words, for the list of modes; its description and line-up are shown only for the mode being looked at. */
+export function taglineOf(mode: ModeInfo): string {
+  if (mode.editable) return "Choose the models yourself.";
+  if (mode.auto) return mode.outside ? "Adds outside models. About $0.02 a drawing." : "No outside model can run on this server.";
+  return mode.outside ? "Outside models are called." : "Our own models. Free, nothing is sent out.";
+}
+
 /** A choice in words, for telling the user which one could not be kept. */
 export function describeChoice(info: ModesInfo, choice: Choice): string {
   const mode = modeOf(info, choice.mode);

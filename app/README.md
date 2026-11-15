@@ -38,12 +38,14 @@ In Blueline only and Best accuracy the line-up is fixed and shown read-only; Bes
 it resolves to on this server. The pickers are open in Custom only.
 
 **In the page** the setting is an oval in the question box (`web/src/ModePill.tsx`, with the choice in
-`web/src/useModes.ts` and the reading of `GET /api/modes` in `web/src/modes.ts`). It names the mode and says in a few
-words what that means; its outline is a closed blue line while only our own models and scripts answer, and a broken
-amber one, whose dashes travel while a question is out, when a question may go to an outside model. The oval opens a
-panel (a sheet from the bottom edge on a phone) with the three modes as one choice, each with its measured result on
-held-out image plans, and under the chosen one its line-up: read-only, or with the two pickers in Custom, where an
-engine that cannot run here is shown disabled with the reason. The choice is kept in the browser's `localStorage`
+`web/src/useModes.ts` and the reading of `GET /api/modes` in `web/src/modes.ts`). It sits on one bar with the Ask
+button and names the mode; its outline is a closed blue line while only our own models and scripts answer, and a
+broken amber one, whose dashes travel while a question is out, when a question may go to an outside model. The oval
+opens a short list (a sheet from the bottom edge on a phone): the three modes as one choice, each with a few words
+and its measured result on held-out image plans. What a mode is made of is kept out of the list: its description and
+who does each job show in a card beside the list for the mode under the pointer or with the focus, and with the "i"
+of a mode on a phone. Custom opens its two pickers under it, where an engine that cannot run here is listed but
+cannot be picked. The choice is kept in the browser's `localStorage`
 (`blueline.mode`). A remembered choice that cannot run on this server gives way to the server's default, and the panel
 says so once. An answer with no value for want of an outside model carries `retry`, and the page then offers to ask
 the question again in that mode, which also becomes the setting. A server without `/api/modes` and the static demo

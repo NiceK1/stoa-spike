@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { TierTag } from "./SourceBlock";
-import { callsOutside, hintOf, measuredOf, picksOf, type Engine, type EngineRef, type LineupRow, type ModeInfo } from "./modes";
+import { callsOutside, hintOf, measuredOf, picksOf, taglineOf, type Engine, type EngineRef, type LineupRow, type ModeInfo } from "./modes";
 import type { Modes } from "./useModes";
 
 /**
@@ -17,47 +16,55 @@ export function ModeGlyph({ outside }: { outside: boolean }) {
   );
 }
 
+/** Our own engines carry Blueline in their name; only an outside one is tagged. */
 function EngineLine({ engine }: { engine: EngineRef }) {
   return (
     <div className="engine" title={engine.name}>
-      {engine.tier && <TierTag tier={engine.tier} />}
       <b>{engine.label}</b>
+      {engine.outside && <span className="tier external-model">outside</span>}
     </div>
   );
 }
 
-/** One job of the line-up and who does it. With `options` the job is a picker, and `chosen` is the pick. */
-function Row({ row, options, chosen, onPick }: { row: LineupRow; options?: Engine[]; chosen?: string; onPick?: (id: string) => void }) {
-  if (!options) {
-    return (
-      <div className="row">
-        <p className="row-title">{row.title}</p>
-        {row.engines.map((engine) => <EngineLine key={engine.id} engine={engine} />)}
-        {row.note && <p className="row-note">{row.note}</p>}
-      </div>
-    );
-  }
-  // What the pick leaves to someone else: with no outside reader, the detectors still read the room types.
-  const others = row.engines.filter((engine) => engine.id !== chosen);
+/** One job of the line-up and who does it. */
+function Job({ row }: { row: LineupRow }) {
   return (
-    <fieldset className="row">
-      <legend className="row-title">{row.title}</legend>
-      {options.map((engine) => (
-        <label key={engine.id} className={engine.available ? "pick" : "pick unavailable"}>
-          <input
-            type="radio" name={`blueline-pick-${row.role}`} checked={engine.id === chosen} disabled={!engine.available}
-            onChange={() => onPick?.(engine.id)}
-          />
-          <span className="engine" title={engine.name}>
-            {engine.tier && <TierTag tier={engine.tier} />}
-            <b>{engine.label}</b>
-          </span>
-          {!engine.available && <span className="why">Cannot run on this server: {engine.unavailable ?? "it is not installed"}.</span>}
-        </label>
-      ))}
-      {others.map((engine) => <EngineLine key={engine.id} engine={engine} />)}
-      {row.note && <p className="row-note">{row.note}</p>}
-    </fieldset>
+    <div className="job">
+      <dt>{row.title}</dt>
+      <dd>
+        {row.engines.map((engine) => <EngineLine key={engine.id} engine={engine} />)}
+        {row.note && <p className="job-note">{row.note}</p>}
+      </dd>
+    </div>
+  );
+}
+
+/** What a mode is and who does each job in it: kept out of the list, shown beside it for the mode being looked at. */
+function Details({ mode, outside }: { mode: ModeInfo; outside: boolean }) {
+  const measured = measuredOf(mode);
+  return (
+    <aside id="mode-details" className={outside ? "mode-details outside" : "mode-details"} role="note">
+      <h3><ModeGlyph outside={outside} />{mode.label}</h3>
+      <p>{mode.description}</p>
+      <dl>{mode.lineup.map((row) => <Job key={row.role} row={row} />)}</dl>
+      {measured && <p className="measured"><b>{measured.share}</b> {measured.rest}</p>}
+    </aside>
+  );
+}
+
+/** A picker of the mode that has them. An engine that cannot run here is listed, and cannot be picked. */
+function Pick({ label, options, chosen, onPick }: { label: string; options: Engine[]; chosen: string; onPick: (id: string) => void }) {
+  return (
+    <label className="pick">
+      <span>{label}</span>
+      <select value={chosen} onChange={(e) => onPick(e.target.value)}>
+        {options.map((engine) => (
+          <option key={engine.id} value={engine.id} disabled={!engine.available} title={engine.unavailable}>
+            {engine.label}{!engine.available && " (cannot run here)"}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
@@ -68,22 +75,27 @@ function Row({ row, options, chosen, onPick }: { row: LineupRow; options?: Engin
 export function ModePill({ modes, busy }: { modes: Modes; busy: boolean }) {
   const { info, choice, mode, outside, summary, notice } = modes;
   const [open, setOpen] = useState(false);
+  // The mode whose details show: the one under the pointer or with the focus, or the one pinned with its "i".
+  const [looking, setLooking] = useState<string | null>(null);
+  const [pinned, setPinned] = useState<string | null>(null);
   const pill = useRef<HTMLButtonElement>(null);
-  const panel = useRef<HTMLDivElement>(null);
+  const pop = useRef<HTMLDivElement>(null);
 
   function close(refocus: boolean) {
     setOpen(false);
+    setLooking(null);
+    setPinned(null);
     modes.dismissNotice();
     if (refocus) pill.current?.focus();
   }
 
   useEffect(() => {
     if (!open) return;
-    panel.current?.querySelector<HTMLInputElement>('input[name="blueline-mode"]:checked')?.focus();
+    pop.current?.querySelector<HTMLInputElement>('input[name="blueline-mode"]:checked')?.focus();
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(true); };
     const onDown = (e: PointerEvent) => {
       const target = e.target as Node;
-      if (!panel.current?.contains(target) && !pill.current?.contains(target)) close(false);
+      if (!pop.current?.contains(target) && !pill.current?.contains(target)) close(false);
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("pointerdown", onDown);
@@ -91,8 +103,10 @@ export function ModePill({ modes, busy }: { modes: Modes; busy: boolean }) {
   }, [open]);
 
   if (!info || !choice || !mode) return null;
-  const hint = hintOf(info, choice);
   const picks = picksOf(info, choice);
+  // Beside the list the card can follow the pointer; inside a phone's sheet it would move the list under the finger.
+  const follows = window.matchMedia("(min-width: 641px)").matches;
+  const detailed = info.modes.find((each) => each.id === (pinned ?? (follows ? looking : null)));
 
   return (
     <>
@@ -100,13 +114,12 @@ export function ModePill({ modes, busy }: { modes: Modes; busy: boolean }) {
         <button
           ref={pill} type="button" className={`mode-pill${outside ? " outside" : ""}${outside && busy ? " busy" : ""}`}
           aria-haspopup="dialog" aria-expanded={open} aria-controls="mode-panel" title={summary ?? undefined}
-          aria-label={`Who answers: ${mode.label}.${summary ? ` ${summary}` : ""}`} onClick={() => (open ? close(false) : setOpen(true))}
+          aria-label={`Who answers: ${mode.label}, ${hintOf(info, choice)}.${summary ? ` ${summary}` : ""}`} onClick={() => (open ? close(false) : setOpen(true))}
         >
           {/* The outline is drawn, not a border, so that its dashes can open and travel. */}
-          <svg className="mode-edge" aria-hidden="true"><rect x="0.75" y="0.75" width="100%" height="100%" rx="13.25" /></svg>
+          <svg className="mode-edge" aria-hidden="true"><rect x="0.75" y="0.75" width="100%" height="100%" rx="15.25" /></svg>
           <ModeGlyph outside={outside} />
           <span className="mode-name">{mode.label}</span>
-          {hint && <span className="mode-hint">{hint}</span>}
           <svg className="mode-caret" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 7.5 6 4l3.5 3.5" /></svg>
         </button>
         <span className="visually-hidden" role="status">{summary && `${mode.label}. ${summary}`}</span>
@@ -114,62 +127,59 @@ export function ModePill({ modes, busy }: { modes: Modes; busy: boolean }) {
       {open && (
         <>
           <div className="mode-scrim" />
-          <div
-            ref={panel} id="mode-panel" className="mode-panel" role="dialog" aria-labelledby="mode-panel-title"
-            // Enter in a radio button would submit the question box this panel sits in; here it means "done".
-            onKeyDown={(e) => { if (e.key === "Enter" && e.target instanceof HTMLInputElement) { e.preventDefault(); close(true); } }}
-          >
-            <header className="mode-head">
-              <h2 id="mode-panel-title">Who answers your questions</h2>
-              <button type="button" className="mode-done" onClick={() => close(true)}>Done</button>
-            </header>
-            {notice && <p className="mode-notice" role="status">{notice}</p>}
-            <div className="mode-options" role="radiogroup" aria-labelledby="mode-panel-title">
-              {info.modes.map((each) => {
-                const on = each.id === mode.id;
-                const out = callsOutside(info, { ...choice, mode: each.id });
-                const measured = measuredOf(each);
-                return (
-                  <div key={each.id} className={`mode-option${on ? " on" : ""}${out ? " outside" : ""}`}>
-                    <label className="mode-choice">
-                      <input
-                        type="radio" name="blueline-mode" checked={on}
-                        aria-labelledby={`mode-title-${each.id}`} aria-describedby={`mode-about-${each.id}`}
-                        onChange={() => modes.choose({ ...choice, mode: each.id })}
-                      />
-                      <span className="mode-title" id={`mode-title-${each.id}`}>{each.label}{each.auto && <span className="badge">auto</span>}</span>
-                      <ModeGlyph outside={out} />
-                      <span className="mode-about" id={`mode-about-${each.id}`}>
-                        {each.description}
-                        {measured && <span className="mode-measured"><b>{measured.share}</b> {measured.rest}</span>}
-                      </span>
-                    </label>
-                    {on && <Lineup mode={each} interpreters={info.interpreters} readers={info.readers} picks={picks} onPick={(pick) => modes.choose({ ...choice, ...picks, ...pick })} />}
-                  </div>
-                );
-              })}
+          <div ref={pop} className="mode-pop">
+            <div
+              id="mode-panel" className="mode-panel" role="dialog" aria-labelledby="mode-panel-title"
+              // Enter in a radio button would submit the question box this panel sits in; here it means "done".
+              onKeyDown={(e) => { if (e.key === "Enter" && e.target instanceof HTMLInputElement) { e.preventDefault(); close(true); } }}
+            >
+              <header className="mode-head">
+                <h2 id="mode-panel-title">Answer with</h2>
+                <button type="button" className="mode-done" onClick={() => close(true)}>Done</button>
+              </header>
+              {notice && <p className="mode-notice" role="status">{notice}</p>}
+              <div className="mode-options" role="radiogroup" aria-labelledby="mode-panel-title" onMouseLeave={() => setLooking(null)}>
+                {info.modes.map((each) => {
+                  const on = each.id === mode.id;
+                  const out = callsOutside(info, { ...choice, mode: each.id });
+                  const measured = measuredOf(each);
+                  return (
+                    <div key={each.id} className={`mode-option${on ? " on" : ""}${out ? " outside" : ""}`} onMouseEnter={() => setLooking(each.id)}>
+                      <label
+                        className="mode-choice"
+                        // A click on a mode without pickers is the whole choice; arrow keys move through the list without closing it.
+                        onClick={(e) => { if (!each.editable && e.detail > 0) close(true); }}
+                      >
+                        <input
+                          type="radio" name="blueline-mode" checked={on}
+                          aria-labelledby={`mode-title-${each.id}`} aria-describedby={`mode-about-${each.id}`}
+                          onChange={() => modes.choose({ ...choice, mode: each.id })}
+                          onFocus={() => setLooking(each.id)} onBlur={() => setLooking(null)}
+                        />
+                        <span className="mode-title" id={`mode-title-${each.id}`}>{each.label}{each.auto && <span className="badge">auto</span>}</span>
+                        <span className="mode-share">{measured?.share}</span>
+                        <span className="mode-about" id={`mode-about-${each.id}`}>{taglineOf(each)}</span>
+                      </label>
+                      <button
+                        type="button" className="mode-info" aria-label={`What ${each.label} uses`} aria-controls="mode-details"
+                        aria-expanded={pinned === each.id} onClick={() => setPinned(pinned === each.id ? null : each.id)}
+                      >i</button>
+                      {on && each.editable && (
+                        <div className="picks">
+                          <Pick label="Understands the question" options={info.interpreters} chosen={picks.interpreter} onPick={(id) => modes.choose({ ...choice, ...picks, interpreter: id })} />
+                          <Pick label="Reads image plans" options={info.readers} chosen={picks.reader} onPick={(id) => modes.choose({ ...choice, ...picks, reader: id })} />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="mode-foot">Score: questions about 200 unseen floor-plan images answered exactly right.</p>
             </div>
+            {detailed && <Details mode={detailed} outside={callsOutside(info, { ...choice, mode: detailed.id })} />}
           </div>
         </>
       )}
     </>
-  );
-}
-
-function Lineup({ mode, interpreters, readers, picks, onPick }: {
-  mode: ModeInfo; interpreters: Engine[]; readers: Engine[]; picks: { interpreter: string; reader: string };
-  onPick: (pick: { interpreter: string } | { reader: string }) => void;
-}) {
-  return (
-    <div className="lineup">
-      {/* With outside models in the line-up, their tags below say what the summary would. */}
-      {!mode.outside && <p className="mode-summary">{mode.summary}</p>}
-      {mode.auto && <p className="lineup-head">On this server, auto resolves to</p>}
-      {mode.lineup.map((row) =>
-        mode.editable && row.role === "interpreter" ? <Row key={row.role} row={row} options={interpreters} chosen={picks.interpreter} onPick={(id) => onPick({ interpreter: id })} />
-        : mode.editable && row.role === "reader" ? <Row key={row.role} row={row} options={readers} chosen={picks.reader} onPick={(id) => onPick({ reader: id })} />
-        : <Row key={row.role} row={row} />,
-      )}
-    </div>
   );
 }
