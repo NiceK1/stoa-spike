@@ -453,6 +453,11 @@ npm run eval:paraphrase -- --source cubicasa5k --sample ../raster-dev.txt --draw
 npm run eval:paraphrase -- --source ifc_models --drawings 20 --per-file 2 --original   # same sample, dataset wording
 npm run eval:paraphrase -- --source swiss_dwellings --drawings 30 --per-file 5 --original --interpreter templates   # and in bulk mode
 npm test
+# what a call costs and how long it takes (docs/results.md); the last three make paid calls
+npx tsx scripts/measure-latency.ts                                        # scripts and detectors, first and later questions
+PLANNER_PROVIDER=anthropic-api PLANNER_MODEL=claude-haiku-5-5 npx tsx scripts/measure-interp-cost.ts <pairs>/test.jsonl 0 40
+VISION_PROVIDER=anthropic-api npx tsx scripts/measure-text-cost.ts ifc_bench 8 1
+npx tsx scripts/measure-gemini-reading.ts low raster-test100.txt 0 20 4   # tokens, seconds and cost per drawing reading
 ```
 
 Set `STOA_DATASET=../dataset-full` to score against the full dataset instead of the preview; the practice sheets and
