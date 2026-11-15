@@ -24,11 +24,12 @@ All measurements, with what each answer costs and how long it takes: [docs/resul
 built with each partner's technology: [Verda](docs/verda.md), with the measured [path to scale](docs/scaling.md);
 [Gemma](docs/gemma.md); [the Gemini API](docs/gemini.md).
 
-**What an answer costs.** In the default mode nothing is sent to an outside model, so there is no fee per question:
-the scripts and our own models run on our server, and the only cost is that server's time. How much that is depends
-on where it is hosted and how busy it is. On a small CPU server at Verda's price it comes to about 0.05 EUR per 1,000
-scanned drawings and 0.04 EUR per 1,000 questions (projected from our load test), against $9 to $70 per 1,000 drawings
-through an outside vision model. The measurements and the hosting options are in [docs/scaling.md](docs/scaling.md).
+**What an answer costs.** For the person asking: nothing. In the default mode no question is sent to an outside
+model, so there is no fee per question at all; the scripts and our own models run on the server that hosts the app.
+For whoever hosts it, the only cost is that server's time, and it is small. How small depends on the hosting and on
+how busy the server is: on a small CPU server at Verda's price it comes to about 0.05 EUR per 1,000 scanned drawings
+and 0.04 EUR per 1,000 questions (projected from our load test), against $9 to $70 per 1,000 drawings through an
+outside vision model. The measurements and the hosting options are in [docs/scaling.md](docs/scaling.md).
 
 ![Results on the full Stoa dataset, 15 November 2026. By code alone: Swiss apartment floors 37,376 of 37,584 right (99.4%), IFC numeric answers 3,044 of 3,062 (99.4%). Raster floor plans on 200 held-out drawings: our own detectors 1,530 of 1,781 right (85.9%) with no outside model, 1,576 (88.5%) with one outside reading per drawing, against 77.1% and 84.6% for two outside vision models alone. Below: outside calls and their cost per drawing for each way of answering, and raster accuracy per kind of question.](docs/results.png)
 
