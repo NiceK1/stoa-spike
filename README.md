@@ -15,7 +15,8 @@ Live demo: https://blueline.65-108-33-91.sslip.io
 - **Practice drawing sheets and IFC free-text questions** are answered from the sheet's text layer and from facts
   extracted by code, worded by a language model.
 - **Any wording**: a small language model turns each question into a structured call that the exact scripts run.
-  A Gemma we fine-tuned does this on the CPU in under a second, at no cost.
+  A Gemma we fine-tuned does this on the CPU in under a second, at no cost
+  ([the model on Hugging Face](https://huggingface.co/NiceK1/blueline-interpreter-functiongemma-270m)).
 
 All measurements, with what each answer costs and how long it takes: [docs/results.md](docs/results.md). What was
 built with each partner's technology: [Verda](docs/verda.md), with the measured [path to scale](docs/scaling.md);

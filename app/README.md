@@ -316,7 +316,8 @@ valid and names only this drawing's labels, apartments and storeys. A missing mo
 the question to the keyword parser, like any other interpreter failure.
 
 ```bash
-# the weights are not in the repository: put the GGUF file at models/interpreter/interpreter-q8_0.gguf
+# the weights are not in the repository: download them (292 MB) to models/interpreter/interpreter-q8_0.gguf
+curl -L --create-dirs -o ../models/interpreter/interpreter-q8_0.gguf https://huggingface.co/NiceK1/blueline-interpreter-functiongemma-270m/resolve/main/interpreter-q8_0.gguf
 PLANNER_PROVIDER=gemma-local npm start
 # or name the file; PLANNER_THREADS sets the CPU threads (default 8, or fewer cores)
 PLANNER_PROVIDER=gemma-local PLANNER_MODEL=C:/models/interpreter-q8_0.gguf npm start
