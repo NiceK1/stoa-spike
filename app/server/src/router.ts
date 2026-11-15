@@ -20,7 +20,7 @@ import { toEnglish } from "./rewrite.js";
 import { SCRIPTS, UNCONFIGURED, model as modelSource } from "./source.js";
 import { isLayeredPlan, loadPlan, takeoffSource, type Plan, type TakeoffResult } from "./solvers/dxf.js";
 import { describeIfcIntent, elementWords, parseIfcQuestion } from "./solvers/ifc/question.js";
-import { RASTER_KINDS, TARGETS, rasterTarget, readByKeywords, solveRaster, type RasterScope } from "./solvers/raster.js";
+import { RASTER_KINDS, TARGETS, rasterTarget, readByKeywords, solveRaster, wholeWhenOnlyKinds, type RasterScope } from "./solvers/raster.js";
 import sharp from "sharp";
 import type { Answer, AskInput, Evidence, OutsideAdvice, QuestionType, Solved, Understanding } from "./types.js";
 
@@ -263,7 +263,8 @@ export async function ask(input: AskInput, deps: Deps): Promise<Answer> {
     // drawing then reads the question as well.
     const fixed: RasterReading | null = input.type !== undefined && input.type !== "count" ? { call: { operation: "read" }, locate: false, type: input.type } : null;
     const target = rasterTarget(input.question);
-    const read = carried ?? fixed ?? (await interpret(reader, (model) => planRaster(input.question, RASTER_KINDS, model, rasterHint(input.question))));
+    const planned = carried ?? fixed ?? (await interpret(reader, (model) => planRaster(input.question, RASTER_KINDS, model, rasterHint(input.question))));
+    const read = planned && wholeWhenOnlyKinds(planned, input.question);
     let reading: RasterReading;
     let how: How;
     let asked = input.type ?? read?.type;

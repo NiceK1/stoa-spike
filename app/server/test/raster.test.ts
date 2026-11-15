@@ -136,6 +136,15 @@ describe("room types and storeys on a raster drawing", () => {
     expect((await count(WINDOWS, { vision: model, detector })).pipeline).toBe("detector");
   });
 
+  it("gives each of the reader's positions its nearest box when the detector counts as many, however rough the position", async () => {
+    process.env.RASTER_DETECTOR_TARGETS = "symbols";
+    // The reader's two bedrooms sit at 20 and 120 px; the detector's two are at 60 and 150 px: no position lies in a box.
+    const detector = routed([box("bedroom", 0.9, 60), box("bedroom", 0.9, 150)]);
+    const bedrooms = await count(BEDROOMS, { vision: vision(0), detector });
+    expect(bedrooms.evidence).toMatchObject({ marks: [{ n: 1, x: 60, w: 20 }, { n: 2, x: 150, w: 20 }] });
+    expect(bedrooms.source.from.used).toBe("the drawing image; 2 positions in the model's inventory of the drawing, 2 of them outlined by our detector");
+  });
+
   it("outlines an item the reader counted with our detector's box around it, and leaves a dot where there is none", async () => {
     process.env.RASTER_DETECTOR_TARGETS = "symbols";
     // The reader's two bedrooms sit at 20 and 120 px; the detector has a bedroom box around the first only.

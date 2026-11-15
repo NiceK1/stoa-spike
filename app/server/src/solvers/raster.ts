@@ -127,6 +127,21 @@ export function rasterTargets(question: string): Target[] {
 }
 
 /** The reading the keyword patterns give, for when no interpreter model reads the question. */
+/**
+ * A count limited to a part of the drawing becomes a count on the whole drawing when the question names nothing but
+ * the kinds: without a room, a part or a condition in it there is nothing to limit the count to, whatever the
+ * interpreter read into a short question.
+ */
+export function wholeWhenOnlyKinds(reading: RasterReading, question: string): RasterReading {
+  const { call } = reading;
+  if (call.operation !== "count_known" || call.whole) return reading;
+  const named = targetsOf(call.targets);
+  // The kinds' own words count as naming them too: the patterns follow the dataset's wording ("toilet bowls"), a user says "toilet".
+  const words = named.flatMap((t) => `${t.id} ${t.plural}`.toLowerCase().split(/[^\p{L}]+/u)).flatMap((word) => [word, `${word}s`, word.replace(/s$/, "")]);
+  const onlyKinds = named.length > 0 && isPlainRequest(question, new RegExp(named.map((t) => `(?:${t.pattern.source})`).join("|")), [...LISTING, ...words]);
+  return onlyKinds ? { ...reading, call: { ...call, whole: true } } : reading;
+}
+
 export function readByKeywords(question: string, qtype: QuestionType, locate = false): RasterReading {
   // A question that only lists several kinds asks for each of them, whatever answer type its wording suggests.
   const listed = rasterTargets(question);
@@ -422,14 +437,26 @@ async function countTarget(
   const readerMarks = async (points: Located[]): Promise<Mark[]> => {
     const marks = toMarks(points);
     if (!detector || !target.detectorClasses.every((cls) => cls in detector.thresholds)) return marks;
-    const boxes = (await detector.detect(imagePath)).filter((d) => target.detectorClasses.includes(d.cls) && d.score >= OUTLINE_SCORE);
-    const taken = new Set<Detection>();
-    return marks.map((mark) => {
-      const [around] = boxes
-        .filter((d) => !taken.has(d) && mark.x >= d.x && mark.x <= d.x + d.w && mark.y >= d.y && mark.y <= d.y + d.h)
-        .sort((a, b) => a.w * a.h - b.w * b.h);
+    const found = await detector.detect(imagePath);
+    const confident = counted(detector, found);
+    // When the detector counts as many as the reader, each position takes its nearest box, however rough the
+    // position. Otherwise a box is taken only when the position lies in it or close by.
+    const same = confident.length === marks.length;
+    const boxes = same ? confident : found.filter((d) => target.detectorClasses.includes(d.cls) && d.score >= OUTLINE_SCORE);
+    const pairs = marks
+      .flatMap((mark, i) => boxes.map((d, j) => ({ i, j, dx: Math.abs(mark.x - (d.x + d.w / 2)), dy: Math.abs(mark.y - (d.y + d.h / 2)), d })))
+      .filter(({ dx, dy, d }) => same || (dx <= d.w && dy <= d.h))
+      .sort((a, b) => Math.hypot(a.dx, a.dy) - Math.hypot(b.dx, b.dy));
+    const boxOf = new Map<number, Detection>();
+    const taken = new Set<number>();
+    for (const { i, j, d } of pairs) {
+      if (boxOf.has(i) || taken.has(j)) continue;
+      boxOf.set(i, d);
+      taken.add(j);
+    }
+    return marks.map((mark, i) => {
+      const around = boxOf.get(i);
       if (!around) return mark;
-      taken.add(around);
       outlined++;
       return { n: mark.n, x: around.x, y: around.y, w: around.w, h: around.h, label: `${around.cls.replace("_", " ")}, outlined by our detector` };
     });
