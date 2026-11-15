@@ -181,9 +181,13 @@ export function createModes(detector: Detector | null, probe: Probe = systemProb
   const keywords: Slot = { id: "keywords", label: "Keyword parser only", name: SCRIPTS.keywords, tier: "script", outside: false, available: true, model: null };
 
   const hasGemini = env("GEMINI_API_KEY") !== undefined;
+  // At low thinking Gemini reads the held-out drawings within noise of its default level, for a quarter of the cost
+  // and the wait. GEMINI_THINKING=default leaves the level to the model.
+  const thinking = env("GEMINI_THINKING") === "default" ? undefined : (env("GEMINI_THINKING") ?? "low");
+  const geminiId = `gemini-api:${GEMINI}${thinking ? `:thinking-${thinking}` : ""}`;
   const gemini: Slot = {
-    id: "gemini", label: labelOf(`gemini-api:${GEMINI}`)!, name: `gemini-api:${GEMINI}`, tier: "external-model", outside: true, available: hasGemini,
-    ...(!hasGemini && { unavailable: "GEMINI_API_KEY is not set" }), model: hasGemini ? new GeminiApiVision(GEMINI) : null,
+    id: "gemini", label: labelOf(geminiId)!, name: geminiId, tier: "external-model", outside: true, available: hasGemini,
+    ...(!hasGemini && { unavailable: "GEMINI_API_KEY is not set" }), model: hasGemini ? new GeminiApiVision(GEMINI, thinking) : null,
   };
   const haiku = claude("haiku", labelOf(`anthropic-api:${HAIKU}`)!, HAIKU, env("PLANNER_EFFORT"));
   const sonnet = claude("sonnet", labelOf(`anthropic-api:${SONNET}`)!, SONNET, env("VISION_EFFORT"));

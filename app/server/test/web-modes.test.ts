@@ -77,9 +77,9 @@ describe("what the pill says about a choice", () => {
 describe("what the panel says about a line-up", () => {
   it("gives the measured result of the line-ups that were measured, and none for the others", () => {
     expect(measuredOf(mode(DEMO, "blueline"))?.share).toBe("85.9%");
-    expect(measuredOf(mode(DEMO, "best"))?.share).toBe("89.0%");
+    expect(measuredOf(mode(DEMO, "best"))?.share).toBe("88.5%");
     const withGemini = listing({ ANTHROPIC_API_KEY: "key", GEMINI_API_KEY: "key" }, { reader: "gemini" });
-    expect(measuredOf(mode(withGemini, "custom"))?.share).toBe("87.7%");
+    expect(measuredOf(mode(withGemini, "custom"))?.share).toBe("87.3%");
     const withSonnet = listing({ ANTHROPIC_API_KEY: "key", GEMINI_API_KEY: "key" }, { reader: "sonnet" });
     expect(measuredOf(mode(withSonnet, "custom"))).toBeNull();
     // No Gemini key: Best accuracy reads with Claude Sonnet, which was not measured.

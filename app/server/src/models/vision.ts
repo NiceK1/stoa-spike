@@ -126,6 +126,7 @@ const API_PRICES: Record<string, [number, number]> = {
   "claude-opus-5-5": [4, 20],
   "claude-sonnet-5-5": [2, 10],
   "claude-haiku-5-5": [0.1, 0.5],
+  "gemini-4-hydrogen": [1.5, 7.5],
   "gemini-2.0-flash-exp": [0, 0], // Free tier during preview
   "gemini-2.0-flash-thinking-exp-1219": [0, 0], // Free tier during preview
   "gemini-1.5-pro": [1.25, 5],
@@ -188,8 +189,12 @@ export class GeminiApiVision implements VisionModel {
   readonly id: string;
   private client: import("@google/generative-ai").GoogleGenerativeAI | null = null;
 
-  constructor(private readonly model = process.env.VISION_MODEL ?? "gemini-2.0-flash-exp") {
-    this.id = `gemini-api:${model}`;
+  /**
+   * `thinking` is the model's thinking level (GEMINI_THINKING: low, medium, high). Left out, the model uses its own
+   * default, which for Gemini 4 Hydrogen is high: about four times the cost and the wait of low on a drawing reading.
+   */
+  constructor(private readonly model = process.env.VISION_MODEL ?? "gemini-2.0-flash-exp", private readonly thinking = process.env.GEMINI_THINKING || undefined) {
+    this.id = `gemini-api:${model}${thinking ? `:thinking-${thinking}` : ""}`;
   }
 
   // Helper to convert JSON schema to Gemini format (remove unsupported fields)
@@ -249,6 +254,8 @@ export class GeminiApiVision implements VisionModel {
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: this.convertSchema(request.schema),
+        // The SDK's types predate the thinking level; the API takes it.
+        ...(this.thinking && ({ thinkingConfig: { thinkingLevel: this.thinking } } as object)),
       },
       systemInstruction: request.system.replace("Open the image with the Read tool before answering. ", "").replace("Open the image with the Read tool first. ", ""),
     });
@@ -289,7 +296,8 @@ export class GeminiApiVision implements VisionModel {
     const usage = response.usageMetadata;
     const [inputPrice, outputPrice] = API_PRICES[this.model] ?? [0, 0];
     const costUsd = usage 
-      ? ((usage.promptTokenCount || 0) * inputPrice + (usage.candidatesTokenCount || 0) * outputPrice) / 1e6
+      // Thinking tokens are billed as output.
+      ? ((usage.promptTokenCount || 0) * inputPrice + ((usage.candidatesTokenCount || 0) + ((usage as { thoughtsTokenCount?: number }).thoughtsTokenCount || 0)) * outputPrice) / 1e6
       : 0;
 
     const visionResult = {

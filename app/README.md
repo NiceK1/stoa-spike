@@ -88,27 +88,31 @@ mode, 15 November 2026). Vector drawings score the same in every mode (Measured,
 | Mode | Correct | Outside calls | Cost and time of the outside calls |
 |---|---|---|---|
 | Blueline only | 1,530, 85.9% (sample A 773 of 916, sample B 757 of 865) | none | nothing leaves the server |
-| Best accuracy | 1,585, 89.0% (sample A 813, sample B 772) | one Gemini reading per drawing; one Haiku interpretation per question | a reading: about $0.07 and a median of 29 s, once per drawing; an interpretation: about $0.0003 and 2.8 s |
+| Best accuracy | 1,576, 88.5% (sample A 807, sample B 769) | one Gemini reading per drawing; one Haiku interpretation per question | a reading: about $0.02 and 8 s, once per drawing; an interpretation: about $0.0003 and 2.8 s |
 
 | Kind | Asked | Blueline only | Best accuracy |
 |---|---|---|---|
-| Windows | 200 | 97 | 102 |
-| Doors | 156 | 119 | 120 |
-| Toilet bowls | 200 | 188 | 193 |
-| Sinks | 199 | 174 | 180 |
-| Showers and bathtubs | 182 | 162 | 168 |
-| The drawn symbols together | 937 | 740 | 763 |
-| Saunas | 137 | 133 | 134 |
-| Kitchens | 129 | 118 | 127 |
+| Windows | 200 | 97 | 103 |
+| Doors | 156 | 119 | 117 |
+| Toilet bowls | 200 | 188 | 192 |
+| Sinks | 199 | 174 | 179 |
+| Showers and bathtubs | 182 | 162 | 170 |
+| The drawn symbols together | 937 | 740 | 761 |
+| Saunas | 137 | 133 | 133 |
+| Kitchens | 129 | 118 | 125 |
 | Bedrooms | 125 | 111 | 115 |
-| WC rooms | 98 | 95 | 97 |
-| Bathrooms | 94 | 87 | 92 |
-| Balconies | 61 | 55 | 59 |
-| Storeys | 200 | 191 | 198 |
-| Room types and storeys together | 844 | 790 | 822 |
+| WC rooms | 98 | 95 | 95 |
+| Bathrooms | 94 | 87 | 90 |
+| Balconies | 61 | 55 | 58 |
+| Storeys | 200 | 191 | 199 |
+| Room types and storeys together | 844 | 790 | 815 |
 
 Custom with Gemini as the reader counts the symbols as Blueline only does and the room types as Best accuracy does:
-1,562, 87.7%.
+1,555, 87.3%.
+
+In the modes Gemini reads at its low thinking level. At the model's own default (high; `GEMINI_THINKING=default`) Best
+accuracy scored 1,585 (89.0%) and Custom with Gemini 1,562 (87.7%): 9 and 7 questions more out of 1,781, which is
+inside the noise of these samples, for about $0.07 and a median of 29 s per reading instead of $0.02 and 8 s.
 
 The server's side of it:
 
@@ -363,8 +367,8 @@ mode.
 | IFC models, numeric questions | 3,062 | 3,044 | 99.4% |
 | Practice drawing sheets (PDF text) | 48 scorable | 48 | 100% |
 | Raster floor plans, 200 held-out drawings, Blueline only: our detectors alone | 1,781 | 1,530 | 85.9% |
-| Raster floor plans, the same drawings, Best accuracy: the vote on symbols, Gemini 4 Hydrogen for room types | 1,781 | 1,585 | 89.0% |
-| IFC models, free-text questions (graded sample) | 46 | 16, and 11 partly | 35% |
+| Raster floor plans, the same drawings, Best accuracy: the vote on symbols, Gemini 4 Hydrogen for room types | 1,781 | 1,576 | 88.5% |
+| IFC models, free-text questions (graded sample it was not tuned on) | 46 | 25, and 13 partly | 54% |
 
 Raster floor plans, on drawings the detectors never saw in training (two samples of 100, English questions; the
 Finnish questions map to the same targets):
@@ -372,9 +376,10 @@ Finnish questions map to the same targets):
 | Who answers | Sample A (916) | Sample B (865) | Both | Vision calls per drawing |
 |---|---|---|---|---|
 | Blueline only (`--mode blueline`): our trained detectors for all 13 kinds | 773 | 757 | 1,530, 85.9% | 0 |
-| Best accuracy (`--mode best`): the middle of both detectors' counts and Gemini 4 Hydrogen's on symbols, Gemini for room types and storeys | 813 | 772 | 1,585, 89.0% | 1, shared by all questions about the drawing |
+| Best accuracy (`--mode best`): the middle of both detectors' counts and Gemini 4 Hydrogen's on symbols, Gemini for room types and storeys | 807 | 769 | 1,576, 88.5% | 1, shared by all questions about the drawing |
+| The same with Gemini at its default thinking level (`GEMINI_THINKING=default`) | 813 | 772 | 1,585, 89.0% | 1, shared by all questions about the drawing |
 | The line-up of Custom with Claude Sonnet 5.5 as the reader, measured before the modes with `RASTER_DETECTOR_TARGETS=symbols` and Sonnet through the CLI: detectors for drawn symbols, one Sonnet reading for room types and storeys | 791 | 757 | 1,548, 86.9% | none for a symbol question; 1 once a room type or storey is asked |
-| Custom with Gemini 4 Hydrogen as the reader (`--mode custom --reader gemini`) | 797 | 765 | 1,562, 87.7% | none for a symbol question; 1 once a room type or storey is asked |
+| Custom with Gemini 4 Hydrogen as the reader (`--mode custom --reader gemini`) | 791 | 764 | 1,555, 87.3% | none for a symbol question; 1 once a room type or storey is asked |
 | Sonnet 5.5 alone (`--no-detector`) | 713 | 660 | 1,373, 77.1% | 1 |
 | Gemini 4 Hydrogen alone (`--no-detector`) | 791 | 725 | 1,516, 85.1% | 1 |
 | Gemma 4 31B alone, hosted (`--no-detector`, sample A only, 12 failed calls) | 537 | | 58.6% | 1 |
@@ -400,7 +405,8 @@ optional setting buys, per room kind on both samples (exact counts; the symbols 
 Windows are the weak kind (97 of 200 drawings counted exactly); doors are at 76%, every other kind between 87% and 99%.
 
 The vote of Best accuracy was first measured with Sonnet 5.5 as the third count: 809 and 760 (88.1%). With Gemini 4
-Hydrogen it scores 813 and 772 (89.0%). It needs a reading of every drawing, which is why it is a mode and not the
+Hydrogen it scores 813 and 772 (89.0%) at the model's default thinking level and 807 and 769 (88.5%) at low, which
+the modes use. It needs a reading of every drawing, which is why it is a mode and not the
 default.
 
 Things that were tried and measured but are not in the code:
@@ -457,6 +463,7 @@ straight from them, as it always did.
 | `STOA_DATASET` | dataset folder, default `../dataset` | the same |
 | `ANTHROPIC_API_KEY` | makes Claude Haiku 5.5 and Claude Sonnet 5.5 available, through the API | used with `VISION_PROVIDER` or `PLANNER_PROVIDER` `anthropic-api` |
 | `GEMINI_API_KEY` | makes Gemini 4 Hydrogen available | used with `gemini-api` |
+| `GEMINI_THINKING` | Gemini's thinking level in the modes: `low` (default), `medium`, `high`, or `default` for the model's own | the level for `gemini-api`; unset leaves it to the model |
 | `VISION_PROVIDER` | unset or `claude-cli`: the Claude engines may run through the local `claude` CLI (without a key, or always when `claude-cli` is named). `openai-compatible` (with `VISION_BASE_URL`, `VISION_MODEL`, optionally `VISION_API_KEY` and `VISION_IMAGE_MIN_SIDE`): a reader we host ourselves, offered in Custom. Any other value, `none` included, only rules the CLI out | the vision model: `claude-cli` (default), `anthropic-api`, `gemini-api`, `openai-compatible`, or `none`: no outside model, questions read by the keyword parsers unless `PLANNER_PROVIDER` names an interpreter, and a question that only an outside model could answer gets no value and the reason |
 | `VISION_MODEL` | not read: the engines are the measured models (`claude-haiku-5-5`, `claude-sonnet-5-5`, `gemini-4-hydrogen`); it names the model of a self-hosted reader | model id, default `claude-sonnet-5-5` |
 | `PLANNER_PROVIDER`, `PLANNER_MODEL` | `gemma-local` with a `.gguf` path in `PLANNER_MODEL` names the Blueline interpreter's weights file; `claude-cli` makes the CLI the way to the Claude engines. Otherwise not read | the interpreter model that reads every question, default the vision model; a small one is enough (measured: `claude-haiku-5-5`). `PLANNER_PROVIDER` picks its provider (default the vision provider; `gemma-local` is the fine-tuned Gemma on this machine's CPU; `none` leaves the keyword parsers) |

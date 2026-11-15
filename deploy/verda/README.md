@@ -78,7 +78,7 @@ deploy/verda/fallback.sh <ssh destination> off             # the keys are remove
 passes them to the process) and writes the drop-in `blueline.service.d/fallback.conf`, which lifts the service's
 confinement to localhost. A key makes its engines available: Claude Haiku 5.5 and Claude Sonnet 5.5 with the Anthropic
 key, Gemini 4 Hydrogen with the Gemini key. Best accuracy then has Haiku read the question, Gemini read image plans
-(one reading per drawing, about $0.07 and half a minute; the detectors and Gemini vote on the drawn symbols) and Sonnet
+(one reading per drawing at its low thinking level, about $0.02 and 8 seconds; the detectors and Gemini vote on the drawn symbols) and Sonnet
 word the answers from IFC facts and sheet text. With one key only, Best accuracy uses what that key gives.
 
 `off` removes the keys and the drop-in. Best accuracy and Custom stay in the app and say that they resolve to the
@@ -91,7 +91,7 @@ them (apart from keeping the `claude` CLI out of the line-up), they are for an e
 without `--mode`.
 
 What a visitor's choice costs: nothing in Blueline only. In Best accuracy every question is one Haiku interpretation
-(about $0.0003), every image plan one Gemini reading (about $0.07, cached for all later questions about that plan),
+(about $0.0003), every image plan one Gemini reading (about $0.02, cached for all later questions about that plan),
 and a question about IFC facts or sheet text one or two Sonnet calls (about $0.01 to $0.03). There is no spending
 limit in the app: set one on the keys' accounts before giving the address out.
 

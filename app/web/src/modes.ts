@@ -105,7 +105,7 @@ export function understandsFreeWording(mode: ModeInfo): boolean {
 
 export interface Measured { share: string; rest: string }
 
-const READING_COST = "One outside reading per drawing: about $0.07 and half a minute for the first question on an image plan.";
+const READING_COST = "One outside reading per drawing: about $0.02 and 8 seconds for the first question on an image plan.";
 
 /**
  * The measured result of a line-up on 1,781 questions about 200 held-out image plans (app/README.md, "Measured"),
@@ -115,7 +115,7 @@ export function measuredOf(mode: ModeInfo): Measured | null {
   const ids = (role: LineupRow["role"]) => mode.lineup.find((row) => row.role === role)?.engines.map((engine) => engine.id).join("+");
   const symbols = ids("symbols"), reader = ids("reader");
   if (symbols === "detectors" && reader === "detectors") return { share: "85.9%", rest: "right on 1,781 questions about held-out image plans. No outside call, free." };
-  if (symbols === "detectors+gemini" && reader === "gemini") return { share: "89.0%", rest: `right on the same 1,781 questions. ${READING_COST}` };
-  if (symbols === "detectors" && reader === "gemini") return { share: "87.7%", rest: `right on the same 1,781 questions. ${READING_COST}` };
+  if (symbols === "detectors+gemini" && reader === "gemini") return { share: "88.5%", rest: `right on the same 1,781 questions. ${READING_COST}` };
+  if (symbols === "detectors" && reader === "gemini") return { share: "87.3%", rest: `right on the same 1,781 questions. ${READING_COST}` };
   return null;
 }

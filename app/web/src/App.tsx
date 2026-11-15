@@ -421,7 +421,7 @@ export function App() {
                       <p className="asked">{pending}</p>
                       <p className="time">
                         {modes.outside
-                          ? "Reading the drawing… the first outside reading of an image takes about half a minute; later questions on it answer in seconds."
+                          ? "Reading the drawing… the first outside reading of an image takes about ten seconds; later questions on it answer at once."
                           : "Reading the drawing… vector drawings answer at once, images take up to 20 s."}
                       </p>
                     </div>

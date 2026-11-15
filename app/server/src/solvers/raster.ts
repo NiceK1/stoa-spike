@@ -142,6 +142,8 @@ const CATEGORIES = [...new Set(TARGETS.flatMap((t) => t.categories))];
 
 const INVENTORY_PROMPT = "Take the inventory of this floor plan.";
 const IN_DOMAIN_SCORE = 0.6;
+// A box that only outlines an item the reader has already found may be one the detector itself would not count.
+const OUTLINE_SCORE = 0.2;
 const IN_DOMAIN_DETECTIONS = 3;
 
 const INVENTORY_BASE = [
@@ -414,6 +416,26 @@ async function countTarget(
   const names = target.detectorClasses.map((cls) => cls.replace("_", " ")).join(" and ");
   const inventory = () => deps.vision.ask({ imagePath, system: inventorySystem(), schema: INVENTORY_SCHEMA, prompt: INVENTORY_PROMPT });
   const located = (output: Record<string, any>): Located[] => target.categories.flatMap((category) => output[category] ?? []);
+  // The reader gives one position per item. Where our detector has a box of that kind around the position, the box
+  // is shown, so the item is outlined like a detector's own; a position without one stays a numbered dot.
+  let outlined = 0;
+  const readerMarks = async (points: Located[]): Promise<Mark[]> => {
+    const marks = toMarks(points);
+    if (!detector || !target.detectorClasses.every((cls) => cls in detector.thresholds)) return marks;
+    const boxes = (await detector.detect(imagePath)).filter((d) => target.detectorClasses.includes(d.cls) && d.score >= OUTLINE_SCORE);
+    const taken = new Set<Detection>();
+    return marks.map((mark) => {
+      const [around] = boxes
+        .filter((d) => !taken.has(d) && mark.x >= d.x && mark.x <= d.x + d.w && mark.y >= d.y && mark.y <= d.y + d.h)
+        .sort((a, b) => a.w * a.h - b.w * b.h);
+      if (!around) return mark;
+      taken.add(around);
+      outlined++;
+      return { n: mark.n, x: around.x, y: around.y, w: around.w, h: around.h, label: `${around.cls.replace("_", " ")}, outlined by our detector` };
+    });
+  };
+  const READER_CAPTION = "Each number is one item the reader counted; a box is our detector's outline of it, a dot the reader's estimate";
+  const outlines = () => (outlined ? `, ${outlined} of them outlined by our detector` : "");
 
   let why: string;
   if (scope === "none") why = WHY.off;
@@ -451,12 +473,13 @@ async function countTarget(
           tallies.push({ id: deps.vision.id, name: deps.vision.id, count: points.length, points });
           const middle = middleCount(tallies.map((tally) => tally.count));
           const shown = tallies.find((tally) => tally.count === middle)!;
+          const pointed = shown.boxes ? [] : await readerMarks(shown.points ?? []);
           return {
             value: middle, unit: "count", pipeline: "symbol-vote", exact: false, kind: target.id,
             method: `middle of ${tallies.length} independent counts of ${what} (${tallies.map((tally) => `${tally.name}: ${tally.count}`).join("; ")})`,
             evidence: shown.boxes
               ? image(boxMarks(shown.boxes), `Each box is one counted ${names}, as found by ${shown.name}`)
-              : image(toMarks(shown.points ?? []), "Each number is one counted item; positions are the reader's estimate"),
+              : image(pointed, outlined ? READER_CAPTION : "Each number is one counted item; positions are the reader's estimate"),
             source: {
               calculatedBy: [
                 ...tallies.map((tally) => model(tally.id, `counted the ${target.plural}${tally.points ? " in its inventory of the drawing" : ""}: ${tally.count}`, tally.name)),
@@ -466,7 +489,7 @@ async function countTarget(
                 file,
                 used: shown.boxes
                   ? `${several(middle, "detection box")} of class ${target.detectorClasses.join(" and ")} by ${shown.name} on the drawing image`
-                  : `the drawing image; ${several(middle, "position")} in the reader's inventory of the drawing`,
+                  : `the drawing image; ${several(middle, "position")} in the reader's inventory of the drawing${outlines()}`,
               },
             },
           };
@@ -501,9 +524,10 @@ async function countTarget(
     };
   }
   const points = located(output);
+  const marks = await readerMarks(points);
   return {
     value: points.length, unit: "count", pipeline: "vision-model", exact: false, kind: target.id, method,
-    evidence: image(toMarks(points), "Each number is one counted item; positions are the model's estimate"),
-    source: { calculatedBy, from: { file, used: `the drawing image; ${several(points.length, "position")} in the model's inventory of the drawing` } },
+    evidence: image(marks, outlined ? READER_CAPTION : "Each number is one counted item; positions are the model's estimate"),
+    source: { calculatedBy, from: { file, used: `the drawing image; ${several(points.length, "position")} in the model's inventory of the drawing${outlines()}` } },
   };
 }

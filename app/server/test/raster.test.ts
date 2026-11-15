@@ -133,8 +133,21 @@ describe("room types and storeys on a raster drawing", () => {
     // The same request, so the two questions share one cached reading of the drawing.
     expect(model.requests).toHaveLength(2);
     expect(model.requests[1]).toEqual(model.requests[0]);
-    expect(detector.scans).toBe(0);
     expect((await count(WINDOWS, { vision: model, detector })).pipeline).toBe("detector");
+  });
+
+  it("outlines an item the reader counted with our detector's box around it, and leaves a dot where there is none", async () => {
+    process.env.RASTER_DETECTOR_TARGETS = "symbols";
+    // The reader's two bedrooms sit at 20 and 120 px; the detector has a bedroom box around the first only.
+    const detector = routed([box("bedroom", 0.3), box("bedroom", 0.9, 60)]);
+    const bedrooms = await count(BEDROOMS, { vision: vision(0), detector });
+    expect(bedrooms.value).toBe(2);
+    expect(bedrooms.evidence).toMatchObject({
+      marks: [{ n: 1, x: 10, y: 10, w: 20, h: 10, label: "bedroom, outlined by our detector" }, { n: 2, x: 120, y: 20 }],
+      caption: "Each number is one item the reader counted; a box is our detector's outline of it, a dot the reader's estimate",
+    });
+    expect(bedrooms.evidence?.kind === "image" && bedrooms.evidence.marks[1].w).toBeUndefined();
+    expect(bedrooms.source.from.used).toBe("the drawing image; 2 positions in the model's inventory of the drawing, 1 of them outlined by our detector");
   });
 
   it("go to the vision model for a kind the installed detectors do not offer", async () => {

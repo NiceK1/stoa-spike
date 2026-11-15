@@ -24,7 +24,7 @@ const OURS_ONLY = { VISION_PROVIDER: "none", PLANNER_PROVIDER: "gemma-local" };
 const GEMMA = "gemma-local:interpreter-q8_0";
 const HAIKU = "anthropic-api:claude-haiku-5-5";
 const SONNET = "anthropic-api:claude-sonnet-5-5";
-const GEMINI = "gemini-api:gemini-4-hydrogen";
+const GEMINI = "gemini-api:gemini-4-hydrogen:thinking-low";
 
 /** The ids of the models a line-up runs with. */
 function models(modes: ReturnType<typeof createModes>, choice?: Record<string, unknown>) {
