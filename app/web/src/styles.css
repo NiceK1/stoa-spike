@@ -375,18 +375,13 @@ button { cursor: pointer; }
 .mode-option:hover { background: var(--paper); }
 .mode-option.on { border-color: var(--brand); background: var(--marker-soft); }
 .mode-option.outside.on { border-color: var(--estimate); border-style: dashed; background: var(--outside-soft); }
-.mode-choice { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: baseline; gap: 1px 9px; padding: 8px 40px 9px 10px; cursor: pointer; }
+.mode-choice { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: baseline; gap: 1px 9px; padding: 8px 12px 9px 10px; cursor: pointer; }
 .mode-choice input { align-self: center; margin: 0; accent-color: var(--brand); }
 .mode-option.outside .mode-choice input { accent-color: var(--estimate); }
 .mode-title { display: flex; align-items: center; gap: 7px; font: 600 18px/1.2 var(--display); letter-spacing: 0.005em; }
 .mode-title .badge { color: var(--estimate); border-color: rgba(138, 90, 0, 0.4); }
 .mode-share { font: 600 18px/1.2 var(--display); font-variant-numeric: tabular-nums; color: var(--ink); }
 .mode-about { grid-column: 2 / -1; font-size: 13px; line-height: 1.35; color: var(--soft); }
-.mode-info {
-  position: absolute; top: 9px; right: 9px; width: 20px; height: 20px; padding: 0; border: 1px solid var(--rule); border-radius: 50%;
-  background: var(--sheet); font: italic 600 13px/1 Georgia, serif; color: var(--soft);
-}
-.mode-info:hover, .mode-info[aria-expanded="true"] { border-color: var(--brand); color: var(--brand); }
 .picks { display: grid; gap: 8px; padding: 2px 10px 11px 32px; cursor: default; }
 .pick { display: grid; gap: 3px; }
 .pick-label { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--soft); }

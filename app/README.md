@@ -49,8 +49,8 @@ button and names the mode; its outline is a closed blue line while only our own 
 broken amber one, whose dashes travel while a question is out, when a question may go to an outside model. The oval
 opens a short list (a sheet from the bottom edge on a phone): the three modes as one choice, each with a few words
 and its measured result on held-out image plans. What a mode is made of is kept out of the list: its description and
-who does each job show in a card beside the list for the mode under the pointer or with the focus, and with the "i"
-of a mode on a phone. Custom opens its two pickers under it, where an engine that cannot run here is listed but
+who does each job show in a card beside the list for the mode under the pointer or with the keyboard's focus. Custom
+opens its two pickers under it, where an engine that cannot run here is listed but
 cannot be picked. The choice is kept in the browser's `localStorage`
 (`blueline.mode`). A remembered choice that cannot run on this server gives way to the server's default, and the panel
 says so once. An answer with no value for want of an outside model carries `retry`, and the page then offers to ask

@@ -79,16 +79,14 @@ function Pick({ label, options, chosen, onPick }: { label: string; options: Engi
 export function ModePill({ modes, busy }: { modes: Modes; busy: boolean }) {
   const { info, choice, mode, outside, summary, notice } = modes;
   const [open, setOpen] = useState(false);
-  // The mode whose details show: the one under the pointer or with the focus, or the one pinned with its "i".
+  // The mode whose details show: the one under the pointer or with the keyboard's focus.
   const [looking, setLooking] = useState<string | null>(null);
-  const [pinned, setPinned] = useState<string | null>(null);
   const pill = useRef<HTMLButtonElement>(null);
   const pop = useRef<HTMLDivElement>(null);
 
   function close(refocus: boolean) {
     setOpen(false);
     setLooking(null);
-    setPinned(null);
     modes.dismissNotice();
     if (refocus) pill.current?.focus();
   }
@@ -110,7 +108,7 @@ export function ModePill({ modes, busy }: { modes: Modes; busy: boolean }) {
   const picks = picksOf(info, choice);
   // Beside the list the card can follow the pointer; inside a phone's sheet it would move the list under the finger.
   const follows = window.matchMedia("(min-width: 641px)").matches;
-  const detailed = info.modes.find((each) => each.id === (pinned ?? (follows ? looking : null)));
+  const detailed = follows ? info.modes.find((each) => each.id === looking) : undefined;
 
   return (
     <>
@@ -166,10 +164,6 @@ export function ModePill({ modes, busy }: { modes: Modes; busy: boolean }) {
                         <span className="mode-share">{measured?.share}</span>
                         <span className="mode-about" id={`mode-about-${each.id}`}>{taglineOf(each)}</span>
                       </label>
-                      <button
-                        type="button" className="mode-info" aria-label={`What ${each.label} uses`} aria-controls="mode-details"
-                        aria-expanded={pinned === each.id} onClick={(e) => { e.stopPropagation(); setPinned(pinned === each.id ? null : each.id); }}
-                      >i</button>
                       {on && each.editable && (
                         <div className="picks" onClick={(e) => e.stopPropagation()}>
                           <Pick label="Understands the question" options={info.interpreters} chosen={picks.interpreter} onPick={(id) => modes.choose({ ...choice, ...picks, interpreter: id })} />
