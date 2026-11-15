@@ -146,6 +146,11 @@ use at Google's listed $1.50 and $7.50 per million input and output tokens, thin
 default level 2,928 input, 454 output and 8,156 thinking tokens per reading on average over 20 drawings (thinking
 from 1,069 to 34,644), at low 1,244 thinking tokens on average over 197 readings.
 
+The $0 in the rows of our own scripts and models means that no outside provider is paid. They still use our server's
+time, and what that costs depends on the hosting: about 0.05 EUR per 1,000 scanned drawings and 0.04 EUR per 1,000
+interpreted questions on a small CPU server at Verda's price, when the server is kept busy (projected from the load
+test in [scaling.md](scaling.md)); a server that is busy a quarter of the time costs four times that per drawing.
+
 Put together, for one raster drawing and the questions asked about it:
 
 | Mode | Outside cost | Wait for the first answer | Wait for later answers |
