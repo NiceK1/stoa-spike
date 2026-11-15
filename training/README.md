@@ -17,9 +17,10 @@ To redraw it from the logs saved in `docs/training-data/` (one `results.csv` per
 
 ### Run ledger
 
-All runs are on one Nvidia A100 on Verda (14 November 2026, local time), starting from COCO-pretrained weights.
-Scores are questions answered with exactly the right count over the five symbol kinds; runs 1–3 on the 479 test
-drawings, runs 4–6 on the 480 dev drawings.
+Runs 1 to 7 and 16 are on one Nvidia A100 on Verda, runs 8 to 15 side by side on a spot instance with eight L40S
+(14 and 15 November 2026, local time), all starting from COCO-pretrained weights. Scores are questions answered with
+exactly the right count over the five symbol kinds; runs 1–3 on the 479 test drawings, the later ones on the 480 dev
+drawings unless the row says otherwise.
 
 | Run | When | Model | Trained on | Size, epochs | GPU time | Result | Led to |
 |---|---|---|---|---|---|---|---|
@@ -28,7 +29,16 @@ drawings, runs 4–6 on the 480 dev drawings.
 | 3 | 07:05–09:02 | YOLO11x | 6 symbol classes, mirrored | 1536 px, 42 | 1.9 h | 1,616 of 2,220, worse on every kind | the error analysis: the labels set the ceiling |
 | 4 | 13:53–15:07 | YOLO11l | run 2's recipe on the new split (3,802 drawings) | 1280 px, 60 | 1.2 h | 1,723 of 2,235 | the yardstick for later runs |
 | 5 | 15:08–16:23 | YOLO11l | run 4 with mosaic off and gentler scaling and colour | 1280 px, 60 | 1.2 h | 1,709 of 2,235, no gain | dropping augmentation as a lever |
-| 6 | from 16:24 | YOLO26l | run 4's recipe | 1280 px, 60 | running | not scored yet | |
+| 6 | 16:24–18:03 | YOLO26l | run 4's recipe | 1280 px, 60 | 1.6 h | 1,738 of 2,235, inside the noise between seeds | dropping a newer architecture as a lever |
+| 7 | 18:05–19:50 | YOLO11l | windows relabelled as runs (below) | 1280 px, 60 | 1.8 h | 1,729 of 2,235; windows 255 of 480 against 236 | the fair retrain, run 16 |
+| 8, 9 | spot burst, 18:15–22:10 | YOLO11l | run 4's recipe with two other seeds | 1280 px, 60 | | 1,728 and 1,749 of 2,235 | the noise between runs of one recipe: about 13 questions |
+| 10 | spot burst | YOLO11l | run 4 with thicker boxes for thin symbols | 1280 px, 60 | | 1,718 of 2,235, no gain | |
+| 11 | spot burst | RT-DETR | run 4's data | 1280 px | | 1,612 of 2,235 | dropping transformer detectors |
+| 12 | spot burst | YOLO26l | windows as runs | 1280 px, 60 | | 1,747 of 2,235; windows 243 of 480 | |
+| 13 | spot burst | YOLO11l | the seven room kinds and storeys only | 1280 px, 60 | | 1,908 of 2,063 room questions; on the app's held-out drawings 788 of 844 against 790 for run 1 | not adopted |
+| 14 | spot burst | YOLO11l | run 13 at a higher resolution | 1600 px, 60 | | 1,825 of 2,063, worse | |
+| 15 | spot burst | YOLO11m | all 13 classes on the new split | 1280 px, 60 | | 3,600 of 4,298 over all kinds | |
+| 16 | 15 Nov, 00:35–02:50 | YOLO11l | windows as runs on run 2's data (4,282 drawings) | 1280 px, 60 | 2.3 h, GPU shared | on the app's 200 held-out drawings: windows 89 against 97 for run 2, doors 114 against 119 | not adopted: the app keeps runs 1 and 2 |
 
 Per run, `docs/training-data/` holds the per-epoch log (`runN.csv`), the exact settings Ultralytics recorded
 (`runN-settings.yaml`) and the scoring report with per-kind counts and the confidence thresholds tuned on validation
@@ -120,6 +130,13 @@ venv/bin/python sweep/panes.py prepare && venv/bin/python sweep/panes.py train &
 dev), for a model that can be compared with the deployed one. Its `app_spec.json` makes `export_onnx.py` write the
 spec under the names the app counts: a run is a `window` that counts once, and `door_other` is named `door` only if
 that gives more exact door counts on validation, counted as the app counts (no NMS across classes).
+
+What it gave: on the dev drawings the run labels counted 19 more windows right of 480 (run 7). Retrained on the
+deployed detector's own data and compared with it on the app's 200 held-out drawings (run 16), they counted fewer
+right: windows 89 of 200 against 97, doors 114 of 156 against 119, showers and bathtubs 155 of 182 against 162;
+sinks and toilets were level (175 against 174, 187 against 188). The gain did not carry over, so the app keeps its
+detectors. Calibrating the counts from the detections' probabilities (`sweep/calib.py`) stayed inside the noise too:
+windows 230 against 236 on dev, doors 266 against 263.
 
 ## Unit mask, RF-DETR and calibrated counts
 

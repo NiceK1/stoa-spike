@@ -34,7 +34,8 @@ Measured on 200 floor plans held out from training, 1,781 count questions, exact
 The spot burst also told us what not to spend on. Three seeds of one recipe differ by about 13 questions in 2,235, and
 a larger model, a newer architecture, RT-DETR, gentler augmentation and thicker boxes all landed inside that noise. The
 limit for windows is the annotation itself: the same window is one object in some drawings and two in others. Labelling
-windows as runs gained 19 of 480 drawings on our selection set; the fair retrain that settles it is running now.
+windows as runs gained 19 of 480 drawings on our selection set, but the fair retrain on the deployed detector's own
+data counted fewer windows right on the held-out drawings (89 of 200 against 97), so the app keeps its detectors.
 
 The interpreter went from no valid output to 87% of held-out questions turned into exactly the right call. Inside the
 app it matches a hosted small model on the dataset's wording and answers in about a second on a laptop CPU. A served
