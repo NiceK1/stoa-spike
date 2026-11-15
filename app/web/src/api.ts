@@ -70,7 +70,7 @@ export async function ask(d: Drawing, question: string, choice?: Choice): Promis
       body: JSON.stringify({ ...(d.kind === "dataset" ? { path: d.path } : { upload: d.id }), question, ...choice }),
     });
     const body = await response.json();
-    if (!response.ok) throw new Error(body.error ?? "The question could not be answered.");
+    if (!response.ok) throw Object.assign(new Error(body.error ?? "The question could not be answered."), { detail: body.detail as string | undefined });
     return body;
   }
   if (d.kind !== "dataset") throw new Error("Uploads need the full app.");

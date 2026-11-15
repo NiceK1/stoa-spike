@@ -21,7 +21,7 @@ const SYSTEM = [
   "If no template fits, translate the question literally, still copying the quoted names exactly.",
 ].join("\n");
 
-const SCHEMA = {
+export const SCHEMA = {
   type: "object",
   properties: { question: { type: "string" } },
   required: ["question"],

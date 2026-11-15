@@ -8,6 +8,7 @@ import { basename, extname, join, relative, resolve, sep } from "node:path";
 import { APP_ROOT, CACHE_DIR, REPO_ROOT, UPLOAD_DIR, datasetRoot, loadEnv } from "./config.js";
 import { isAvailable, questionsByPath } from "./dataset.js";
 import { createDetector } from "./models/detector.js";
+import { explainFailure } from "./failure.js";
 import { ChoiceError, DEFAULT_MODE, createModes, lineupSentence, type Choice } from "./modes.js";
 import { ask, preview } from "./router.js";
 import { isCorrect } from "./scoring.js";
@@ -84,7 +85,7 @@ app.get<{ Querystring: { path?: string; upload?: string } }>("/api/preview", asy
   try {
     return { evidence: await preview(file, { fileUrl }) };
   } catch (error) {
-    return reply.code(500).send({ error: error instanceof Error ? error.message : String(error) });
+    return reply.code(500).send(explainFailure(error));
   }
 });
 
@@ -123,7 +124,7 @@ app.post<{ Body: { path?: string; upload?: string; question: string; type?: Ques
       expected: known ? { value: known.answer, unit: known.unit, correct: isCorrect(known.type, known.answer, answer.value) } : null,
     };
   } catch (error) {
-    return reply.code(500).send({ error: error instanceof Error ? error.message : String(error) });
+    return reply.code(500).send(explainFailure(error));
   }
 });
 

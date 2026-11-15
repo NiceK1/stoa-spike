@@ -76,7 +76,7 @@ const SYSTEM =
   "Return the answer, and in `rows` the ids of every row the answer is based on (each counted or summed row), so a person can check them on the sheet. " +
   "If the text does not contain the answer, set value to null and say what is missing.";
 
-const SCHEMA = {
+export const SCHEMA = {
   type: "object",
   properties: {
     answer: { type: "string" },

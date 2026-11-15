@@ -185,6 +185,37 @@ export class AnthropicApiVision implements VisionModel {
 }
 
 /** Gemini through the Google AI API. Needs GEMINI_API_KEY. */
+/** What stands for the empty string in an enum sent to Gemini, which takes no empty enum value. */
+const GEMINI_EMPTY = "(none)";
+
+/**
+ * A JSON schema as Gemini's response schema takes it: one type per field, with "or null" said as `nullable`, no
+ * empty enum value, and without the keywords it rejects.
+ */
+export function geminiSchema(schema: any): any {
+  if (Array.isArray(schema)) return schema.map(geminiSchema);
+  if (!schema || typeof schema !== "object") return schema;
+  const { $schema: _dialect, additionalProperties: _closed, ...converted } = schema;
+  if (Array.isArray(converted.enum)) converted.enum = converted.enum.map((value: unknown) => (value === "" ? GEMINI_EMPTY : value));
+  if (Array.isArray(converted.type)) {
+    const types = converted.type.filter((type: string) => type !== "null");
+    if (types.length < converted.type.length) converted.nullable = true;
+    converted.type = types[0];
+  }
+  if (converted.properties) converted.properties = Object.fromEntries(Object.entries(converted.properties).map(([key, value]) => [key, geminiSchema(value)]));
+  if (converted.items) converted.items = geminiSchema(converted.items);
+  for (const key of ["anyOf", "oneOf", "allOf"]) if (converted[key]) converted[key] = converted[key].map(geminiSchema);
+  return converted;
+}
+
+/** Gemini's answer with the stand-in for the empty enum value turned back. */
+export function geminiOutput(value: any): any {
+  if (value === GEMINI_EMPTY) return "";
+  if (Array.isArray(value)) return value.map(geminiOutput);
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, each]) => [key, geminiOutput(each)]));
+  return value;
+}
+
 export class GeminiApiVision implements VisionModel {
   readonly id: string;
   private client: import("@google/generative-ai").GoogleGenerativeAI | null = null;
@@ -195,45 +226,6 @@ export class GeminiApiVision implements VisionModel {
    */
   constructor(private readonly model = process.env.VISION_MODEL ?? "gemini-2.0-flash-exp", private readonly thinking = process.env.GEMINI_THINKING || undefined) {
     this.id = `gemini-api:${model}${thinking ? `:thinking-${thinking}` : ""}`;
-  }
-
-  // Helper to convert JSON schema to Gemini format (remove unsupported fields)
-  private convertSchema(schema: any): any {
-    if (!schema || typeof schema !== 'object') return schema;
-    
-    // Create a copy to avoid mutating the original
-    const converted = Array.isArray(schema) ? [...schema] : { ...schema };
-    
-    // Remove unsupported fields
-    delete converted.$schema;
-    delete converted.additionalProperties;
-    
-    // Recursively process nested objects
-    if (converted.properties) {
-      const newProps: any = {};
-      for (const [key, value] of Object.entries(converted.properties)) {
-        newProps[key] = this.convertSchema(value);
-      }
-      converted.properties = newProps;
-    }
-    
-    // Process arrays
-    if (converted.items) {
-      converted.items = this.convertSchema(converted.items);
-    }
-    
-    // Process anyOf/oneOf/allOf
-    if (converted.anyOf) {
-      converted.anyOf = converted.anyOf.map((s: any) => this.convertSchema(s));
-    }
-    if (converted.oneOf) {
-      converted.oneOf = converted.oneOf.map((s: any) => this.convertSchema(s));
-    }
-    if (converted.allOf) {
-      converted.allOf = converted.allOf.map((s: any) => this.convertSchema(s));
-    }
-    
-    return converted;
   }
 
   async ask(request: VisionRequest): Promise<VisionResult> {
@@ -253,7 +245,7 @@ export class GeminiApiVision implements VisionModel {
       model: this.model,
       generationConfig: {
         responseMimeType: "application/json",
-        responseSchema: this.convertSchema(request.schema),
+        responseSchema: geminiSchema(request.schema),
         // The SDK's types predate the thinking level; the API takes it.
         ...(this.thinking && ({ thinkingConfig: { thinkingLevel: this.thinking } } as object)),
       },
@@ -287,7 +279,7 @@ export class GeminiApiVision implements VisionModel {
 
     let output: Record<string, any>;
     try {
-      output = JSON.parse(response.text());
+      output = geminiOutput(JSON.parse(response.text()));
     } catch (e) {
       throw new Error(`Failed to parse Gemini JSON response: ${response.text().slice(0, 300)}`);
     }

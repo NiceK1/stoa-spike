@@ -14,7 +14,7 @@ const SYSTEM =
   "- partly: the answer gets the main fact right but leaves out or gets wrong part of what was asked.\n" +
   "- wrong: the main fact is missing or contradicts the reference, or the answer says it cannot be determined when the reference gives it.";
 
-const SCHEMA = {
+export const SCHEMA = {
   type: "object",
   properties: { verdict: { type: "string", enum: ["correct", "partly", "wrong"] }, reason: { type: "string" } },
   required: ["verdict", "reason"],

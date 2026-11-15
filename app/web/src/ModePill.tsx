@@ -54,16 +54,20 @@ function Details({ mode, outside }: { mode: ModeInfo; outside: boolean }) {
 
 /** A picker of the mode that has them. An engine that cannot run here is listed, and cannot be picked. */
 function Pick({ label, options, chosen, onPick }: { label: string; options: Engine[]; chosen: string; onPick: (id: string) => void }) {
+  const outside = options.find((engine) => engine.id === chosen)?.outside ?? false;
   return (
-    <label className="pick">
-      <span>{label}</span>
-      <select value={chosen} onChange={(e) => onPick(e.target.value)}>
-        {options.map((engine) => (
-          <option key={engine.id} value={engine.id} disabled={!engine.available} title={engine.unavailable}>
-            {engine.label}{!engine.available && " (cannot run here)"}
-          </option>
-        ))}
-      </select>
+    <label className={outside ? "pick outside" : "pick"}>
+      <span className="pick-label">{label}{outside && <span className="tier external-model">outside</span>}</span>
+      <span className="pick-select">
+        <select value={chosen} onChange={(e) => onPick(e.target.value)}>
+          {options.map((engine) => (
+            <option key={engine.id} value={engine.id} disabled={!engine.available} title={engine.unavailable}>
+              {engine.label}{!engine.available && " (cannot run here)"}
+            </option>
+          ))}
+        </select>
+        <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" /></svg>
+      </span>
     </label>
   );
 }
@@ -144,12 +148,13 @@ export function ModePill({ modes, busy }: { modes: Modes; busy: boolean }) {
                   const out = callsOutside(info, { ...choice, mode: each.id });
                   const measured = measuredOf(each);
                   return (
-                    <div key={each.id} className={`mode-option${on ? " on" : ""}${out ? " outside" : ""}`} onMouseEnter={() => setLooking(each.id)}>
-                      <label
-                        className="mode-choice"
-                        // A click on a mode without pickers is the whole choice; arrow keys move through the list without closing it.
-                        onClick={(e) => { if (!each.editable && e.detail > 0) close(true); }}
-                      >
+                    <div
+                      key={each.id} className={`mode-option${on ? " on" : ""}${out ? " outside" : ""}`} onMouseEnter={() => setLooking(each.id)}
+                      // The whole block chooses. A click on a mode without pickers is the whole choice, so the list closes;
+                      // the keyboard's own clicks (arrow keys, Space: detail 0) move through the list and leave it open.
+                      onClick={(e) => { modes.choose({ ...choice, mode: each.id }); if (!each.editable && e.detail > 0) close(true); }}
+                    >
+                      <label className="mode-choice">
                         <input
                           type="radio" name="blueline-mode" checked={on}
                           aria-labelledby={`mode-title-${each.id}`} aria-describedby={`mode-about-${each.id}`}
@@ -163,10 +168,10 @@ export function ModePill({ modes, busy }: { modes: Modes; busy: boolean }) {
                       </label>
                       <button
                         type="button" className="mode-info" aria-label={`What ${each.label} uses`} aria-controls="mode-details"
-                        aria-expanded={pinned === each.id} onClick={() => setPinned(pinned === each.id ? null : each.id)}
+                        aria-expanded={pinned === each.id} onClick={(e) => { e.stopPropagation(); setPinned(pinned === each.id ? null : each.id); }}
                       >i</button>
                       {on && each.editable && (
-                        <div className="picks">
+                        <div className="picks" onClick={(e) => e.stopPropagation()}>
                           <Pick label="Understands the question" options={info.interpreters} chosen={picks.interpreter} onPick={(id) => modes.choose({ ...choice, ...picks, interpreter: id })} />
                           <Pick label="Reads image plans" options={info.readers} chosen={picks.reader} onPick={(id) => modes.choose({ ...choice, ...picks, reader: id })} />
                         </div>

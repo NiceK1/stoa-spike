@@ -379,6 +379,15 @@ describe("the vote on a drawn symbol", () => {
     expect(answer.method).toBe("window symbols counted by our detectors (symbols), no outside model; the reader broken-reader gave no count for the vote (503 from the provider)");
   });
 
+  it("counts a room type with our detectors when the reader it was left to fails, and says so", async () => {
+    const broken: VisionModel = { id: "broken-reader", ask: async () => { throw new Error("400 from the provider"); } };
+    const bedrooms = await count(BEDROOMS, { vision: broken, detector: pair(4, 4), scope: "symbols", vote: true });
+    expect(bedrooms).toMatchObject({ value: 1, pipeline: "detector" });
+    expect(bedrooms.method).toBe("bedroom rooms counted by our detectors (rooms), no outside model; the reader broken-reader did not answer, so our detectors counted instead");
+    // Nobody else can count a kind the detectors do not know: the failure is the answer's.
+    await expect(count("How many staircases are on this plan?", { vision: broken, detector: pair(4, 4), scope: "symbols" })).rejects.toThrow("400 from the provider");
+  });
+
   it("is not held with fewer than three counts: one detector answers without asking the reader", async () => {
     const model = vision(9);
     const answer = await voted(routed(windows(4)), model);

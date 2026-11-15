@@ -23,7 +23,7 @@ const SELECT_SYSTEM =
   "terminal, a furnishing element or a proxy, an installation is spread over segments, fittings, terminals and devices. " +
   "Ask for nothing when the overview already answers the question.";
 
-const SELECT_SCHEMA = {
+export const SELECT_SCHEMA = {
   type: "object",
   properties: {
     sections: { type: "array", items: { type: "string", enum: ["spaces", "systems"] } },
@@ -43,7 +43,7 @@ const ANSWER_SYSTEM =
   "when the facts hold neither the value nor a basis for it. Keep type and room names as the model writes them. " +
   "When the answer is a single number, also give it in value with its unit.";
 
-const ANSWER_SCHEMA = {
+export const ANSWER_SCHEMA = {
   type: "object",
   properties: {
     answer: { type: "string" },

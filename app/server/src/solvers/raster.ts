@@ -209,7 +209,7 @@ const COUNT_SYSTEM =
   "For each item give the position of its centre as x and y in thousandths of the image width and height " +
   "(0 to 1000, origin at the top-left corner). The answer is the number of items you list.";
 
-const COUNT_SCHEMA = {
+export const COUNT_SCHEMA = {
   type: "object",
   properties: { items: POINTS, count: { type: "integer" } },
   required: ["items", "count"],
@@ -220,7 +220,7 @@ const FREE_SYSTEM =
   "You read architectural drawings. Open the image with the Read tool before answering. " +
   "Answer from what is drawn or written on the drawing; if it cannot be determined, say so in the explanation and leave value empty.";
 
-const FREE_SCHEMA = {
+export const FREE_SCHEMA = {
   type: "object",
   properties: {
     answer: { type: "string" },
@@ -437,6 +437,31 @@ async function countTarget(
   const READER_CAPTION = "Each number is one item the reader counted; a box is our detector's outline of it, a dot the reader's estimate";
   const outlines = () => (outlined ? `, ${outlined} of them outlined by our detector` : "");
 
+  const counted = (by: Detector, found: Detection[]) =>
+    readingOrder(found.filter((d) => target.detectorClasses.includes(d.cls) && d.score >= by.thresholds[d.cls]), (d) => ({ x: d.x + d.w / 2, y: d.y + d.h / 2 }), height * ROW);
+  const boxMarks = (found: Detection[]): Mark[] =>
+    found.map((d, i) => ({ n: i + 1, x: d.x, y: d.y, w: d.w, h: d.h, label: `${d.cls.replace("_", " ")}, ${Math.round(d.score * 100)}% confidence` }));
+  const what = target.id === "floor" ? "storey plans" : `${names} ${target.symbol ? "symbols" : "rooms"}`;
+  // The detectors know one drawing style. On a drawing where they recognise almost nothing with confidence
+  // (an elevation, a historic scan), their count would be a confident zero, so the vision model answers instead.
+  const inDomain = (scanned: Detection[]) => scanned.filter((d) => d.score >= IN_DOMAIN_SCORE).length >= IN_DOMAIN_DETECTIONS;
+  /** The count of the detector routed to the target, with why nobody else took part when someone was due to. */
+  const byDetector = (by: Detector, scanned: Detection[], remark = ""): Solved => {
+    const boxes = counted(by, scanned);
+    // A detector that is not our own weights (a hosted one) is named with its provider, like any outside model.
+    const ours = tierOf(by.id) === "own-model";
+    const name = ours ? [...new Set(target.detectorClasses.map((cls) => by.nameFor?.(cls) ?? by.id.split(":")[1]))].join(" and ") : by.id;
+    return {
+      value: boxes.length, unit: "count", pipeline: "detector", exact: false, kind: target.id,
+      method: (ours ? `${what} counted by our detectors (${name}), no outside model` : `${what} counted by the outside detector ${name}`) + remark,
+      evidence: image(boxMarks(boxes), `Each box is one counted ${names}`),
+      source: {
+        calculatedBy: [model(by.id, `counted the ${target.plural}${remark}`, name)],
+        from: { file, used: `${several(boxes.length, "detection box")} of class ${target.detectorClasses.join(" and ")} on the drawing image` },
+      },
+    };
+  };
+
   let why: string;
   if (scope === "none") why = WHY.off;
   else if (!detector) why = WHY.absent;
@@ -444,14 +469,7 @@ async function countTarget(
   else if (scope !== "all" && !target.symbol) why = deps.scope ? "the line-up leaves room types and storeys to the reader" : `RASTER_DETECTOR_TARGETS=${scope} leaves room types and storeys to it`;
   else {
     const scanned = await detector.detect(imagePath);
-    // The detectors know one drawing style. On a drawing where they recognise almost nothing with confidence
-    // (an elevation, a historic scan), their count would be a confident zero, so the vision model answers instead.
-    if (scanned.filter((d) => d.score >= IN_DOMAIN_SCORE).length >= IN_DOMAIN_DETECTIONS) {
-      const counted = (by: Detector, found: Detection[]) =>
-        readingOrder(found.filter((d) => target.detectorClasses.includes(d.cls) && d.score >= by.thresholds[d.cls]), (d) => ({ x: d.x + d.w / 2, y: d.y + d.h / 2 }), height * ROW);
-      const boxMarks = (found: Detection[]): Mark[] =>
-        found.map((d, i) => ({ n: i + 1, x: d.x, y: d.y, w: d.w, h: d.h, label: `${d.cls.replace("_", " ")}, ${Math.round(d.score * 100)}% confidence` }));
-      const what = target.id === "floor" ? "storey plans" : `${names} ${target.symbol ? "symbols" : "rooms"}`;
+    if (inDomain(scanned)) {
       const routed = detector.nameFor?.(target.detectorClasses[0]) ?? detector.id.split(":")[1];
 
       // Why the reader's count could not be had, when a vote was due: the routed detector then answers alone.
@@ -496,25 +514,21 @@ async function countTarget(
         }
       }
 
-      const boxes = counted(detector, scanned);
-      // A detector that is not our own weights (a hosted one) is named with its provider, like any outside model.
-      const ours = tierOf(detector.id) === "own-model";
-      const by = ours ? [...new Set(target.detectorClasses.map((cls) => detector.nameFor?.(cls) ?? detector.id.split(":")[1]))].join(" and ") : detector.id;
-      return {
-        value: boxes.length, unit: "count", pipeline: "detector", exact: false, kind: target.id,
-        method: (ours ? `${what} counted by our detectors (${by}), no outside model` : `${what} counted by the outside detector ${by}`) + unheard,
-        evidence: image(boxMarks(boxes), `Each box is one counted ${names}`),
-        source: {
-          calculatedBy: [model(detector.id, `counted the ${target.plural}${unheard}`, by)],
-          from: { file, used: `${several(boxes.length, "detection box")} of class ${target.detectorClasses.join(" and ")} on the drawing image` },
-        },
-      };
+      return byDetector(detector, scanned, unheard);
     }
     why = WHY.unrecognised;
   }
 
   if (noReader) return unanswered(file, `${target.plural} were`, why, image([], "Source drawing"), deps.advice, target.id);
-  const { output } = await inventory();
+  const read = await inventory().catch(async (error) => {
+    // The reader failed. A kind our detectors know on a drawing in their style is still counted, by them alone.
+    if (!detector || !target.detectorClasses.every((cls) => cls in detector.thresholds)) throw error;
+    const scanned = await detector.detect(imagePath);
+    if (!inDomain(scanned)) throw error;
+    return byDetector(detector, scanned, `; the reader ${deps.vision.id} did not answer, so our detectors counted instead`);
+  });
+  if ("pipeline" in read) return read;
+  const { output } = read;
   const method = fallback(deps.vision, target.plural, why);
   const calculatedBy = [model(deps.vision.id, `counted the ${target.plural}, because ${why}`)];
   if (target.id === "floor") {

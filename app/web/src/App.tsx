@@ -112,6 +112,8 @@ export function App() {
   const [shownReply, setShownReply] = useState<number | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // A provider's own message behind a failed answer, kept folded under the sentence shown.
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const [kind, setKind] = useState<string | null>(null);
   const [translations, setTranslations] = useState(false);
   /** Whether the drawing list is shown; remembered in this browser between visits. */
@@ -233,6 +235,7 @@ export function App() {
     setQuestion("");
     setPending(text);
     setError(null);
+    setErrorDetail(null);
     if (inMode) modes.choose(inMode);
     try {
       const body = await api.ask(target, text, await modes.fields());
@@ -247,6 +250,7 @@ export function App() {
       if (request !== latest.current) return;
       setQuestion(text);
       setError(e instanceof Error ? e.message : String(e));
+      setErrorDetail((e as { detail?: string }).detail ?? null);
     } finally {
       if (request === latest.current) setPending(null);
     }
@@ -257,6 +261,7 @@ export function App() {
     latest.current++;
     setPending(null);
     setError(null);
+    setErrorDetail(null);
     setQuestion("");
     setKind(null);
     setShownReply((history[drawingKey(d)]?.length ?? 0) > 0 ? history[drawingKey(d)].length - 1 : null);
@@ -413,7 +418,12 @@ export function App() {
                 )}
               </div>
               <aside className="inspector" aria-label="Answer and questions">
-                {error && <div className="notice" role="alert">{error}</div>}
+                {error && (
+                  <div className="notice" role="alert">
+                    {error}
+                    {errorDetail && <details><summary>Technical detail</summary>{errorDetail}</details>}
+                  </div>
+                )}
                 {pending ? (
                   <div className="placard pending" aria-live="polite">
                     <div className="figure"><span className="spinner" /></div>

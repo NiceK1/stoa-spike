@@ -77,15 +77,15 @@ describe("what the pill says about a choice", () => {
 });
 
 describe("what the panel says about a line-up", () => {
-  it("gives the measured result of the line-ups that were measured, and none for the others", () => {
+  it("gives the measured result of each line-up", () => {
     expect(measuredOf(mode(DEMO, "blueline"))?.share).toBe("85.9%");
     expect(measuredOf(mode(DEMO, "best"))?.share).toBe("88.5%");
     const withGemini = listing({ ANTHROPIC_API_KEY: "key", GEMINI_API_KEY: "key" }, { reader: "gemini" });
     expect(measuredOf(mode(withGemini, "custom"))?.share).toBe("87.3%");
     const withSonnet = listing({ ANTHROPIC_API_KEY: "key", GEMINI_API_KEY: "key" }, { reader: "sonnet" });
-    expect(measuredOf(mode(withSonnet, "custom"))).toBeNull();
-    // No Gemini key: Best accuracy reads with Claude Sonnet, which was not measured.
-    expect(measuredOf(mode(listing({ ANTHROPIC_API_KEY: "key" }), "best"))).toBeNull();
+    expect(measuredOf(mode(withSonnet, "custom"))?.share).toBe("86.9%");
+    // No Gemini key: Best accuracy votes and reads with Claude Sonnet.
+    expect(measuredOf(mode(listing({ ANTHROPIC_API_KEY: "key" }), "best"))?.share).toBe("87.5%");
     expect(measuredOf(mode(OURS_ONLY, "best"))?.share).toBe("85.9%");
   });
 

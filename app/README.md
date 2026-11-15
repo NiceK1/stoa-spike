@@ -37,6 +37,12 @@ differs there.
 In Blueline only and Best accuracy the line-up is fixed and shown read-only; Best accuracy is shown as "auto" with what
 it resolves to on this server. The pickers are open in Custom only.
 
+**When an outside model fails.** If the reader fails on a count our detectors can make (a room type, a storey), the
+detectors answer and the answer says that the reader did not. Any other failed outside call is reported in one
+sentence that names the model, with the provider's own message folded under it (`server/src/failure.ts`). Every answer
+format the app sends is converted for Gemini, which takes one type per field and no empty menu value
+(`geminiSchema` in `server/src/models/vision.ts`); a test runs all of them through the conversion.
+
 **In the page** the setting is an oval in the question box (`web/src/ModePill.tsx`, with the choice in
 `web/src/useModes.ts` and the reading of `GET /api/modes` in `web/src/modes.ts`). It sits on one bar with the Ask
 button and names the mode; its outline is a closed blue line while only our own models and scripts answer, and a
