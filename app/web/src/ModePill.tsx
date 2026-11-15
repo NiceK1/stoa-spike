@@ -154,7 +154,8 @@ export function ModePill({ modes, busy }: { modes: Modes; busy: boolean }) {
                           type="radio" name="blueline-mode" checked={on}
                           aria-labelledby={`mode-title-${each.id}`} aria-describedby={`mode-about-${each.id}`}
                           onChange={() => modes.choose({ ...choice, mode: each.id })}
-                          onFocus={() => setLooking(each.id)} onBlur={() => setLooking(null)}
+                          // Opening the list with the mouse focuses the chosen mode; only the keyboard's focus asks for its details.
+                          onFocus={(e) => { if (e.target.matches(":focus-visible")) setLooking(each.id); }} onBlur={() => setLooking(null)}
                         />
                         <span className="mode-title" id={`mode-title-${each.id}`}>{each.label}{each.auto && <span className="badge">auto</span>}</span>
                         <span className="mode-share">{measured?.share}</span>
