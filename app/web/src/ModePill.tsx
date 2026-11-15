@@ -16,12 +16,18 @@ export function ModeGlyph({ outside }: { outside: boolean }) {
   );
 }
 
-/** Our own engines carry Blueline in their name; only an outside one is tagged. */
+/** Whose an engine is, in one word: ours, one we host, or an outside one. An entry that is no engine ("no outside reader") has none. */
+function Whose({ engine }: { engine: EngineRef }) {
+  if (engine.outside) return <span className="tier external-model">outside</span>;
+  if (engine.tier === "self-hosted-model") return <span className="tier self-hosted-model">self-hosted</span>;
+  return engine.tier ? <span className="tier own-model">Blueline</span> : null;
+}
+
 function EngineLine({ engine }: { engine: EngineRef }) {
   return (
     <div className="engine" title={engine.name}>
       <b>{engine.label}</b>
-      {engine.outside && <span className="tier external-model">outside</span>}
+      <Whose engine={engine} />
     </div>
   );
 }
@@ -54,10 +60,10 @@ function Details({ mode, outside }: { mode: ModeInfo; outside: boolean }) {
 
 /** A picker of the mode that has them. An engine that cannot run here is listed, and cannot be picked. */
 function Pick({ label, options, chosen, onPick }: { label: string; options: Engine[]; chosen: string; onPick: (id: string) => void }) {
-  const outside = options.find((engine) => engine.id === chosen)?.outside ?? false;
+  const picked = options.find((engine) => engine.id === chosen);
   return (
-    <label className={outside ? "pick outside" : "pick"}>
-      <span className="pick-label">{label}{outside && <span className="tier external-model">outside</span>}</span>
+    <label className={picked?.outside ? "pick outside" : "pick"}>
+      <span className="pick-label">{label}{picked && <Whose engine={picked} />}</span>
       <span className="pick-select">
         <select value={chosen} onChange={(e) => onPick(e.target.value)}>
           {options.map((engine) => (
