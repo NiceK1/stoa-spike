@@ -64,7 +64,11 @@ for the four-hour spot burst.
 
 ## From demo to real use
 
-Answering needs no GPU: the detectors and the interpreter run on a CPU, so the service is one small instance. Because
-the models are ours and open, a drawing never has to leave the machine it is uploaded to, which is what a contractor
-with unreleased plans needs, and the instance can sit in a European datacentre. A new drawing style means new labels
-and the same queue on a spot box for an afternoon.
+Answering needs no GPU and no call outside the process, so a drawing stays on Verda's machines. Measured on six cores
+of our instance with our own models only, one replica scans 30 raster drawings a minute (1.8 s each, once per drawing)
+and gives 56 answers a minute to one user and about 40 when several ask at once; the interpreter, which reads one
+question at a time, saturates first. The path from there is the same container image as auto-scaling CPU containers
+behind one queue with a shared cache (0.09 EUR per replica-hour, about 0.05 EUR per 1,000 drawings against $9 through
+an outside vision model), then one GPU container for the models once more than about 22 CPU replicas are busy (the
+same models ran at 9 to 75 drawings a second on the A100), and batch jobs on spot capacity for whole-project archives.
+The measurements, the costs, what is not built yet and the container specification are in [scaling.md](scaling.md).
