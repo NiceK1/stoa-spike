@@ -21,8 +21,10 @@ export type Evidence =
 export type SourceTier = "script" | "own-model" | "self-hosted-model" | "external-model";
 
 export interface Contributor {
-  /** A name a person can recognise: "CAD geometry script", a detector's model name, an external model's id. */
+  /** What identifies it: a script's name ("CAD geometry script"), a detector's weights, a model's id with its provider. */
   name: string;
+  /** A model as a person reads it: "Blueline detector (trained YOLO11)", "Gemini 4 Hydrogen (Google)". Scripts are read by their name. */
+  label?: string;
   tier: SourceTier;
   /** Its share of the answer, said when several contributed or the name alone leaves it open. */
   did?: string;
@@ -56,6 +58,18 @@ export interface AnswerSource {
   };
 }
 
+export type ModeId = "blueline" | "best" | "custom";
+
+/** What an answer with no value says when the question needed an outside model and the line-up has none. */
+export interface OutsideAdvice {
+  /** Why there is none, as a clause that follows "and": "Blueline only calls none". */
+  none: string;
+  /** What would answer the question, as a sentence without its full stop. */
+  remedy?: string;
+  /** The mode to offer for asking again: set only when that mode has an outside model on this server. */
+  retry?: ModeId;
+}
+
 export interface Answer {
   value: number | string | null;
   unit?: string;
@@ -70,6 +84,8 @@ export interface Answer {
   evidence?: Evidence;
   note?: string;
   source: AnswerSource;
+  /** With no value for want of an outside model: the mode that has one here, so the client can offer to ask again in it. */
+  retry?: { mode: ModeId };
 }
 
 /** An answer as a pipeline returns it; the router adds who understood the question. */

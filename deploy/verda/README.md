@@ -1,9 +1,10 @@
 # Blueline on a Verda instance
 
-The demo as a plain service on an Ubuntu instance, open to anyone over HTTPS, with local models only: our ONNX
-detectors answer image plans, geometry code answers DXF and IFC, and the fine-tuned Gemma reads the question.
-No cloud model is called and none can be: there are no API keys on the instance and the service can only talk to
-the machine it runs on.
+The demo as a plain service on an Ubuntu instance, open to anyone over HTTPS. It answers in the Blueline only mode
+unless a visitor picks another: our ONNX detectors answer image plans, geometry code answers DXF and IFC, and the
+fine-tuned Gemma reads the question. As `setup.sh` leaves it, no cloud model is called and none can be: there are no
+API keys on the instance and the service can only talk to the machine it runs on. `fallback.sh` makes the outside
+engines available for the two other modes (below).
 
 The Hugging Face Space in `deploy/hf-space` is the same deployment in a container. Both use the same bundle:
 `setup.sh` builds the dataset subset with `deploy/hf-space/build_bundle.py` and the service runs with the
@@ -62,6 +63,37 @@ written is left alone and the old one stays in use.
 `npm ci` needs the npm that wrote `package-lock.json`. With the lock file of 14 November 2026 that is npm 11.6:
 npm 10.9 (which comes with Node 22) and npm 11.21 both refuse it as out of sync. `setup.sh` installs
 `NPM_VERSION` (default 11.6.2); when `npm ci` refuses all the same, `redeploy.sh` falls back to `npm install`.
+
+## Outside engines for Best accuracy and Custom
+
+The app has three modes (`app/README.md`, Modes). Blueline only is the default and calls no outside model, with or
+without keys on the instance. The keys decide what the other two modes can use:
+
+```bash
+deploy/verda/fallback.sh <ssh destination> on <env file>   # the keys go to the instance; the outside engines become available
+deploy/verda/fallback.sh <ssh destination> off             # the keys are removed; every mode resolves to the Blueline engines
+```
+
+`on` copies `ANTHROPIC_API_KEY` and `GEMINI_API_KEY` from the env file to `/etc/blueline/keys.env` (root only; systemd
+passes them to the process) and writes the drop-in `blueline.service.d/fallback.conf`, which lifts the service's
+confinement to localhost. A key makes its engines available: Claude Haiku 5.5 and Claude Sonnet 5.5 with the Anthropic
+key, Gemini 4 Hydrogen with the Gemini key. Best accuracy then has Haiku read the question, Gemini read image plans
+(one reading per drawing, about $0.07 and half a minute; the detectors and Gemini vote on the drawn symbols) and Sonnet
+word the answers from IFC facts and sheet text. With one key only, Best accuracy uses what that key gives.
+
+`off` removes the keys and the drop-in. Best accuracy and Custom stay in the app and say that they resolve to the
+Blueline engines; nothing can leave the instance again.
+
+Both end with the service's `/api/health` (the default mode and its models) and the summary line of each mode from
+`/api/modes`, for example `"summary":"Nothing leaves this server."` for Blueline only. The drop-in also sets
+`VISION_PROVIDER`, `VISION_MODEL`, `PLANNER_PROVIDER` and `PLANNER_MODEL`: the server does not choose its engines by
+them (apart from keeping the `claude` CLI out of the line-up), they are for an evaluation script run on the instance
+without `--mode`.
+
+What a visitor's choice costs: nothing in Blueline only. In Best accuracy every question is one Haiku interpretation
+(about $0.0003), every image plan one Gemini reading (about $0.07, cached for all later questions about that plan),
+and a question about IFC facts or sheet text one or two Sonnet calls (about $0.01 to $0.03). There is no spending
+limit in the app: set one on the keys' accounts before giving the address out.
 
 ## Move it to another Verda instance
 

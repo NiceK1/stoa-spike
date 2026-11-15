@@ -17,6 +17,114 @@ A drawing and a question can be linked directly: `http://127.0.0.1:8787/?path=da
 The server's front page is the landing page (`deploy/hf-space/landing.html`, the same one the Hugging Face demo opens with);
 the app itself is at `/app.html`, and a link that names a drawing as above opens the app directly.
 
+## Modes
+
+The ask window has one setting for all its questions, the mode. The browser remembers it and sends it with every
+question; a question without a mode is asked in Blueline only. A mode says which engine does each of four jobs
+(`server/src/modes.ts`):
+
+| Job | Blueline only (`blueline`, the default) | Best accuracy (`best`) | Custom (`custom`) |
+|---|---|---|---|
+| Understands the question | Blueline interpreter (tuned Gemma), on the CPU; the keyword parser when its weights file is missing | Claude Haiku 5.5 (Anthropic), else Gemini 4 Hydrogen (Google), else the Blueline interpreter | the user's pick: Blueline interpreter, Claude Haiku 5.5, Gemini 4 Hydrogen, or the keyword parser only |
+| Counts the drawn symbols on an image plan (window, door, toilet bowl, sink, shower, bathtub) | Blueline detector (trained YOLO11), the one routed to the class | the middle of three independent counts: each of the two Blueline detectors and the reader's inventory of the drawing | the routed Blueline detector, no vote |
+| Reads room types, storeys and anything else on an image plan | the Blueline detectors for the seven room types and storeys; any other question gets no value and the reason | the reader: Gemini 4 Hydrogen (Google), else Claude Sonnet 5.5 (Anthropic) | the reader the user picks: none (then as in Blueline only), Gemini 4 Hydrogen, Claude Sonnet 5.5 |
+| Words answers from a building model's facts and from a sheet's text | nobody: no value and the reason | Claude Sonnet 5.5 (Anthropic), else the reader | the reader |
+| Calls that leave the server | none | one interpretation per question; one reading per image plan, shared by all its questions; one reading per question about something else on it; one or two text calls per facts or sheet question | whatever the picks call |
+
+Layered DXF plans and IFC quantities are computed by the scripts in every mode; only who understands the question
+differs there.
+
+In Blueline only and Best accuracy the line-up is fixed and shown read-only; Best accuracy is shown as "auto" with what
+it resolves to on this server. The pickers are open in Custom only.
+
+**In the page** the setting is an oval in the question box (`web/src/ModePill.tsx`, with the choice in
+`web/src/useModes.ts` and the reading of `GET /api/modes` in `web/src/modes.ts`). It names the mode and says in a few
+words what that means; its outline is a closed blue line while only our own models and scripts answer, and a broken
+amber one, whose dashes travel while a question is out, when a question may go to an outside model. The oval opens a
+panel (a sheet from the bottom edge on a phone) with the three modes as one choice, each with its measured result on
+held-out image plans, and under the chosen one its line-up: read-only, or with the two pickers in Custom, where an
+engine that cannot run here is shown disabled with the reason. The choice is kept in the browser's `localStorage`
+(`blueline.mode`). A remembered choice that cannot run on this server gives way to the server's default, and the panel
+says so once. An answer with no value for want of an outside model carries `retry`, and the page then offers to ask
+the question again in that mode, which also becomes the setting. A server without `/api/modes` and the static demo
+build show no oval and send no mode.
+
+**Which engines can run** is worked out once, when the server starts. An engine that cannot run is listed with the
+reason, is not offered in Custom, and is skipped by Best accuracy:
+
+| Engine | Can run when |
+|---|---|
+| Blueline interpreter (tuned Gemma) | its GGUF file is there: `../models/interpreter/interpreter-q8_0.gguf`, or the file `PLANNER_MODEL` names with `PLANNER_PROVIDER=gemma-local` |
+| Blueline detector (trained YOLO11) | the weights are in `../models` (`DETECTOR`, below) |
+| Claude Haiku 5.5, Claude Sonnet 5.5 (Anthropic) | `ANTHROPIC_API_KEY` is set (they then run through the API); or the local `claude` CLI is the configured provider (`VISION_PROVIDER` unset or `claude-cli`, or `PLANNER_PROVIDER=claude-cli`) and `claude` is on the PATH. A provider variable that names `claude-cli` keeps the CLI in use although a key is set |
+| Gemini 4 Hydrogen (Google) | `GEMINI_API_KEY` is set |
+| a reader we host ourselves | `VISION_PROVIDER=openai-compatible` with `VISION_BASE_URL` and `VISION_MODEL`; offered in Custom, never chosen by Best accuracy |
+
+So the public demo (both keys, no CLI) offers every engine through its API, a developer's PC with no variables offers
+the Claude engines through the CLI, and a server with `VISION_PROVIDER=none` and no keys has the Blueline engines only.
+There Best accuracy and Custom still work: they resolve to the Blueline line-up and their summary says so ("No outside
+model can run on this server, so Best accuracy resolves to the Blueline engines. Nothing leaves this server."). An
+empty key counts as no key. `VISION_PROVIDER=none` on its own only rules the CLI out: a key still makes its engines
+available, and the default mode still calls none of them.
+
+**The vote in Best accuracy.** A drawn symbol is counted by every detector that knows its class and by the reader's
+inventory of the drawing, and the middle count is the answer (the lower middle one for an even number of counts). The
+inventory is the same single reading that gives the room types, so the vote costs no extra call. The marks on the
+drawing are those of a count that equals the answer: the routed detector's boxes, else the other detector's, else the
+reader's positions. The source lists every count and the script that took the middle; the `method` sentence reads
+`middle of 3 independent counts of window symbols (floorplan-symbols-yolo11l-1280: 14; floorplan-yolo11m-1280: 13;
+gemini-api:gemini-4-hydrogen: 11)`, and the answer's `pipeline` is `symbol-vote`. A vote needs three counts: with one
+detector installed, or when the reader's call fails, the routed detector answers alone and the method says why. On a
+drawing the detectors do not recognise the reader answers alone, as in every mode with a reader.
+
+**A question the mode cannot answer** (in Blueline only, or in Custom without a reader: a count of an unknown kind, a
+count in a part of an image plan, a free reading, a question about a building model's facts, a sheet's text) gets no
+value. Its `source.needed` says why and which mode would answer it, and the answer carries `retry: { mode: "best" }`
+when Best accuracy has an outside model on this server, so that the client can offer to ask again there.
+
+Measured per mode, on the two held-out raster samples of 100 drawings (1,781 questions in the dataset's wording, bulk
+mode, 15 November 2026). Vector drawings score the same in every mode (Measured, below):
+
+| Mode | Correct | Outside calls | Cost and time of the outside calls |
+|---|---|---|---|
+| Blueline only | 1,530, 85.9% (sample A 773 of 916, sample B 757 of 865) | none | nothing leaves the server |
+| Best accuracy | 1,585, 89.0% (sample A 813, sample B 772) | one Gemini reading per drawing; one Haiku interpretation per question | a reading: about $0.07 and a median of 29 s, once per drawing; an interpretation: about $0.0003 and 2.8 s |
+
+| Kind | Asked | Blueline only | Best accuracy |
+|---|---|---|---|
+| Windows | 200 | 97 | 102 |
+| Doors | 156 | 119 | 120 |
+| Toilet bowls | 200 | 188 | 193 |
+| Sinks | 199 | 174 | 180 |
+| Showers and bathtubs | 182 | 162 | 168 |
+| The drawn symbols together | 937 | 740 | 763 |
+| Saunas | 137 | 133 | 134 |
+| Kitchens | 129 | 118 | 127 |
+| Bedrooms | 125 | 111 | 115 |
+| WC rooms | 98 | 95 | 97 |
+| Bathrooms | 94 | 87 | 92 |
+| Balconies | 61 | 55 | 59 |
+| Storeys | 200 | 191 | 198 |
+| Room types and storeys together | 844 | 790 | 822 |
+
+Custom with Gemini as the reader counts the symbols as Blueline only does and the room types as Best accuracy does:
+1,562, 87.7%.
+
+The server's side of it:
+
+- `GET /api/modes` returns `{ default, modes, interpreters, readers }`: the three modes, each with its label, a
+  description, `auto`, `editable`, `outside` (an outside model is in the line-up), a one-line `summary` ("Nothing leaves
+  this server.") and its `lineup`, four rows in display order (`interpreter`, `symbols`, `reader`, `text`) with the
+  engines of each; and the engines Custom can pick from, each with `available` and, when it cannot run, `unavailable`.
+  `?interpreter=<id>&reader=<id>` describes Custom for those picks.
+- `POST /api/ask` takes `mode` (`blueline`, `best`, `custom`; Blueline only when left out) and, read with `custom`
+  only, `interpreter` (`blueline`, `haiku`, `gemini`, `keywords`) and `reader` (`none`, `gemini`, `sonnet`). An unknown
+  mode or pick, or an engine that cannot run here, is a 400 whose `error` names the choices. The reply carries the
+  `mode` that answered.
+- `GET /api/health` names the default mode and its models.
+- `npm run eval` and `npm run eval:paraphrase` take `--mode`, with `--engine-interpreter` and `--reader` for custom,
+  and build their line-up with the same resolver. Without `--mode` the environment picks the models, as before.
+
 ## How a question is answered
 
 `server/src/router.ts` picks the pipeline from the file. In the dataset, files with the same name and a different
@@ -30,10 +138,12 @@ PDF is answered from its vector twin when one is there.
 | Layered DXF, or a PDF/PNG with a DXF of the same name | room outlines, labels and symbols from the CAD layers | plan with the counted shapes numbered | none |
 | PDF sheet with a text layer (schedules, notes) | text rows with positions, answered by a language model | the rows used, boxed on the page | one text call |
 | Raster floor plan, a count of a known kind | each of the 13 known kinds (window, door, toilet bowl, sink, shower, bathtub; sauna, kitchen, bedroom, WC room, bathroom, balcony; storey) is counted by our trained detector routed to its class | numbered boxes on the image | none |
-| Raster floor plan, anything else | the external vision model, as the fallback: items of other kinds, a count limited to a part of the drawing, a free reading, and any count on a drawing the detectors do not recognise | numbered marks on the image, or the drawing | one vision call per question; one per drawing for the known kinds on an unrecognised drawing, shared by all its questions |
+| Raster floor plan, anything else | the outside vision model (the reader of the mode), as the fallback: items of other kinds, a count limited to a part of the drawing, a free reading, and any count on a drawing the detectors do not recognise | numbered marks on the image, or the drawing | one vision call per question; one per drawing for the known kinds on an unrecognised drawing, shared by all its questions |
 
-Before a pipeline computes anything, the question is read by the interpreter model, which costs one small text call
-per question (next section). Vector answers are exact and labelled so; model answers are labelled as estimates.
+The table is the line-up of Blueline only, where the two rows that need a language model and the last row get no value
+and the reason; Best accuracy and Custom put an outside model there (Modes, above). Before a pipeline computes
+anything, the question is read by the interpreter, which costs one small text call per question when it is a hosted
+model (next section). Vector answers are exact and labelled so; model answers are labelled as estimates.
 Models sit behind two interfaces, `VisionModel` (`server/src/models/vision.ts`) and `Detector`
 (`server/src/models/detector.ts`), so a provider can be replaced without touching the pipelines.
 
@@ -48,45 +158,49 @@ Under the value the app shows a Source block of three lines. They come from the 
 | Calculated by | every script or model that computed, counted, read or worded the value, each with what it did when several contributed; with no value, why nothing was calculated and what it would have taken | `CAD geometry script`; or `IFC facts script (web-ifc)`: extracted the model's facts as text, with `claude-cli:claude-sonnet-5-5`: wrote the answer from those facts |
 | From | the file the value was taken from (the vector twin, when the question was asked about a PDF or PNG of it) and what in it was used | `site3387_bldg5238_floor23498.dxf`: indoor room outlines inside unit A: 9 room outlines on layer ROOM_OUTLINE |
 
-Each name carries a tag for its tier, so a reader sees at a glance whether a model outside was involved:
+Each name carries a tag for its tier, so a reader sees at a glance which answers used only models we trained and ran
+ourselves:
 
-| Tag | `tier` | Who |
-|---|---|---|
-| our script | `script` | the keyword parser, the CAD geometry script, the IFC scripts (model records, stored quantities, geometry, facts), the sheet text script |
-| our model | `own-model` | the ONNX detectors, by model name, and the local Gemma interpreter |
-| self-hosted model | `self-hosted-model` | a model behind `VISION_PROVIDER=openai-compatible` |
-| external model | `external-model` | `claude-cli`, `anthropic-api`, `gemini-api`, the Roboflow detector, and any provider the app does not know |
+| Tag | `tier` | Who | `label`, with `name` as the secondary text |
+|---|---|---|---|
+| Blueline script | `script` | the keyword parser, the CAD geometry script, the IFC scripts (model records, stored quantities, geometry, facts), the sheet text script, the middle count script of the vote | none: a script is read by its `name` |
+| Blueline model | `own-model` | the ONNX detectors and the local Gemma interpreter | `Blueline detector (trained YOLO11)` with the weights, `floorplan-symbols-yolo11l-1280`; `Blueline interpreter (tuned Gemma)` with `gemma-local:interpreter-q8_0` |
+| self-hosted model | `self-hosted-model` | a model behind `VISION_PROVIDER=openai-compatible` | `gemma-4-31b (self-hosted)` |
+| outside model | `external-model` | `claude-cli`, `anthropic-api`, `gemini-api`, the Roboflow detector, and any provider the app does not know | product and vendor: `Claude Haiku 5.5 (Anthropic)`, `Claude Sonnet 5.5 (Anthropic)`, `Gemini 4 Hydrogen (Google)`, with the id, `gemini-api:gemini-4-hydrogen`; none for an unknown provider |
+
+The `tier` and `name` values are ids and do not change; `label` (`server/src/source.ts`) is what a person reads.
 
 An answer with no value says in `needed` why nothing was calculated and what it would have taken; the block prints it
 as "Not calculated", and the note under the block then leaves that sentence out. The `method` sentence of an answer
 says the same as the source in one line; the client shows it when a server sends no `source`.
 
-### Local first, the external vision model as the fallback
+### Local first, the outside vision model as the fallback
 
-Nothing our own models can do is sent to an external vision model. On a raster drawing the interpreter's call decides
+Nothing our own models can do is sent to an outside vision model. On a raster drawing the interpreter's call decides
 the tier (`server/src/solvers/raster.ts`):
 
 | The interpreter's call | Who answers | Why |
 |---|---|---|
 | `count_known` on the whole drawing, the drawing in the detectors' style | our detectors, no model call | |
-| `count_known` on a drawing where the detectors find fewer than 3 items with 60% confidence (an elevation, a historic scan) | external vision model, one inventory of the drawing | the detectors' count would be a confident zero |
-| `count_known` limited to a part of the drawing ("the kitchen sink", "in enlarged plan 6A") | external vision model, from the full question | the detectors count on the whole drawing only |
-| `count_other` (stairs, wardrobes, fireplaces) | external vision model | the detectors do not know the kind |
-| `read` (a text, a dimension, a schedule entry) | external vision model | the detectors count items and cannot read |
+| `count_known` on a drawing where the detectors find fewer than 3 items with 60% confidence (an elevation, a historic scan) | outside vision model, one inventory of the drawing | the detectors' count would be a confident zero |
+| `count_known` limited to a part of the drawing ("the kitchen sink", "in enlarged plan 6A") | outside vision model, from the full question | the detectors count on the whole drawing only |
+| `count_other` (stairs, wardrobes, fireplaces) | outside vision model | the detectors do not know the kind |
+| `read` (a text, a dimension, a schedule entry) | outside vision model | the detectors count items and cannot read |
 
 The source of every raster answer names and tags the tier, and its `method` sentence says it in plain words: `window
-symbols counted by our detectors (floorplan-symbols-yolo11l-1280), no external model`, against `staircases read by the
-external vision model claude-cli:claude-sonnet-5-5 because our detectors do not know this kind of item`. A fallback
+symbols counted by our detectors (floorplan-symbols-yolo11l-1280), no outside model`, against `staircases read by the
+outside vision model claude-cli:claude-sonnet-5-5 because our detectors do not know this kind of item`. A fallback
 model we host ourselves (`VISION_PROVIDER=openai-compatible`) is called the self-hosted vision model there, and a
-detector hosted elsewhere (`DETECTOR=roboflow`) an external detector. When several kinds are asked, each part says its
+detector hosted elsewhere (`DETECTOR=roboflow`) an outside detector. When several kinds are asked, each part says its
 own tier.
 
-With no external model configured (`VISION_PROVIDER=none`) a question of the fallback tier is not an error: the answer
-has no value, and its note says why, for example `No answer: this question needs an external vision model, because our
-detectors count on the whole drawing only, not in a part of it, and the app is running with our local models only
-(VISION_PROVIDER=none).` The same holds for a question about a building model's facts, which a language model writes
-the answer to. When one of several kinds cannot be counted, the others are still counted and marked, and the note says
-which one is missing.
+In a line-up without an outside model (Blueline only, Custom without a reader, or a script run with
+`VISION_PROVIDER=none`) a question of the fallback tier is not an error: the answer has no value, and its note says
+why and what would answer it, for example `No answer: this question needs an outside vision model, because our
+detectors count on the whole drawing only, not in a part of it, and Blueline only calls none. Best accuracy, or a
+reader chosen in Custom, would answer it.` The same holds for a question about a building model's facts, which a
+language model writes the answer to. When one of several kinds cannot be counted, the others are still counted and
+marked, and the note says which one is missing.
 
 ## How questions are understood
 
@@ -118,7 +232,7 @@ What the code does with a call:
 - A question the drawing cannot answer gets the reason in a sentence, and a request to show, mark or find things
   returns the marks or says why there are none.
 - A raster question limited to part of the drawing ("the kitchen sink", "in enlarged plan 6A") is counted by the
-  external vision model from the full question, because the detectors count on the whole drawing only; the method
+  outside vision model from the full question, because the detectors count on the whole drawing only; the method
   line says so.
 
 The first line of every answer's source says how the question was read and by whom, and the `method` sentence starts
@@ -179,7 +293,8 @@ counting errors that the dataset's wording has as well.
 
 ### A local interpreter: fine-tuned FunctionGemma on the CPU
 
-`PLANNER_PROVIDER=gemma-local` replaces the hosted interpreter by a small open model inside the Node process:
+The Blueline interpreter is a small open model inside the Node process. It reads every question in Blueline only,
+whenever its weights file is there, and a script run without `--mode` gets it with `PLANNER_PROVIDER=gemma-local`. It is
 FunctionGemma 270M, fine-tuned on this app's own question-to-call pairs, as a 292 MB GGUF file (q8_0) run on the CPU
 with `node-llama-cpp` (`server/src/models/gemma.ts`). Nothing leaves the machine and a call costs nothing. The planner
 and the router are unchanged. The provider puts the first line of the instruction, a one-line summary of the schema and
@@ -247,7 +362,8 @@ mode.
 | Swiss apartment floors (DXF geometry) | 37,584 | 37,376 | 99.4% |
 | IFC models, numeric questions | 3,062 | 3,044 | 99.4% |
 | Practice drawing sheets (PDF text) | 48 scorable | 48 | 100% |
-| Raster floor plans, 200 held-out drawings, our detectors alone | 1,781 | 1,530 | 85.9% |
+| Raster floor plans, 200 held-out drawings, Blueline only: our detectors alone | 1,781 | 1,530 | 85.9% |
+| Raster floor plans, the same drawings, Best accuracy: the vote on symbols, Gemini 4 Hydrogen for room types | 1,781 | 1,585 | 89.0% |
 | IFC models, free-text questions (graded sample) | 46 | 16, and 11 partly | 35% |
 
 Raster floor plans, on drawings the detectors never saw in training (two samples of 100, English questions; the
@@ -255,9 +371,10 @@ Finnish questions map to the same targets):
 
 | Who answers | Sample A (916) | Sample B (865) | Both | Vision calls per drawing |
 |---|---|---|---|---|
-| Our trained detectors for all 13 kinds (default) | 773 | 757 | 1,530, 85.9% | 0 |
-| Optional, `RASTER_DETECTOR_TARGETS=symbols`: detectors for drawn symbols, one Sonnet 5.5 reading for room types and storeys | 791 | 757 | 1,548, 86.9% | none for a symbol question; 1 once a room type or storey is asked |
-| The same with Gemini 4 Hydrogen reading the room types (`VISION_PROVIDER=gemini-api`) | 797 | 765 | 1,562, 87.7% | none for a symbol question; 1 once a room type or storey is asked |
+| Blueline only (`--mode blueline`): our trained detectors for all 13 kinds | 773 | 757 | 1,530, 85.9% | 0 |
+| Best accuracy (`--mode best`): the middle of both detectors' counts and Gemini 4 Hydrogen's on symbols, Gemini for room types and storeys | 813 | 772 | 1,585, 89.0% | 1, shared by all questions about the drawing |
+| The line-up of Custom with Claude Sonnet 5.5 as the reader, measured before the modes with `RASTER_DETECTOR_TARGETS=symbols` and Sonnet through the CLI: detectors for drawn symbols, one Sonnet reading for room types and storeys | 791 | 757 | 1,548, 86.9% | none for a symbol question; 1 once a room type or storey is asked |
+| Custom with Gemini 4 Hydrogen as the reader (`--mode custom --reader gemini`) | 797 | 765 | 1,562, 87.7% | none for a symbol question; 1 once a room type or storey is asked |
 | Sonnet 5.5 alone (`--no-detector`) | 713 | 660 | 1,373, 77.1% | 1 |
 | Gemini 4 Hydrogen alone (`--no-detector`) | 791 | 725 | 1,516, 85.1% | 1 |
 | Gemma 4 31B alone, hosted (`--no-detector`, sample A only, 12 failed calls) | 537 | | 58.6% | 1 |
@@ -282,10 +399,12 @@ optional setting buys, per room kind on both samples (exact counts; the symbols 
 
 Windows are the weak kind (97 of 200 drawings counted exactly); doors are at 76%, every other kind between 87% and 99%.
 
-Things that were tried and measured but are not in the code any more:
+The vote of Best accuracy was first measured with Sonnet 5.5 as the third count: 809 and 760 (88.1%). With Gemini 4
+Hydrogen it scores 813 and 772 (89.0%). It needs a reading of every drawing, which is why it is a mode and not the
+default.
 
-- Voting: every detector and the vision model's inventory counted each symbol and the middle count won. It scored 809
-  and 760 (88.1%), about one point above the default, for one extra vision call on every drawing; removed for cost.
+Things that were tried and measured but are not in the code:
+
 - Passing the detectors' findings to the vision model as hints lifted the vision model's own score from 713 to 779 on
   sample A, but the vote dropped, because the hinted reading stopped being an independent opinion.
 - Three vision readings per drawing instead of one gained a few questions at three times the cost.
@@ -308,7 +427,10 @@ npm run eval -- --source swiss_dwellings --interpreter templates       # bulk mo
 npm run eval -- --source ifc_models --interpreter templates
 npm run eval -- --source opening_design --interpreter templates        # needs STOA_DATASET=../dataset
 npm run eval -- --source opening_design --interpreter model            # the interpreter reads every question
-npm run eval -- --source cubicasa5k --sample ../raster-test100.txt --interpreter templates     # sample A; raster-test100b.txt is sample B
+npm run eval -- --mode blueline --source cubicasa5k --sample ../raster-test100.txt --interpreter templates   # sample A in Blueline only; raster-test100b.txt is sample B
+npm run eval -- --mode best --source cubicasa5k --sample ../raster-test100.txt --interpreter templates       # Best accuracy: needs the keys, one reading per drawing
+npm run eval -- --mode custom --reader gemini --source cubicasa5k --sample ../raster-test100.txt --interpreter templates   # Custom; --engine-interpreter picks its interpreter
+npm run eval -- --source cubicasa5k --sample ../raster-test100.txt --interpreter templates     # without --mode the environment picks the models
 RASTER_DETECTOR_TARGETS=symbols npm run eval -- --source cubicasa5k --sample ../raster-test100.txt --interpreter templates   # room types and storeys by the vision model
 npm run eval -- --source cubicasa5k --sample ../raster-test100.txt --interpreter templates --no-detector                      # the vision model alone
 npm run eval -- --source ifc_bench --per-file 2 --judge --interpreter templates   # free text, graded by a language model
@@ -326,21 +448,26 @@ and should not be tuned on.
 
 ## Configuration
 
-The server reads `../.env` and the environment:
+The server and the scripts read `../.env` and the environment. The server answers in the mode each question names,
+so for it the variables decide which engines can run (Modes, above); a script run without `--mode` takes its models
+straight from them, as it always did.
 
-| Variable | Purpose |
-|---|---|
-| `STOA_DATASET` | dataset folder, default `../dataset` |
-| `VISION_PROVIDER` | the external model, used as the fallback only: `claude-cli` (default, the local `claude` CLI), `anthropic-api` (needs `ANTHROPIC_API_KEY`), `gemini-api` (needs `GEMINI_API_KEY`), or `none`: no external model at all, questions read by the keyword parsers unless `PLANNER_PROVIDER` names an interpreter; a question that only an external model could answer then gets an answer with no value and a note saying why |
-| `VISION_MODEL` | model id, default `claude-sonnet-5-5` |
-| `PLANNER_MODEL` | the interpreter model that reads every question, default the vision model; a small one is enough (measured: `claude-haiku-5-5`). `PLANNER_PROVIDER` picks its provider (default the vision provider; `gemma-local` is the fine-tuned Gemma on this machine's CPU, with `PLANNER_MODEL` as the optional path of its GGUF file; `none` leaves the keyword parsers), `PLANNER_EFFORT` its effort with the CLI |
-| `INTERPRETER` | `templates` is the bulk mode: the keyword parsers read the questions and no interpreter is asked |
-| `DETECTOR` | `onnx` (our weights in `../models`, the default when present), `roboflow` (needs `ROBOFLOW_API_KEY`), `none` |
-| `RASTER_DETECTOR_TARGETS` | `all` (default: the detectors count every kind they know, room types and storeys included, with no vision call), `symbols` (the earlier behaviour, for comparison: the detectors count drawn symbols and one reading by the vision model gives room types and storeys), `none` (the vision model counts everything) |
-| `INVENTORY_PROMPT` | version of the prompt for the vision model's inventory of a drawing, default `v3` |
+| Variable | For the server and a script run with `--mode` | For a script run without `--mode` |
+|---|---|---|
+| `STOA_DATASET` | dataset folder, default `../dataset` | the same |
+| `ANTHROPIC_API_KEY` | makes Claude Haiku 5.5 and Claude Sonnet 5.5 available, through the API | used with `VISION_PROVIDER` or `PLANNER_PROVIDER` `anthropic-api` |
+| `GEMINI_API_KEY` | makes Gemini 4 Hydrogen available | used with `gemini-api` |
+| `VISION_PROVIDER` | unset or `claude-cli`: the Claude engines may run through the local `claude` CLI (without a key, or always when `claude-cli` is named). `openai-compatible` (with `VISION_BASE_URL`, `VISION_MODEL`, optionally `VISION_API_KEY` and `VISION_IMAGE_MIN_SIDE`): a reader we host ourselves, offered in Custom. Any other value, `none` included, only rules the CLI out | the vision model: `claude-cli` (default), `anthropic-api`, `gemini-api`, `openai-compatible`, or `none`: no outside model, questions read by the keyword parsers unless `PLANNER_PROVIDER` names an interpreter, and a question that only an outside model could answer gets no value and the reason |
+| `VISION_MODEL` | not read: the engines are the measured models (`claude-haiku-5-5`, `claude-sonnet-5-5`, `gemini-4-hydrogen`); it names the model of a self-hosted reader | model id, default `claude-sonnet-5-5` |
+| `PLANNER_PROVIDER`, `PLANNER_MODEL` | `gemma-local` with a `.gguf` path in `PLANNER_MODEL` names the Blueline interpreter's weights file; `claude-cli` makes the CLI the way to the Claude engines. Otherwise not read | the interpreter model that reads every question, default the vision model; a small one is enough (measured: `claude-haiku-5-5`). `PLANNER_PROVIDER` picks its provider (default the vision provider; `gemma-local` is the fine-tuned Gemma on this machine's CPU; `none` leaves the keyword parsers) |
+| `PLANNER_EFFORT`, `VISION_EFFORT`, `PLANNER_THREADS` | the effort of Haiku and of Sonnet through the CLI; the CPU threads of the Blueline interpreter | the same |
+| `INTERPRETER` | `templates` is the bulk mode: the keyword parsers read the questions and no interpreter is asked, in any mode | the same |
+| `DETECTOR` | `onnx` (our weights in `../models`, the default when present), `roboflow` (needs `ROBOFLOW_API_KEY`; an outside detector), `none` | the same |
+| `RASTER_DETECTOR_TARGETS` | not read: the mode decides (every kind in Blueline only, drawn symbols when there is a reader) | `all` (default: the detectors count every kind they know, with no vision call), `symbols` (the detectors count drawn symbols and one reading by the vision model gives room types and storeys), `none` (the vision model counts everything) |
+| `INVENTORY_PROMPT` | version of the prompt for the reader's inventory of a drawing, default `v3` | the same |
 
 The first count on a drawing takes about 3 seconds on a laptop CPU (both detectors scan it once; later questions about
-the same drawing reuse the scan) and costs nothing. A fallback reading by the external model takes about 5 seconds
+the same drawing reuse the scan) and costs nothing. A fallback reading by the outside model takes about 5 seconds
 and costs about $0.009 with `anthropic-api`; through the local CLI it takes about 20 seconds.
 
 ## Detector weights

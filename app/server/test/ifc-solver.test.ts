@@ -304,7 +304,7 @@ describe("a question about a building model, read by the interpreter", () => {
     const none: VisionModel = { id: "none", ask: async () => { throw new Error("This question needs a vision model"); } };
     const unanswered = await ask({ file: house, question: "what are the walls made of?" }, { vision: none, planner: null, detector: null, fileUrl: () => "" });
     expect(unanswered.source).toMatchObject({ understoodBy: { by: "keyword-parser" }, calculatedBy: [], from: { file: "house.ifc", used: "nothing" } });
-    expect(unanswered.source.needed).toContain("an external language model is needed");
+    expect(unanswered.source.needed).toContain("an outside language model is needed");
   });
 
   it("names the model that reworded a question for the keyword parser", async () => {
@@ -314,7 +314,7 @@ describe("a question about a building model, read by the interpreter", () => {
     expect(answer.value).toBe(2);
     expect(answer.source.understoodBy).toEqual({
       by: "keyword-parser", name: "Keyword parser", tier: "script", why: "no interpreter model is configured",
-      helper: { name: "anthropic-api:claude-haiku-5-5", tier: "external-model", did: `rewrote the question in English as "${english}" for the keyword parser` },
+      helper: { name: "anthropic-api:claude-haiku-5-5", label: "Claude Haiku 5.5 (Anthropic)", tier: "external-model", did: `rewrote the question in English as "${english}" for the keyword parser` },
     });
   });
 
@@ -324,16 +324,30 @@ describe("a question about a building model, read by the interpreter", () => {
     expect(answer.method).toContain(`understood as "a question about facts in the building model" by fake-planner; answered by fake-writer`);
   });
 
-  it("answers a question about the model's facts with no value and the reason when no external model is configured", async () => {
+  it("answers a question about the model's facts with no value and the reason when no outside model is configured", async () => {
     const none: VisionModel = { id: "none", ask: async () => { throw new Error("This question needs a vision model"); } };
     const planner = interpreter({ operation: "model_facts", answer_type: "text" });
     for (const reader of [{ planner }, { planner: null }]) {
       const answer = await ask({ file: house, question: "what are the walls made of?" }, { vision: none, detector: null, fileUrl: () => "", ...reader });
       expect(answer).toMatchObject({ value: null, pipeline: "none" });
-      expect(answer.note).toContain("it needs an external language model, and the app is running with our local models only (VISION_PROVIDER=none)");
+      expect(answer.note).toContain("it needs an outside language model, and none is configured (VISION_PROVIDER=none)");
     }
     // What the code computes needs no model.
     expect(await ask({ file: house, question: "Show me the walls" }, { vision: none, planner: null, detector: null, fileUrl: () => "" })).toMatchObject({ value: 2 });
+  });
+
+  it("has a model of its own word the facts when the line-up names one, and says which mode would when it has none", async () => {
+    const none: VisionModel = { id: "none", ask: async () => { throw new Error("This question needs a vision model"); } };
+    const wording: VisionModel = { ...writer, id: "anthropic-api:claude-sonnet-5-5" };
+    const worded = await ask({ file: house, question: "what are the walls made of?" }, { vision: none, text: wording, planner: null, detector: null, fileUrl: () => "" });
+    expect(worded.source.calculatedBy[1]).toEqual({ name: "anthropic-api:claude-sonnet-5-5", label: "Claude Sonnet 5.5 (Anthropic)", tier: "external-model", did: "wrote the answer from those facts" });
+
+    const advice = { none: "Blueline only calls none", remedy: "Best accuracy, or a reader chosen in Custom, would answer it", retry: "best" as const };
+    const unanswered = await ask({ file: house, question: "what are the walls made of?" }, { vision: none, text: none, planner: null, detector: null, fileUrl: () => "", advice });
+    expect(unanswered).toMatchObject({ value: null, retry: { mode: "best" } });
+    expect(unanswered.source.needed).toBe(
+      "an outside language model is needed to write the answer from the model's facts; Blueline only calls none. Best accuracy, or a reader chosen in Custom, would answer it",
+    );
   });
 
   it("without an interpreter, does not turn a question about one room into a count of all rooms", async () => {

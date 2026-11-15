@@ -1,19 +1,21 @@
 /**
  * Raster drawings, local first. Every known kind (drawn symbols, room types, storeys) is counted by the trained
- * detector that the routing prefers for its class, with no model call. The external vision model is the fallback for
- * what the detectors cannot do: other kinds of items, counts limited to a part of the drawing, free reading, and
- * drawings the detectors do not recognise. The method text of every answer names the tier, and the reason when it is
- * the external one; without an external model such a question gets an answer with no value that says so.
+ * detector that the routing prefers for its class, with no model call. The outside vision model (the reader) is the
+ * fallback for what the detectors cannot do: other kinds of items, counts limited to a part of the drawing, free
+ * reading, and drawings the detectors do not recognise. The method text of every answer names the tier, and the reason
+ * when it is the outside one; without a reader such a question gets an answer with no value that says so.
+ * A line-up may give room types and storeys to the reader (`scope`), and may have every detector and the reader count
+ * a drawn symbol and take the middle count (`vote`).
  * A counted answer comes with numbered marks on the image, so a person can check each counted item.
  */
 import { basename } from "node:path";
 import sharp from "sharp";
-import type { Detector } from "../models/detector.js";
+import type { Detection, Detector } from "../models/detector.js";
 import type { VisionModel } from "../models/vision.js";
 import { markedSentence, type RasterKind, type RasterReading } from "../planner.js";
 import { isLocate, isPlainRequest } from "../questions.js";
-import { model, tierOf } from "../source.js";
-import type { Answer, Mark, QuestionType, Solved } from "../types.js";
+import { SCRIPTS, UNCONFIGURED, model, script, tierOf } from "../source.js";
+import type { Answer, Mark, OutsideAdvice, QuestionType, Solved } from "../types.js";
 
 export interface RasterDeps {
   vision: VisionModel;
@@ -24,7 +26,18 @@ export interface RasterDeps {
   useDetector?: boolean;
   /** The drawing as the user knows it, when the image is a rendering or a turned copy of it. */
   file?: string;
+  /**
+   * What the detectors count: every kind they know, the drawn symbols only (room types and storeys then go to the
+   * reader), or nothing. Left out, RASTER_DETECTOR_TARGETS decides.
+   */
+  scope?: RasterScope;
+  /** A drawn symbol is counted by every detector that knows it and by the reader, and the middle count is the answer. */
+  vote?: boolean;
+  /** What to say when a question needs a reader and there is none; left out, the environment's wording. */
+  advice?: OutsideAdvice;
 }
+
+export type RasterScope = "all" | "symbols" | "none";
 
 export interface Target {
   id: string;
@@ -229,17 +242,19 @@ const WHY = {
   unrecognised: "our detectors do not recognise this drawing, so their count would not be reliable",
 };
 
-/** The fallback, named by its tier: a model we host ourselves is not an external one. */
+/** The fallback, named by its tier: a model we host ourselves is not an outside one. */
 const fallback = (vision: VisionModel, what: string, why: string) =>
-  `${what} read by the ${tierOf(vision.id) === "self-hosted-model" ? "self-hosted" : "external"} vision model ${vision.id} because ${why}`;
+  `${what} read by the ${tierOf(vision.id) === "self-hosted-model" ? "self-hosted" : "outside"} vision model ${vision.id} because ${why}`;
 
-/** The answer to a question that only an external vision model could answer, when none is configured. */
-function unanswered(file: string, what: string, why: string, evidence: Answer["evidence"], kind?: string): Solved {
+/** The answer to a question that only an outside vision model could answer, when the line-up has none. */
+function unanswered(file: string, what: string, why: string, evidence: Answer["evidence"], advice: OutsideAdvice = UNCONFIGURED, kind?: string): Solved {
+  const remedy = advice.remedy ? `. ${advice.remedy}` : "";
   return {
     value: null, pipeline: "none", exact: false, kind, evidence,
-    method: `${what} not counted or read: only an external vision model could, because ${why}, and none is configured`,
-    note: `No answer: this question needs an external vision model, because ${why}, and the app is running with our local models only (VISION_PROVIDER=none).`,
-    source: { calculatedBy: [], needed: `an external vision model is needed, because ${why}; none is configured (VISION_PROVIDER=none)`, from: { file, used: "nothing" } },
+    method: `${what} not counted or read: only an outside vision model could, because ${why}, and ${advice.none}`,
+    note: `No answer: this question needs an outside vision model, because ${why}, and ${advice.none}${remedy}.`,
+    source: { calculatedBy: [], needed: `an outside vision model is needed, because ${why}; ${advice.none}${remedy}`, from: { file, used: "nothing" } },
+    ...(advice.retry && { retry: { mode: advice.retry } }),
   };
 }
 
@@ -276,7 +291,7 @@ export async function solveRaster(imagePath: string, question: string, reading: 
 
   const noExternal = deps.vision.id === "none";
   if (call.operation === "read") {
-    if (noExternal) return unanswered(file, "the drawing was", WHY.read, image([], "Source drawing"));
+    if (noExternal) return unanswered(file, "the drawing was", WHY.read, image([], "Source drawing"), deps.advice);
     const { output } = await deps.vision.ask({ imagePath, system: FREE_SYSTEM, prompt: question, schema: FREE_SCHEMA });
     const unmarked = locate ? "Nothing is marked: the answer was read from the drawing as a whole, not from items that can be pointed at." : "";
     return {
@@ -290,7 +305,7 @@ export async function solveRaster(imagePath: string, question: string, reading: 
   if (call.operation === "count_other" || !call.whole) {
     const subject = call.operation === "count_other" ? call.items : `${targets.map((t) => t.plural).join(" and ")} in the part of the drawing the question names`;
     const why = call.operation === "count_other" ? WHY.other : WHY.part;
-    if (noExternal) return unanswered(file, `${subject} were`, why, image([], "Source drawing"), "other");
+    if (noExternal) return unanswered(file, `${subject} were`, why, image([], "Source drawing"), deps.advice, "other");
     const { output } = await deps.vision.ask({ imagePath, system: COUNT_SYSTEM, prompt: question, schema: COUNT_SCHEMA });
     const items: Located[] = output.items ?? [];
     return {
@@ -311,7 +326,7 @@ export async function solveRaster(imagePath: string, question: string, reading: 
     parts.push({ target, answer, marks: answer.evidence?.kind === "image" ? answer.evidence.marks : [] });
   }
   const marked = (count: number, subject: string) =>
-    // The detector boxes each storey's plan; the external model only gives the number of storeys.
+    // The detector boxes each storey's plan; the reader only gives the number of storeys.
     parts.every((part) => part.target.id === "floor" && part.answer.pipeline !== "detector")
       ? "Storeys are counted from the whole image; there is no single item to mark."
       : markedSentence(count, subject);
@@ -331,12 +346,14 @@ export async function solveRaster(imagePath: string, question: string, reading: 
     const counted = parts.filter((part) => part.answer.value !== null);
     const sofar = counted.length > 0 ? `Counted: ${counted.map((part) => `${part.answer.value} ${part.target.plural}`).join(" and ")}.` : "";
     const marks = counted.flatMap((part) => part.marks.map((mark) => ({ ...mark, label: mark.label ?? part.target.plural })));
+    const retry = open.find((part) => part.answer.retry)?.answer.retry;
     return {
       value: null, unit: "count", pipeline: "none", exact: false, kind: parts.map((part) => part.target.id).join("+"),
       method: parts.map((part) => part.answer.method).join("; "),
       note: [sofar, `Not counted: ${open.map((part) => part.target.plural).join(" and ")}.`, ...new Set(open.map((part) => part.answer.note))].filter(Boolean).join(" "),
       evidence: image(marks.map((mark, i) => ({ ...mark, n: i + 1 })), "Each mark is one counted item, labelled with its kind"),
       source,
+      ...(retry && { retry }),
     };
   }
 
@@ -346,7 +363,8 @@ export async function solveRaster(imagePath: string, question: string, reading: 
   const marks = parts.flatMap((part) => part.marks.map((mark) => ({ ...mark, label: mark.label ?? part.target.plural })));
   const pipelines = new Set(parts.map((part) => part.answer.pipeline));
   return {
-    value: total, unit: "count", pipeline: pipelines.size === 1 ? parts[0].answer.pipeline : "vision-model", exact: false, kind: parts.map((part) => part.target.id).join("+"),
+    // Kinds that came from different places: the reader's share makes the total a reading, otherwise a vote had a part in it.
+    value: total, unit: "count", pipeline: pipelines.size === 1 ? parts[0].answer.pipeline : pipelines.has("vision-model") ? "vision-model" : "symbol-vote", exact: false, kind: parts.map((part) => part.target.id).join("+"),
     method: parts.map((part) => part.answer.method).join("; "),
     note: locate ? `${consists} ${marked(marks.length, subject)}` : consists,
     evidence: image(marks.map((mark, i) => ({ ...mark, n: i + 1 })), "Each mark is one counted item, labelled with its kind"),
@@ -354,51 +372,117 @@ export async function solveRaster(imagePath: string, question: string, reading: 
   };
 }
 
+/** One count of a target on a drawing, with the items that were counted. */
+interface Tally {
+  /** The model's id with its provider, and the name sentences use for it. */
+  id: string;
+  name: string;
+  count: number;
+  boxes?: Detection[];
+  points?: Located[];
+}
+
+/** The middle of several counts; the lower of the two middle ones when their number is even. */
+export function middleCount(counts: number[]): number {
+  const sorted = [...counts].sort((a, b) => a - b);
+  return sorted[Math.floor((sorted.length - 1) / 2)];
+}
+
+/** A vote needs a middle: with fewer counts the routed detector answers alone. */
+const VOTERS = 3;
+
 /**
- * Counts one target on the whole drawing with a single source: the detector routed to its classes, when the drawing
- * is in the detectors' style. Otherwise the external vision model's inventory of the drawing answers, which is one
- * request shared by every such question about it.
+ * Counts one target on the whole drawing: with the detector routed to its classes, when the drawing is in the
+ * detectors' style. Otherwise the reader's inventory of the drawing answers, which is one request shared by every such
+ * question about it.
  *
- * RASTER_DETECTOR_TARGETS: "all" (default) gives the detectors every class they know; "symbols" gives them the drawn
- * symbols only and leaves room types and storeys to the vision model, for comparison; "none" switches them off.
+ * The scope says what the detectors are given: "all" (default) every class they know; "symbols" the drawn symbols
+ * only, room types and storeys going to the reader; "none" nothing. The line-up states it, else RASTER_DETECTOR_TARGETS.
+ *
+ * With `vote`, a drawn symbol is counted by every detector that knows its classes and by the reader's inventory, and
+ * the middle count is the answer: on held-out drawings that beats each of them alone.
  */
 async function countTarget(
   imagePath: string, file: string, target: Target, deps: RasterDeps,
   image: (marks: Mark[], caption: string) => Answer["evidence"], toMarks: (items: Located[]) => Mark[],
 ): Promise<Solved> {
   const { height = 0 } = await sharp(imagePath).metadata();
-  // Without an external model there is nobody to leave room types to.
-  const scope = deps.useDetector === false ? "none" : deps.vision.id === "none" ? "all" : (process.env.RASTER_DETECTOR_TARGETS ?? "all");
+  const noReader = deps.vision.id === "none";
+  // Without a reader there is nobody to leave room types to.
+  const scope: string = deps.useDetector === false ? "none" : noReader ? "all" : (deps.scope ?? process.env.RASTER_DETECTOR_TARGETS ?? "all");
   const detector = scope === "none" ? null : deps.detector;
   const names = target.detectorClasses.map((cls) => cls.replace("_", " ")).join(" and ");
+  const inventory = () => deps.vision.ask({ imagePath, system: inventorySystem(), schema: INVENTORY_SCHEMA, prompt: INVENTORY_PROMPT });
+  const located = (output: Record<string, any>): Located[] => target.categories.flatMap((category) => output[category] ?? []);
 
   let why: string;
   if (scope === "none") why = WHY.off;
   else if (!detector) why = WHY.absent;
   else if (!target.detectorClasses.every((cls) => cls in detector.thresholds)) why = `our detectors do not offer ${target.plural}`;
-  else if (scope !== "all" && !target.symbol) why = `RASTER_DETECTOR_TARGETS=${scope} leaves room types and storeys to it`;
+  else if (scope !== "all" && !target.symbol) why = deps.scope ? "the line-up leaves room types and storeys to the reader" : `RASTER_DETECTOR_TARGETS=${scope} leaves room types and storeys to it`;
   else {
     const scanned = await detector.detect(imagePath);
     // The detectors know one drawing style. On a drawing where they recognise almost nothing with confidence
     // (an elevation, a historic scan), their count would be a confident zero, so the vision model answers instead.
     if (scanned.filter((d) => d.score >= IN_DOMAIN_SCORE).length >= IN_DOMAIN_DETECTIONS) {
-      const boxes = readingOrder(
-        scanned.filter((d) => target.detectorClasses.includes(d.cls) && d.score >= detector.thresholds[d.cls]),
-        (d) => ({ x: d.x + d.w / 2, y: d.y + d.h / 2 }), height * ROW,
-      );
+      const counted = (by: Detector, found: Detection[]) =>
+        readingOrder(found.filter((d) => target.detectorClasses.includes(d.cls) && d.score >= by.thresholds[d.cls]), (d) => ({ x: d.x + d.w / 2, y: d.y + d.h / 2 }), height * ROW);
+      const boxMarks = (found: Detection[]): Mark[] =>
+        found.map((d, i) => ({ n: i + 1, x: d.x, y: d.y, w: d.w, h: d.h, label: `${d.cls.replace("_", " ")}, ${Math.round(d.score * 100)}% confidence` }));
+      const what = target.id === "floor" ? "storey plans" : `${names} ${target.symbol ? "symbols" : "rooms"}`;
+      const routed = detector.nameFor?.(target.detectorClasses[0]) ?? detector.id.split(":")[1];
+
+      // Why the reader's count could not be had, when a vote was due: the routed detector then answers alone.
+      let unheard = "";
+      const voters = (detector.members ?? []).filter((member) => target.detectorClasses.every((cls) => cls in member.thresholds));
+      if (deps.vote && target.symbol && !noReader && voters.length + 1 >= VOTERS) {
+        const read = await inventory().catch((error) => {
+          unheard = `; the reader ${deps.vision.id} gave no count for the vote (${error instanceof Error ? error.message : String(error)})`.slice(0, 200);
+          return null;
+        });
+        if (read) {
+          const tallies: Tally[] = await Promise.all(voters.map(async (member) => {
+            const boxes = counted(member, await member.detect(imagePath));
+            return { id: member.id, name: member.id.split(":")[1], count: boxes.length, boxes };
+          }));
+          // The marks are those of the first count that equals the middle: the routed detector's, then another detector's.
+          tallies.sort((a, b) => Number(b.name === routed) - Number(a.name === routed));
+          const points = located(read.output);
+          tallies.push({ id: deps.vision.id, name: deps.vision.id, count: points.length, points });
+          const middle = middleCount(tallies.map((tally) => tally.count));
+          const shown = tallies.find((tally) => tally.count === middle)!;
+          return {
+            value: middle, unit: "count", pipeline: "symbol-vote", exact: false, kind: target.id,
+            method: `middle of ${tallies.length} independent counts of ${what} (${tallies.map((tally) => `${tally.name}: ${tally.count}`).join("; ")})`,
+            evidence: shown.boxes
+              ? image(boxMarks(shown.boxes), `Each box is one counted ${names}, as found by ${shown.name}`)
+              : image(toMarks(shown.points ?? []), "Each number is one counted item; positions are the reader's estimate"),
+            source: {
+              calculatedBy: [
+                ...tallies.map((tally) => model(tally.id, `counted the ${target.plural}${tally.points ? " in its inventory of the drawing" : ""}: ${tally.count}`, tally.name)),
+                script(SCRIPTS.vote, `took the middle of the ${tallies.length} counts: ${middle}`),
+              ],
+              from: {
+                file,
+                used: shown.boxes
+                  ? `${several(middle, "detection box")} of class ${target.detectorClasses.join(" and ")} by ${shown.name} on the drawing image`
+                  : `the drawing image; ${several(middle, "position")} in the reader's inventory of the drawing`,
+              },
+            },
+          };
+        }
+      }
+
+      const boxes = counted(detector, scanned);
       // A detector that is not our own weights (a hosted one) is named with its provider, like any outside model.
       const ours = tierOf(detector.id) === "own-model";
       const by = ours ? [...new Set(target.detectorClasses.map((cls) => detector.nameFor?.(cls) ?? detector.id.split(":")[1]))].join(" and ") : detector.id;
-      const what = target.id === "floor" ? "storey plans" : `${names} ${target.symbol ? "symbols" : "rooms"}`;
       return {
         value: boxes.length, unit: "count", pipeline: "detector", exact: false, kind: target.id,
-        method: ours ? `${what} counted by our detectors (${by}), no external model` : `${what} counted by the external detector ${by}`,
-        evidence: image(
-          boxes.map((d, i) => ({ n: i + 1, x: d.x, y: d.y, w: d.w, h: d.h, label: `${d.cls.replace("_", " ")}, ${Math.round(d.score * 100)}% confidence` })),
-          `Each box is one counted ${names}`,
-        ),
+        method: (ours ? `${what} counted by our detectors (${by}), no outside model` : `${what} counted by the outside detector ${by}`) + unheard,
+        evidence: image(boxMarks(boxes), `Each box is one counted ${names}`),
         source: {
-          calculatedBy: [model(detector.id, `counted the ${target.plural}`, by)],
+          calculatedBy: [model(detector.id, `counted the ${target.plural}${unheard}`, by)],
           from: { file, used: `${several(boxes.length, "detection box")} of class ${target.detectorClasses.join(" and ")} on the drawing image` },
         },
       };
@@ -406,8 +490,8 @@ async function countTarget(
     why = WHY.unrecognised;
   }
 
-  if (deps.vision.id === "none") return unanswered(file, `${target.plural} were`, why, image([], "Source drawing"), target.id);
-  const { output } = await deps.vision.ask({ imagePath, system: inventorySystem(), schema: INVENTORY_SCHEMA, prompt: INVENTORY_PROMPT });
+  if (noReader) return unanswered(file, `${target.plural} were`, why, image([], "Source drawing"), deps.advice, target.id);
+  const { output } = await inventory();
   const method = fallback(deps.vision, target.plural, why);
   const calculatedBy = [model(deps.vision.id, `counted the ${target.plural}, because ${why}`)];
   if (target.id === "floor") {
@@ -416,7 +500,7 @@ async function countTarget(
       source: { calculatedBy, from: { file, used: "the drawing image as a whole" } },
     };
   }
-  const points: Located[] = target.categories.flatMap((category) => output[category] ?? []);
+  const points = located(output);
   return {
     value: points.length, unit: "count", pipeline: "vision-model", exact: false, kind: target.id, method,
     evidence: image(toMarks(points), "Each number is one counted item; positions are the model's estimate"),

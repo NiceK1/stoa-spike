@@ -220,7 +220,7 @@ describe("the source of an answer about a layered DXF plan", () => {
     const answer = await ask({ file: plan, question: "how big is flat A?" }, deps(planner));
     expect(answer).toMatchObject({ value: 25, pipeline: "dxf-geometry" });
     expect(answer.source).toEqual({
-      understoodBy: { by: "model", name: "claude-cli:claude-haiku-5-5", tier: "external-model", reading: "net area of apartment A" },
+      understoodBy: { by: "model", name: "claude-cli:claude-haiku-5-5", label: "Claude Haiku 5.5 (Anthropic)", tier: "external-model", reading: "net area of apartment A" },
       calculatedBy: [{ name: "CAD geometry script", tier: "script" }],
       from: { file: "floor.dxf", used: "indoor room outlines inside unit A: 3 room outlines on layer ROOM_OUTLINE" },
     });
@@ -334,12 +334,12 @@ describe("a question about a raster drawing", () => {
     expect(planner.requests).toHaveLength(0);
   });
 
-  it("tags the model that counted as external in the source, next to who understood the question", async () => {
+  it("tags the model that counted as an outside one in the source, next to who understood the question", async () => {
     const eyes = { ...vision(), id: "gemini-api:gemini-4-hydrogen" };
     const answer = await ask({ file: image, question: "how many staircases?" }, deps(reading({ operation: "count_other", items: "staircases" }), eyes));
     expect(answer.source).toEqual({
       understoodBy: { by: "model", name: "fake-planner", tier: "external-model", reading: "count staircases" },
-      calculatedBy: [{ name: "gemini-api:gemini-4-hydrogen", tier: "external-model", did: "counted the staircases, because our detectors do not know this kind of item" }],
+      calculatedBy: [{ name: "gemini-api:gemini-4-hydrogen", label: "Gemini 4 Hydrogen (Google)", tier: "external-model", did: "counted the staircases, because our detectors do not know this kind of item" }],
       from: { file: "plan.png", used: "the drawing image; 1 position the model pointed at" },
     });
     // A stated answer type leaves nothing to interpret: the source says so instead of naming a reader.

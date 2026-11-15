@@ -8,8 +8,8 @@ import { basename, extname, join, relative, resolve, sep } from "node:path";
 import { APP_ROOT, CACHE_DIR, REPO_ROOT, UPLOAD_DIR, datasetRoot, loadEnv } from "./config.js";
 import { isAvailable, questionsByPath } from "./dataset.js";
 import { createDetector } from "./models/detector.js";
-import { createPlanner, createVision } from "./models/vision.js";
-import { ask, preview, type Deps } from "./router.js";
+import { ChoiceError, DEFAULT_MODE, createModes, lineupSentence, type Choice } from "./modes.js";
+import { ask, preview } from "./router.js";
 import { isCorrect } from "./scoring.js";
 import type { QuestionType } from "./types.js";
 
@@ -35,11 +35,25 @@ function fileUrl(absolute: string): string {
   throw new Error("file is outside the served folders");
 }
 
-const deps: Deps = { vision: createVision(), planner: createPlanner(), detector: createDetector(), fileUrl };
+const modes = createModes(createDetector());
 const app = Fastify({ logger: false, bodyLimit: 64 * 1024 * 1024 });
 await app.register(multipart, { limits: { fileSize: 200 * 1024 * 1024 } });
 
-app.get("/api/health", async () => ({ vision: deps.vision.id, detector: deps.detector?.id ?? null, dataset: datasetRoot() }));
+// `vision` is the reader of the default mode, which is what a question without a mode gets.
+app.get("/api/health", async () => {
+  const { deps } = modes.resolve();
+  return { mode: DEFAULT_MODE, vision: deps.vision.id, interpreter: deps.planner?.id ?? null, detector: deps.detector?.id ?? null, dataset: datasetRoot() };
+});
+
+// With ?interpreter= and ?reader=, the Custom mode is described for those choices.
+app.get<{ Querystring: Choice }>("/api/modes", async (request, reply) => {
+  try {
+    return modes.describe({ interpreter: request.query.interpreter, reader: request.query.reader });
+  } catch (error) {
+    if (error instanceof ChoiceError) return reply.code(400).send({ error: error.message });
+    throw error;
+  }
+});
 
 app.get("/api/dataset", async () => {
   const sources = new Map<string, { path: string; questions: number }[]>();
@@ -68,7 +82,7 @@ app.get<{ Querystring: { path?: string; upload?: string } }>("/api/preview", asy
   const file = path ? inside(datasetRoot(), path) : upload ? inside(UPLOAD_DIR, upload) : null;
   if (!file) return reply.code(400).send({ error: "path or upload is required" });
   try {
-    return { evidence: await preview(file, deps) };
+    return { evidence: await preview(file, { fileUrl }) };
   } catch (error) {
     return reply.code(500).send({ error: error instanceof Error ? error.message : String(error) });
   }
@@ -84,18 +98,27 @@ app.post("/api/upload", async (request, reply) => {
   return { upload: `${basename(folder)}/${name}`, name };
 });
 
-app.post<{ Body: { path?: string; upload?: string; question: string; type?: QuestionType } }>("/api/ask", async (request, reply) => {
-  const { path, upload, question, type } = request.body ?? ({} as any);
+// `mode` is blueline, best or custom (Blueline only when left out); `interpreter` and `reader` are read with custom only.
+app.post<{ Body: { path?: string; upload?: string; question: string; type?: QuestionType } & Choice }>("/api/ask", async (request, reply) => {
+  const { path, upload, question, type, mode, interpreter, reader } = request.body ?? ({} as any);
   if (!question?.trim()) return reply.code(400).send({ error: "question is required" });
   const file = path ? inside(datasetRoot(), path) : upload ? inside(UPLOAD_DIR, upload) : null;
   if (!file) return reply.code(400).send({ error: "path or upload is required" });
+  let lineup;
+  try {
+    lineup = modes.resolve({ mode, interpreter, reader });
+  } catch (error) {
+    if (error instanceof ChoiceError) return reply.code(400).send({ error: error.message });
+    throw error;
+  }
 
   const known = path ? questionsByPath().get(path)?.find((row) => row.question === question.trim()) : undefined;
   const started = Date.now();
   try {
-    const answer = await ask({ file, question: question.trim(), type: type ?? (known?.type === "other" ? undefined : known?.type) }, deps);
+    const answer = await ask({ file, question: question.trim(), type: type ?? (known?.type === "other" ? undefined : known?.type) }, { ...lineup.deps, fileUrl });
     return {
       answer,
+      mode: lineup.mode,
       seconds: (Date.now() - started) / 1000,
       expected: known ? { value: known.answer, unit: known.unit, correct: isCorrect(known.type, known.answer, answer.value) } : null,
     };
@@ -121,4 +144,5 @@ if (existsSync(webDist)) {
 const port = Number(process.env.PORT ?? 8787);
 // HOST=0.0.0.0 in a container (the Hugging Face Space); the default keeps a local run private to this machine.
 await app.listen({ port, host: process.env.HOST ?? "127.0.0.1" });
-console.log(`Stoa take-off server on http://127.0.0.1:${port} (vision ${deps.vision.id}, detector ${deps.detector?.id ?? "none"})`);
+console.log(`Stoa take-off server on http://127.0.0.1:${port}`);
+for (const mode of ["blueline", "best"]) console.log(`  ${lineupSentence(modes.resolve({ mode }))}`);

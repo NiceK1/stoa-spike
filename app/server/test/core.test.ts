@@ -3,7 +3,7 @@ import { renderPlanSvg } from "../src/evidence.js";
 import { contains, polygonArea } from "../src/geometry.js";
 import { inferType, parseTakeoff } from "../src/questions.js";
 import { isCorrect } from "../src/scoring.js";
-import { tierOf } from "../src/source.js";
+import { labelOf, model, tierOf } from "../src/source.js";
 import { Plan, parseDxf } from "../src/solvers/dxf.js";
 import { rasterTarget, rasterTargets, readByKeywords } from "../src/solvers/raster.js";
 import type { Polygon } from "../src/types.js";
@@ -44,6 +44,24 @@ describe("the tier of a model in an answer's source", () => {
 
   it("takes a provider it does not know for an external one, never for ours", () => {
     expect(tierOf("some-new-provider:model")).toBe("external-model");
+  });
+});
+
+describe("the label of a model in an answer's source", () => {
+  it("names our own models by what they are and a model outside by product and vendor", () => {
+    expect(labelOf("onnx:floorplan-symbols-yolo11l-1280+floorplan-yolo11m-1280")).toBe("Blueline detector (trained YOLO11)");
+    expect(labelOf("gemma-local:interpreter-q8_0")).toBe("Blueline interpreter (tuned Gemma)");
+    expect(labelOf("anthropic-api:claude-haiku-5-5")).toBe("Claude Haiku 5.5 (Anthropic)");
+    expect(labelOf("claude-cli:claude-sonnet-5-5:high")).toBe("Claude Sonnet 5.5 (Anthropic)");
+    expect(labelOf("gemini-api:gemini-4-hydrogen")).toBe("Gemini 4 Hydrogen (Google)");
+    expect(labelOf("openai-compatible:gemma-4-31b:min1024")).toBe("gemma-4-31b (self-hosted)");
+  });
+
+  it("keeps the id of a model it has no product name for, and has no label for an unknown provider", () => {
+    expect(labelOf("gemini-api:gemini-1.5-pro")).toBe("gemini-1.5-pro (Google)");
+    expect(labelOf("onnx:floorplan-rfdetr-960")).toBe("Blueline detector");
+    expect(labelOf("some-new-provider:model")).toBeUndefined();
+    expect(model("some-new-provider:model", "counted")).toEqual({ name: "some-new-provider:model", tier: "external-model", did: "counted" });
   });
 });
 

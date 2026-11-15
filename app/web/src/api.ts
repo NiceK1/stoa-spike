@@ -2,6 +2,8 @@
  * Everything the page asks of the server. A static build (VITE_STATIC=1, the free Hugging Face Space) has no server:
  * it reads answers pre-computed by scripts/export-static.ts from files next to the page instead.
  */
+import type { Choice, ModesInfo } from "./modes";
+
 export const STATIC = import.meta.env.VITE_STATIC === "1";
 
 export type Drawing = { kind: "dataset"; path: string } | { kind: "upload"; id: string; name: string };
@@ -31,6 +33,20 @@ export async function health(): Promise<{ vision: string }> {
   return STATIC ? { vision: "none" } : json("/api/health");
 }
 
+/**
+ * The modes this server offers, with the mode that has pickers described for `picks` when given.
+ * Null when there is nothing to choose from: the static build, an older server, a pick the server refuses.
+ */
+export async function modes(picks?: { interpreter: string; reader: string }): Promise<ModesInfo | null> {
+  if (STATIC) return null;
+  try {
+    const listed = await json(picks ? `/api/modes?${new URLSearchParams(picks)}` : "/api/modes");
+    return Array.isArray(listed?.modes) && listed.modes.length > 0 ? listed : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function dataset(): Promise<{ sources: any[] }> {
   return STATIC ? staticIndex() as Promise<{ sources: any[] }> : json("/api/dataset");
 }
@@ -45,13 +61,13 @@ export async function preview(d: Drawing): Promise<{ evidence: any }> {
   return d.kind === "dataset" ? { evidence: (await withEvidence((await staticDrawing(d.path)).preview))?.evidence ?? null } : { evidence: null };
 }
 
-/** The server's reply to a question, or an Error with the message to show. */
-export async function ask(d: Drawing, question: string): Promise<any> {
+/** The server's reply to a question, or an Error with the message to show. Without `choice` the server's default mode answers. */
+export async function ask(d: Drawing, question: string, choice?: Choice): Promise<any> {
   if (!STATIC) {
     const response = await fetch("/api/ask", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(d.kind === "dataset" ? { path: d.path, question } : { upload: d.id, question }),
+      body: JSON.stringify({ ...(d.kind === "dataset" ? { path: d.path } : { upload: d.id }), question, ...choice }),
     });
     const body = await response.json();
     if (!response.ok) throw new Error(body.error ?? "The question could not be answered.");

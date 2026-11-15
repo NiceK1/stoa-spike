@@ -1,6 +1,6 @@
 /**
  * Picks the pipeline for a drawing: exact geometry when a vector twin exists, our detectors on an image, and an
- * external model only for what neither can do.
+ * outside model only for what neither can do, when the line-up has one (modes.ts).
  * In the dataset, files with the same name and a different extension are the same drawing,
  * and `<model>_plan-<level>.pdf` was rendered from `<model>.ifc`.
  *
@@ -17,12 +17,12 @@ import { markedSentence, planIfc, planRaster, planTakeoff, type RasterReading } 
 import { countKindPattern, describeIntent, inferType, isLocate, isPlainRequest, parseTakeoff } from "./questions.js";
 import { rasterize, upright } from "./rasterize.js";
 import { toEnglish } from "./rewrite.js";
-import { SCRIPTS, model as modelSource, tierOf } from "./source.js";
+import { SCRIPTS, UNCONFIGURED, model as modelSource } from "./source.js";
 import { isLayeredPlan, loadPlan, takeoffSource, type Plan, type TakeoffResult } from "./solvers/dxf.js";
 import { describeIfcIntent, elementWords, parseIfcQuestion } from "./solvers/ifc/question.js";
-import { RASTER_KINDS, TARGETS, rasterTarget, readByKeywords, solveRaster } from "./solvers/raster.js";
+import { RASTER_KINDS, TARGETS, rasterTarget, readByKeywords, solveRaster, type RasterScope } from "./solvers/raster.js";
 import sharp from "sharp";
-import type { Answer, AskInput, Evidence, QuestionType, Solved, Understanding } from "./types.js";
+import type { Answer, AskInput, Evidence, OutsideAdvice, QuestionType, Solved, Understanding } from "./types.js";
 
 export interface Deps {
   vision: VisionModel;
@@ -37,7 +37,19 @@ export interface Deps {
   /** URL the browser can load a file from, for image evidence. */
   fileUrl(path: string): string;
   useDetector?: boolean;
+  /** Words the answers from a building model's facts and from a sheet's text; the vision model when left out. */
+  text?: VisionModel;
+  /** What the detectors count on an image plan; left out, RASTER_DETECTOR_TARGETS decides. */
+  rasterScope?: RasterScope;
+  /** Drawn symbols on an image plan get the middle of every detector's count and the vision model's. */
+  voteSymbols?: boolean;
+  /** What an answer with no value says when the line-up has no outside model; left out, the environment's wording. */
+  advice?: OutsideAdvice;
+  /** Why the keyword parser reads the questions, when the line-up has no interpreter model; left out, that none is configured. */
+  plannerAbsent?: string;
 }
+
+const textOf = (deps: Deps): VisionModel => deps.text ?? deps.vision;
 
 /** Who reads the question: the interpreter model, or the keyword parsers, with the reason the model is not asked. */
 interface Reader {
@@ -48,7 +60,7 @@ interface Reader {
 function readerOf(deps: Deps): Reader {
   if ((deps.interpreter ?? process.env.INTERPRETER) === "templates") return { model: null, why: "bulk mode, INTERPRETER=templates" };
   const planner = deps.planner === undefined ? deps.vision : deps.planner;
-  return planner && planner.id !== "none" ? { model: planner, why: "" } : { model: null, why: "no interpreter model is configured" };
+  return planner && planner.id !== "none" ? { model: planner, why: "" } : { model: null, why: deps.plannerAbsent ?? "no interpreter model is configured" };
 }
 
 /** The interpreter's call, or null when the keyword parsers have to read the question: no model, a failed call, an unusable answer. */
@@ -71,7 +83,7 @@ interface How {
 
 const byModel = (reading: string, model: VisionModel): How => ({
   text: `understood as "${reading}" by ${model.id}`,
-  by: { by: "model", name: model.id, tier: tierOf(model.id), reading },
+  by: { by: "model", ...modelSource(model.id), reading },
 });
 const byKeywords = (reader: Reader): How => ({
   text: `read by the keyword parser (${reader.why})`,
@@ -87,13 +99,16 @@ function noAnswer(how: How, file: string, needed: string, rest: Partial<Answer> 
   return { value: null, pipeline: "none", exact: false, method: how.text, source: { understoodBy: how.by, calculatedBy: [], needed, from: { file: basename(file), used: "nothing" } }, ...rest };
 }
 
-/** A question about a building model's facts, which a language model writes the answer to, when none is configured. */
-const factsUnanswered = (how: How, ifc: string, evidence?: Evidence): Answer =>
-  noAnswer(how, ifc, "an external language model is needed to write the answer from the model's facts; none is configured (VISION_PROVIDER=none)", {
+/** A question about a building model's facts, which a language model writes the answer to, when the line-up has none. */
+function factsUnanswered(how: How, ifc: string, advice: OutsideAdvice = UNCONFIGURED, evidence?: Evidence): Answer {
+  const remedy = advice.remedy ? `. ${advice.remedy}` : "";
+  return noAnswer(how, ifc, `an outside language model is needed to write the answer from the model's facts; ${advice.none}${remedy}`, {
     evidence,
-    method: `${how.text}; not answered: only an external language model could write the answer from the model's facts, and none is configured`,
-    note: "No answer: this question is about the building model's facts, not a count or a measure our code computes, so it needs an external language model, and the app is running with our local models only (VISION_PROVIDER=none).",
+    method: `${how.text}; not answered: only an outside language model could write the answer from the model's facts, and ${advice.none}`,
+    note: `No answer: this question is about the building model's facts, not a count or a measure our code computes, so it needs an outside language model, and ${advice.none}${remedy}.`,
+    ...(advice.retry && { retry: { mode: advice.retry } }),
   });
+}
 const highlighted = (count: number) => `The ${count} counted item${count === 1 ? " is" : "s are"} highlighted on the drawing.`;
 
 const IMAGE = new Set([".png", ".jpg", ".jpeg", ".webp"]);
@@ -270,15 +285,18 @@ export async function ask(input: AskInput, deps: Deps): Promise<Answer> {
       how = byKeywords(reader);
     }
 
-    if (pdf && deps.vision.id !== "none") {
+    if (pdf && textOf(deps).id !== "none") {
       // Schedules and notes are answered from the sheet's text layer; drawings without enough text go to the image pipeline.
       const { solveDocument } = await import("./solvers/document.js");
-      const answer = await solveDocument(input.file, input.question, asked ?? reading.type, { text: deps.vision, fileUrl: deps.fileUrl });
+      const answer = await solveDocument(input.file, input.question, asked ?? reading.type, { text: textOf(deps), fileUrl: deps.fileUrl });
       if (answer) return understood(how, answer);
     }
     if (image) {
       image = await upright(image);
-      const raster = { vision: deps.vision, detector: deps.detector, imageUrl: deps.fileUrl(image), useDetector: deps.useDetector, file: basename(drawn) };
+      const raster = {
+        vision: deps.vision, detector: deps.detector, imageUrl: deps.fileUrl(image), useDetector: deps.useDetector, file: basename(drawn),
+        scope: deps.rasterScope, vote: deps.voteSymbols, advice: deps.advice,
+      };
       return understood(how, await solveRaster(image, input.question, reading, raster));
     }
   }
@@ -346,9 +364,9 @@ async function askIfcByModel(ifc: string, input: AskInput, deps: Deps, reader: R
   if (extname(input.file).toLowerCase() !== ".ifc" && existsSync(input.file)) {
     return sheet ? understood(how, sheet) : noAnswer(how, input.file, "the building model's rules do not cover this question; the sheet itself has to be read");
   }
-  if (deps.vision.id === "none") return factsUnanswered(how, ifc, sheet?.evidence);
+  if (textOf(deps).id === "none") return factsUnanswered(how, ifc, deps.advice, sheet?.evidence);
   const { answerFromDigest } = await import("./solvers/ifc/digest.js");
-  const written = await answerFromDigest(ifc, input.question, type, deps.vision, typeof sheet?.value === "string" ? sheet.value : undefined);
+  const written = await answerFromDigest(ifc, input.question, type, textOf(deps), typeof sheet?.value === "string" ? sheet.value : undefined);
   return {
     ...understood(how, written), evidence: sheet?.evidence,
     note: joined(written.note, read.locate && !sheet?.evidence && "Nothing is marked: the answer was written from the model's facts, not from items on a plan."),
@@ -371,11 +389,11 @@ async function askIfcByKeywords(ifc: string, input: AskInput, deps: Deps, reader
   let answer = await solveIfc(ifc, input.question, qtype);
   const numeric = qtype !== "text";
   if (numeric && !answer) {
-    const english = await toEnglish(input.question, deps.vision);
+    const english = await toEnglish(input.question, textOf(deps));
     const rewritten = english ? await solveIfc(ifc, english, qtype) : null;
     if (rewritten) {
-      answer = { ...rewritten, method: `rewritten as "${english}" by ${deps.vision.id}; ${rewritten.method}` };
-      how = { text: how.text, by: { ...how.by, helper: modelSource(deps.vision.id, `rewrote the question in English as "${english}" for the keyword parser`) } };
+      answer = { ...rewritten, method: `rewritten as "${english}" by ${textOf(deps).id}; ${rewritten.method}` };
+      how = { text: how.text, by: { ...how.by, helper: modelSource(textOf(deps).id, `rewrote the question in English as "${english}" for the keyword parser`) } };
     }
   }
   if (answer && numeric) {
@@ -385,10 +403,10 @@ async function askIfcByKeywords(ifc: string, input: AskInput, deps: Deps, reader
   if (extname(input.file).toLowerCase() === ".ifc") {
     // A free-text question: the fixed rules give a fact sheet on the topic at best, so a language model
     // writes the answer to the actual question from the model's extracted facts.
-    if (deps.vision.id === "none") return factsUnanswered(how, ifc, answer?.evidence);
+    if (textOf(deps).id === "none") return factsUnanswered(how, ifc, deps.advice, answer?.evidence);
     const { answerFromDigest } = await import("./solvers/ifc/digest.js");
     const related = typeof answer?.value === "string" ? answer.value : undefined;
-    const written = await answerFromDigest(ifc, input.question, asked, deps.vision, related);
+    const written = await answerFromDigest(ifc, input.question, asked, textOf(deps), related);
     return { ...understood(how, written), evidence: answer?.evidence };
   }
   return answer ? understood(how, answer) : null;

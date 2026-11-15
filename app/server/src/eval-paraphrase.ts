@@ -10,6 +10,8 @@
  * --styles picks the style set (default dev), --dump <file> keeps every question with how it was understood,
  * --original asks the same sample in the dataset's wording, as the reference,
  * --interpreter templates has the keyword parsers read the questions instead of the interpreter model,
+ * --mode blueline|best|custom answers with the line-up of that mode of the app (custom takes --engine-interpreter and
+ * --reader); the rewording stays with the environment's vision model, which is not part of what is measured,
  * --other-languages samples the dataset's questions that are not in English (to be used with --original).
  * Rewrites and answers are cached like every other model call, so a repeated run costs nothing.
  */
@@ -19,6 +21,7 @@ import { datasetRoot, loadEnv } from "./config.js";
 import { isAvailable, questionsByPath } from "./dataset.js";
 import { createDetector } from "./models/detector.js";
 import { createPlanner, createVision, type VisionModel } from "./models/vision.js";
+import { lineupOfRun, lineupSentence } from "./modes.js";
 import { STYLE_SETS, paraphrase } from "./paraphrase.js";
 import { ask, type Deps } from "./router.js";
 import { isCorrect } from "./scoring.js";
@@ -95,20 +98,24 @@ function sample(): QuestionRow[] {
   return rows;
 }
 
-const vision = counted(createVision(), calls);
+const detector = createDetector();
+const lineup = lineupOfRun(option, detector);
+const rewriter = counted(createVision(), calls);
+const vision = lineup ? counted(lineup.deps.vision, calls) : rewriter;
 function fail(message: string): never {
   throw new Error(message);
 }
 
 const interpreter = option("interpreter", process.env.INTERPRETER === "templates" ? "templates" : "model");
 if (interpreter !== "templates" && interpreter !== "model") fail(`--interpreter is 'templates' or 'model', not '${interpreter}'`);
-const planner = interpreter === "templates" ? null : counted(createPlanner() ?? fail("eval-paraphrase measures the interpreter, which VISION_PROVIDER=none turns off"), interpretations);
-const deps: Deps = { vision, planner, interpreter, detector: createDetector(), fileUrl: () => "" };
+const interpreting = lineup ? lineup.deps.planner : createPlanner();
+const planner = interpreter === "templates" ? null : counted(interpreting ?? fail("eval-paraphrase measures the interpreter, and this line-up has none"), interpretations);
+const deps: Deps = { ...lineup?.deps, vision, planner, interpreter, detector, fileUrl: () => "" };
 
 // --limit N keeps the first N sampled questions: a short run whose calls a full run then finds in the cache.
 const rows = sample().slice(0, Number(option("limit", "0")) || undefined);
 // --original asks the sampled questions in the dataset's wording: the score free wording is measured against.
-const rewritten = args.includes("--original") ? rows.map((row) => ({ row, style: "original", question: row.question })) : await paraphrase(rows, styles, vision);
+const rewritten = args.includes("--original") ? rows.map((row) => ({ row, style: "original", question: row.question })) : await paraphrase(rows, styles, rewriter);
 const rewriteCalls = calls.made;
 
 const results: Record<string, unknown>[] = [];
@@ -154,6 +161,7 @@ if (interpreted > 0) {
   console.log(`interpretation calls: ${interpretations.made} made, ${interpretations.cached} served from the cache; ${(interpretations.seconds / interpreted).toFixed(1)} s and $${(interpretations.costUsd / interpreted).toFixed(4)} per call on average`);
 }
 console.log(`vision ${vision.id}; questions read by ${planner ? `the interpreter ${planner.id}` : "the keyword parsers (bulk mode)"}`);
+if (lineup) console.log(`mode ${lineupSentence(lineup)}`);
 const wrong = results.filter((r) => !r.correct).slice(0, Number(option("show", "12")));
 if (wrong.length) console.log("\nwrong:");
 for (const r of wrong) console.log(`  [${r.style}] ${r.question} | expected ${r.expected}, got ${String(r.value).slice(0, 60)} | ${r.pipeline}: ${String(r.method).slice(0, 90)}`);

@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
-# Lets the deployed demo use outside models where our own are not yet as good: copies the API keys from a local env
-# file to a root-only file on the instance and sets which model reads drawings and which interprets questions.
+# Makes the outside engines available on the deployed demo: copies the API keys from a local env file to a root-only
+# file on the instance and opens the service's network. The default mode stays Blueline only, which calls none of
+# them; they are used when a visitor picks Best accuracy or Custom (app/README.md, Modes).
 #
 #   deploy/verda/fallback.sh <ssh destination> on <env file with the keys>
-#   deploy/verda/fallback.sh <ssh destination> off          our own models only again; the keys are removed
+#   deploy/verda/fallback.sh <ssh destination> off          the Blueline engines only again; the keys are removed
 #
-# Read from the environment (defaults in brackets): VISION_PROVIDER [gemini-api], VISION_MODEL [gemini-4-hydrogen],
-# PLANNER_PROVIDER [anthropic-api], PLANNER_MODEL [claude-haiku-5-5], RASTER_DETECTOR_TARGETS [symbols], SSH_OPTS.
+# Which engines can run follows from the keys: ANTHROPIC_API_KEY gives Claude Haiku 5.5 and Claude Sonnet 5.5,
+# GEMINI_API_KEY gives Gemini 4 Hydrogen; a key that is not in the env file leaves its engines out.
+# The provider variables are for scripts run on the instance without --mode, and keep the claude CLI out of the
+# line-up (defaults in brackets): VISION_PROVIDER [gemini-api], VISION_MODEL [gemini-4-hydrogen],
+# PLANNER_PROVIDER [anthropic-api], PLANNER_MODEL [claude-haiku-5-5]. SSH_OPTS passes options to ssh.
 # The keys never enter the repository or the service's files: systemd reads them as root and passes them to the process.
 set -euo pipefail
 
@@ -30,8 +34,7 @@ Environment=VISION_PROVIDER=${VISION_PROVIDER:-gemini-api}
 Environment=VISION_MODEL=${VISION_MODEL:-gemini-4-hydrogen}
 Environment=PLANNER_PROVIDER=${PLANNER_PROVIDER:-anthropic-api}
 Environment=PLANNER_MODEL=${PLANNER_MODEL:-claude-haiku-5-5}
-Environment=RASTER_DETECTOR_TARGETS=${RASTER_DETECTOR_TARGETS:-symbols}
-# The service is otherwise confined to localhost; the outside models need the network.
+# The service is otherwise confined to localhost; the outside engines need the network.
 IPAddressDeny=
 IPAddressAllow=any
 EOF
@@ -43,4 +46,5 @@ off)
   echo "unknown mode: $mode" >&2; exit 2 ;;
 esac
 
-remote "systemctl daemon-reload && systemctl restart blueline && for i in \$(seq 1 60); do curl -fsS -m 2 http://127.0.0.1:$port/api/health && break; sleep 1; done; echo"
+# After the restart: the default mode, then what each mode resolves to on the instance.
+remote "systemctl daemon-reload && systemctl restart blueline && for i in \$(seq 1 60); do curl -fsS -m 2 http://127.0.0.1:$port/api/health && break; sleep 1; done; echo; curl -fsS -m 5 http://127.0.0.1:$port/api/modes | grep -o '\"summary\":\"[^\"]*\"' || echo 'no /api/modes on the instance: run redeploy.sh first'"

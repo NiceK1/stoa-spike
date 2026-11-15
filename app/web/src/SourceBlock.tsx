@@ -1,6 +1,8 @@
 /** The source of an answer, as the server's `Answer.source` describes it (server/src/types.ts). */
-export type Tier = "script" | "own-model" | "self-hosted-model" | "external-model";
-export interface Contributor { name: string; tier: Tier; did?: string }
+import type { Tier } from "./modes";
+
+/** `label` is a model's display name; `name` stays its id. Scripts, and answers from an older server, have none. */
+export interface Contributor { name: string; label?: string; tier: Tier; did?: string }
 export interface AnswerSource {
   understoodBy: Contributor & { by: "model" | "keyword-parser" | "stated-type" | "nobody"; reading?: string; why?: string; helper?: Contributor };
   calculatedBy: Contributor[];
@@ -9,11 +11,15 @@ export interface AnswerSource {
 }
 
 const TIERS: Record<Tier, string> = {
-  script: "our script",
-  "own-model": "our model",
+  script: "Blueline script",
+  "own-model": "Blueline model",
   "self-hosted-model": "self-hosted model",
-  "external-model": "external model",
+  "external-model": "outside model",
 };
+
+export function TierTag({ tier }: { tier: Tier }) {
+  return <span className={`tier ${tier}`}>{TIERS[tier] ?? tier}</span>;
+}
 
 /** An answer's note without the reason for having no value, which the Source block prints as "Not calculated". */
 export function noteBeside(note: string | undefined, source: AnswerSource | undefined): string | undefined {
@@ -25,8 +31,9 @@ export function noteBeside(note: string | undefined, source: AnswerSource | unde
 function By({ who, untagged, children }: { who: Contributor; untagged?: boolean; children?: React.ReactNode }) {
   return (
     <div className="by">
-      {!untagged && <span className={`tier ${who.tier}`}>{TIERS[who.tier] ?? who.tier}</span>}
-      <b>{who.name}</b>
+      {!untagged && <TierTag tier={who.tier} />}
+      <b>{who.label ?? who.name}</b>
+      {who.label && <> <span className="model-id">{who.name}</span></>}
       {children}
     </div>
   );

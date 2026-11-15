@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as api from "./api";
 import type { Drawing } from "./api";
 import { SourceBlock, noteBeside, type AnswerSource } from "./SourceBlock";
+import { ModeGlyph, ModePill } from "./ModePill";
+import { modeOf, understandsFreeWording, type Choice } from "./modes";
+import { useModes } from "./useModes";
 
 interface Mark { n: number; x: number; y: number; w?: number; h?: number; label?: string }
 type Evidence =
@@ -11,9 +14,13 @@ interface Answer {
   value: number | string | null; unit?: string; pipeline: string; method: string; exact: boolean; evidence?: Evidence; note?: string;
   /** Not sent by every server; without it the method sentence is shown. */
   source?: AnswerSource;
+  /** With no value for want of an outside model: the mode that has one on this server. */
+  retry?: { mode: string };
 }
 interface Reply {
   answer: Answer; seconds: number; expected: { value: number | string; unit: string | null; correct: boolean | null } | null;
+  /** The mode that answered; not sent by every server. */
+  mode?: string;
   /** The question this reply answers, which may differ from what is in the text box by now. */
   question: string;
 }
@@ -34,6 +41,7 @@ const PIPELINES: Record<string, string> = {
   "dxf-facts": "Answered from the rooms measured in the CAD geometry",
   "ifc-geometry": "Measured from the building model",
   detector: "Counted by the symbol detector",
+  "symbol-vote": "Counted three ways, the middle count taken",
   "vision-model": "Read from the image by a vision model",
   "sheet-text": "Read from the text on the sheet",
   "ifc-facts": "Answered from facts in the building model",
@@ -88,8 +96,10 @@ const drawingKey = (d: Drawing) => (d.kind === "dataset" ? d.path : `upload:${d.
 export function App() {
   const [sources, setSources] = useState<Source[]>([]);
   const [listed, setListed] = useState(false);
-  /** False when the server runs with local models only, so free wording on image plans cannot be answered. */
+  const modes = useModes();
+  /** For a server without modes: false when it runs with local models only, so free wording cannot be answered. */
   const [hasVision, setHasVision] = useState(true);
+  const freeWording = modes.mode ? understandsFreeWording(modes.mode) : hasVision;
   const [filter, setFilter] = useState("");
   /** How many drawings each source group lists; the full dataset has thousands per group. */
   const [limits, setLimits] = useState<Record<string, number>>({});
@@ -209,21 +219,23 @@ export function App() {
   const english = known.filter((k) => isEnglish(k.question));
   const offered = translations || english.length === 0 ? known : english;
   const kinds = KINDS.map((k) => ({ ...k, n: offered.filter((q) => kindOf(q.type) === k.type).length })).filter((k) => k.n > 0);
-  const free = drawing && hasVision ? freeQuestions(drawing.kind === "dataset" ? drawing.path : null, drawing.kind === "upload" ? drawing.name : undefined) : [];
+  const free = drawing && freeWording ? freeQuestions(drawing.kind === "dataset" ? drawing.path : null, drawing.kind === "upload" ? drawing.name : undefined) : [];
   const chips = kind === "free" ? [] : kind ? offered.filter((q) => kindOf(q.type) === kind) : offered;
   const freeChips = kind === null || kind === "free" ? free : [];
 
   // Only the latest request may update the screen: a slow answer must not land under another drawing or question.
   const latest = useRef(0);
 
-  async function ask(text: string, target: Drawing | null = drawing) {
+  /** `inMode` asks in that mode and makes it the setting; without it the current setting answers. */
+  async function ask(text: string, target: Drawing | null = drawing, inMode?: Choice) {
     if (!target || !text.trim()) return;
     const request = ++latest.current;
     setQuestion("");
     setPending(text);
     setError(null);
+    if (inMode) modes.choose(inMode);
     try {
-      const body = await api.ask(target, text);
+      const body = await api.ask(target, text, await modes.fields());
       if (request !== latest.current) return;
       const k = drawingKey(target);
       setHistory((h) => {
@@ -267,6 +279,7 @@ export function App() {
   }
 
   const evidence = reply?.answer.evidence ?? (preview === "loading" ? null : preview);
+  const retryMode = reply?.answer.retry && modes.info ? modeOf(modes.info, reply.answer.retry.mode) : undefined;
 
   return (
     <div className={listShown ? "layout" : "layout register-closed"}>
@@ -406,10 +419,22 @@ export function App() {
                     <div className="figure"><span className="spinner" /></div>
                     <div className="facts">
                       <p className="asked">{pending}</p>
-                      <p className="time">Reading the drawing… vector drawings answer at once, images take up to 20 s.</p>
+                      <p className="time">
+                        {modes.outside
+                          ? "Reading the drawing… the first outside reading of an image takes about half a minute; later questions on it answer in seconds."
+                          : "Reading the drawing… vector drawings answer at once, images take up to 20 s."}
+                      </p>
                     </div>
                   </div>
-                ) : reply ? <Result reply={reply} /> : (
+                ) : reply ? (
+                  <Result
+                    reply={reply} answeredIn={modes.info && reply.mode ? modeOf(modes.info, reply.mode)?.label : undefined}
+                    retry={retryMode && {
+                      label: retryMode.label, about: retryMode.summary, switches: retryMode.id !== modes.mode?.id,
+                      run: () => ask(reply.question, drawing, { ...modes.choice, mode: retryMode.id }),
+                    }}
+                  />
+                ) : (
                   <div className="placard idle">
                     <p>Pick a question below or ask your own. The answer appears here, and every counted item is marked on the drawing.</p>
                   </div>
@@ -475,6 +500,7 @@ export function App() {
                       placeholder="Ask your own question" aria-label="Question"
                     />
                     <button className="primary" disabled={pending !== null || !question.trim()}>Ask</button>
+                    <ModePill modes={modes} busy={pending !== null} />
                   </form>
                 </section>
               </aside>
@@ -501,11 +527,15 @@ function history_replace(url: URL) {
   try { window.history.replaceState(null, "", url); } catch { /* not allowed in some embeds */ }
 }
 
-function Result({ reply }: { reply: Reply }) {
+/** Asking the shown question again in the mode the server named; `switches` when that is not the current setting. */
+interface Retry { label: string; about: string; switches: boolean; run: () => void }
+
+function Result({ reply, answeredIn, retry }: { reply: Reply; answeredIn?: string; retry?: Retry }) {
   const { answer, expected, seconds, question } = reply;
   const unit = answer.unit && answer.unit !== "count" ? answer.unit.replace("m2", "m²").replace("m3", "m³") : "";
   const long = typeof answer.value === "string" && answer.value.length > 12;
-  const note = noteBeside(answer.note, answer.source);
+  // With a mode to ask again in, the note only repeats what "Not calculated" and the button already say.
+  const note = answer.retry && answer.source?.needed ? undefined : noteBeside(answer.note, answer.source);
   return (
     <header className="placard">
       <div className={long ? "figure text" : "figure"}>
@@ -520,13 +550,21 @@ function Result({ reply }: { reply: Reply }) {
         </p>
         {answer.source && <SourceBlock source={answer.source} />}
         {note && <p className="note">{note}</p>}
+        {retry && (
+          <div className="retry">
+            <button type="button" className="retry-ask" onClick={retry.run} title={retry.about}>
+              <ModeGlyph outside /> Ask again in {retry.label}
+            </button>
+            {retry.switches && <p>This switches the setting below to {retry.label}, which calls outside models.</p>}
+          </div>
+        )}
         <p className="time">
           {expected && expected.correct !== null && (
             <span className={expected.correct ? "check ok" : "check off"}>
               {expected.correct ? "Matches" : "Differs from"} the dataset answer, {String(expected.value)}.{" "}
             </span>
           )}
-          Answered in {seconds.toFixed(1)} s
+          Answered in {seconds.toFixed(1)} s{answeredIn && ` in ${answeredIn} mode`}
         </p>
       </div>
     </header>
