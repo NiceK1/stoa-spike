@@ -29,7 +29,7 @@ Measured on 200 floor plans held out from training, 1,781 count questions, exact
 |---|---|---|
 | A hosted vision model alone (Sonnet 5.5) | 77.1% | 1 per drawing |
 | Our detectors alone, trained on Verda | 85.9% | none |
-| Our detectors for drawn symbols, Gemini 4 for room types | 87.7% | 1 per drawing, only for room types |
+| Our detectors and one Gemini 4 reading together (the app's Best accuracy mode) | 88.5% | 1 per drawing |
 
 The spot burst also told us what not to spend on. Three seeds of one recipe differ by about 13 questions in 2,235, and
 a larger model, a newer architecture, RT-DETR, gentler augmentation and thicker boxes all landed inside that noise. The
@@ -59,8 +59,8 @@ quotes prices in USD unless asked for EUR; small CPU instances were unavailable 
 
 ## Cost
 
-About 77 EUR of the 200 EUR coupon by the early hours of 15 November: roughly 47 EUR for the A100 over 21 hours and 29 EUR
-for the four-hour spot burst.
+About 83 EUR of the 200 EUR coupon by the morning of 15 November: roughly 54 EUR for the A100 over 25 hours and
+29 EUR for the four-hour spot burst.
 
 ## From demo to real use
 

@@ -36,8 +36,10 @@ Limits, because the instance also trains models: `Nice=10`, `CPUWeight=20`, `CPU
 `MemoryMax=12G`. Measured with the cap: the service uses 3.0 GB of memory with both detectors and the interpreter
 loaded; while it answers, a training run on the same instance kept its GPU at 99% and lost 2 to 6% of its CPU share.
 
-What the cap costs: the first question about an image plan runs both detectors on it, 7 to 8 seconds under the cap
-(3 seconds without it). The result is cached, and a later question about that plan takes about 0.6 seconds.
+The first question about an image plan runs both detectors on it: about 2 seconds on the six cores, plus a second
+for the interpreter. The service sets `DETECTOR_THREADS=6` for that: ONNX Runtime otherwise starts one thread per
+core of the machine (22), and inside the cap a scan then takes 7 to 8 seconds. The result is cached, and a later
+question about that plan takes about 0.6 seconds.
 `redeploy.sh --warm` asks one question per image plan of the demo, so visitors only wait on a drawing they upload.
 The first question after a restart also loads the models (12 seconds, measured cold).
 
@@ -118,5 +120,5 @@ limit in the app: set one on the keys' accounts before giving the address out.
 Nothing on top of the instance it runs on. Today that is the GPU instance we train on, 2.14 EUR per hour whether or
 not the demo runs (see `training/README.md`), and the demo stops when that instance is deleted. On its own the demo
 needs no GPU: 3 GB of memory, about 3 GB of disk, and as many cores as the first question about a drawing should be
-fast (six give 7 to 8 seconds). A small CPU instance would carry it; none was available on Verda when this was set
+fast (six give about 2 seconds a scan). A small CPU instance would carry it; none was available on Verda when this was set
 up, so its price is not measured here. The certificate and the sslip.io name are free.

@@ -35,29 +35,29 @@ RASTER_DRAWINGS, RASTER_ASKED = 200, 1_781
 # who answers: (key, label, right, outside calls per drawing, what those calls cost)
 WHO = [
     ("sonnet", "Outside vision model alone: Claude Sonnet 5.5", 1_373, "1", "about $0.009 and 5 seconds per drawing"),
-    ("gemini", "Outside vision model alone: Gemini 4 Hydrogen", 1_516, "1",
-     "about $0.07 and half a minute per drawing"),
+    ("gemini", "Outside vision model alone: Gemini 4 Hydrogen", 1_507, "1",
+     "about $0.02 and 8 seconds per drawing"),
     ("detectors", "Blueline only: our trained detectors answer every kind", 1_530, "0",
      "nothing leaves the server; 3 seconds of CPU per drawing"),
-    ("best", "Best accuracy: the detectors and one Gemini reading vote on symbols, Gemini reads room types", 1_585,
-     "1", "about $0.07 and half a minute per drawing"),
+    ("best", "Best accuracy: the detectors and one Gemini reading vote on symbols, Gemini reads room types", 1_576,
+     "1", "about $0.02 and 8 seconds per drawing"),
 ]
 # kind: asked, Gemini 4 Hydrogen alone, our detectors alone, best accuracy
 SYMBOL_KINDS = {
-    "toilet bowls": (200, 184, 188, 193),
-    "sinks": (199, 164, 174, 180),
-    "showers and bathtubs": (182, 155, 162, 168),
-    "doors": (156, 106, 119, 120),
-    "windows": (200, 85, 97, 102),
+    "toilet bowls": (200, 184, 188, 192),
+    "sinks": (199, 163, 174, 179),
+    "showers and bathtubs": (182, 159, 162, 170),
+    "doors": (156, 99, 119, 117),
+    "windows": (200, 87, 97, 103),
 }
 ROOM_KINDS = {
-    "storeys": (200, 198, 191, 198),
-    "WC rooms": (98, 97, 95, 97),
-    "kitchens": (129, 127, 118, 127),
-    "saunas": (137, 134, 133, 134),
-    "balconies": (61, 59, 55, 59),
+    "storeys": (200, 199, 191, 199),
+    "WC rooms": (98, 95, 95, 95),
+    "kitchens": (129, 125, 118, 125),
+    "saunas": (137, 133, 133, 133),
+    "balconies": (61, 58, 55, 58),
     "bedrooms": (125, 115, 111, 115),
-    "bathrooms": (94, 92, 87, 92),
+    "bathrooms": (94, 90, 87, 90),
 }
 
 STEP_ASKED, STEP_DRAWINGS = 280, 30

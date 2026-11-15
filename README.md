@@ -1,22 +1,27 @@
-# Stoa take-off spike
+# Blueline
 
-Answers quantity take-off questions from the Junction 2026 Stoa dataset ("Make Blueprints Talk"), marks every counted
-item on the drawing, and scores itself against `questions.jsonl` using the dataset's rules (counts exact; areas,
-lengths and volumes within 2%).
+Blueline answers quantity take-off questions about construction drawings and marks every counted item on the drawing,
+so a person can check the answer. It was built at Junction 2026 for the Stoa challenge "Make Blueprints Talk" and
+scores itself against the dataset's `questions.jsonl` with the dataset's rules (counts exact; areas, lengths and
+volumes within 2%).
+
+Live demo: https://blueline.65-108-33-91.sslip.io
 
 - **Vector drawings** (DXF floor plans, IFC models with numeric answers) are answered by plain geometry code, with no
   model calls: 99.4% right on each, measured on every question.
 - **Raster floor plans**: detectors we trained count every kind the dataset asks about, with no call to an outside
-  model: 85.9% right on 200 held-out drawings, where a hosted vision model alone gets 77.1% to 85.1%. One outside
-  reading per drawing on top of the detectors gives 89.0%.
+  model: 85.9% right on 200 held-out drawings, where a hosted vision model alone gets 77.1% to 85.1%. In the app's
+  Best accuracy mode one outside reading per drawing lifts that to 88.5%, for about two cents a drawing.
 - **Practice drawing sheets and IFC free-text questions** are answered from the sheet's text layer and from facts
   extracted by code, worded by a language model.
 - **Any wording**: a small language model turns each question into a structured call that the exact scripts run.
   A Gemma we fine-tuned does this on the CPU in under a second, at no cost.
 
-All measurements, with what each answer costs and how long it takes: [docs/results.md](docs/results.md).
+All measurements, with what each answer costs and how long it takes: [docs/results.md](docs/results.md). What was
+built with each partner's technology: [Verda](docs/verda.md), with the measured [path to scale](docs/scaling.md);
+[Gemma](docs/gemma.md); [the Gemini API](docs/gemini.md).
 
-![Results on the full Stoa dataset, 15 November 2026. By code alone: Swiss apartment floors 37,376 of 37,584 right (99.4%), IFC numeric answers 3,044 of 3,062 (99.4%). Raster floor plans on 200 held-out drawings: our own detectors 1,530 of 1,781 right (85.9%) with no outside model, 1,585 (89.0%) with one outside reading per drawing, against 77.1% and 85.1% for two outside vision models alone. Below: outside calls and their cost per drawing for each way of answering, and raster accuracy per kind of question.](docs/results.png)
+![Results on the full Stoa dataset, 15 November 2026. By code alone: Swiss apartment floors 37,376 of 37,584 right (99.4%), IFC numeric answers 3,044 of 3,062 (99.4%). Raster floor plans on 200 held-out drawings: our own detectors 1,530 of 1,781 right (85.9%) with no outside model, 1,576 (88.5%) with one outside reading per drawing, against 77.1% and 84.6% for two outside vision models alone. Below: outside calls and their cost per drawing for each way of answering, and raster accuracy per kind of question.](docs/results.png)
 
 Raster numbers are measured on 200 drawings the detectors never saw; the "about 90%" for the whole dataset is a
 projection from them. Our detectors beat the vision model on drawn symbols and need no hosted call; windows (97 of
