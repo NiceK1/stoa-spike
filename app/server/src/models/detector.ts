@@ -116,7 +116,9 @@ export class OnnxDetector implements Detector {
     for (let i = 0; i < plane; i++) {
       for (let c = 0; c < 3; c++) input[c * plane + i] = data[i * info.channels + Math.min(c, info.channels - 1)] / 255;
     }
-    if (!this.session) this.session = ort.InferenceSession.create(join(dirname(this.specPath), this.spec.model));
+    // ONNX Runtime sizes its thread pool from the machine's cores, past any CPU limit on the process.
+    const threads = Number(process.env.DETECTOR_THREADS) || undefined;
+    if (!this.session) this.session = ort.InferenceSession.create(join(dirname(this.specPath), this.spec.model), threads ? { intraOpNumThreads: threads } : {});
     const output = await (await this.session).run({ [this.spec.input.name]: new ort.Tensor("float32", input, [1, 3, size, size]) });
     const rows = output[this.spec.output.name].data as Float32Array;
 

@@ -147,7 +147,7 @@ Group=$user
 WorkingDirectory=$repo/app
 Environment=HOST=127.0.0.1 PORT=$port STOA_DATASET=$root/dataset
 Environment=VISION_PROVIDER=none DETECTOR=onnx RASTER_DETECTOR_TARGETS=all RASTER_SYMBOL_VOTE=off
-Environment=PLANNER_PROVIDER=gemma-local PLANNER_THREADS=6
+Environment=PLANNER_PROVIDER=gemma-local PLANNER_THREADS=6 DETECTOR_THREADS=6
 ExecStart=$root/node/bin/node --import tsx server/src/server.ts
 Restart=always
 RestartSec=3

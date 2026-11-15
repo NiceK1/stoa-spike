@@ -43,7 +43,8 @@ await app.register(multipart, { limits: { fileSize: 200 * 1024 * 1024 } });
 // `vision` is the reader of the default mode, which is what a question without a mode gets.
 app.get("/api/health", async () => {
   const { deps } = modes.resolve();
-  return { mode: DEFAULT_MODE, vision: deps.vision.id, interpreter: deps.planner?.id ?? null, detector: deps.detector?.id ?? null, dataset: datasetRoot() };
+  // `status` is what a container platform's health check reads.
+  return { status: "ok", mode: DEFAULT_MODE, vision: deps.vision.id, interpreter: deps.planner?.id ?? null, detector: deps.detector?.id ?? null, dataset: datasetRoot() };
 });
 
 // With ?interpreter= and ?reader=, the Custom mode is described for those choices.
@@ -105,6 +106,7 @@ app.post<{ Body: { path?: string; upload?: string; question: string; type?: Ques
   if (!question?.trim()) return reply.code(400).send({ error: "question is required" });
   const file = path ? inside(datasetRoot(), path) : upload ? inside(UPLOAD_DIR, upload) : null;
   if (!file) return reply.code(400).send({ error: "path or upload is required" });
+  if (path && !isAvailable(path)) return reply.code(404).send({ error: "This drawing is not on this server." });
   let lineup;
   try {
     lineup = modes.resolve({ mode, interpreter, reader });

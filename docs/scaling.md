@@ -46,8 +46,8 @@ cores (four detector threads, two interpreter threads) was worse: 29 answers/min
 
 One setting had to change before this was worth measuring. ONNX Runtime sizes its thread pool from the machine (22
 cores) and pins the threads itself, past any CPU limit. The deployed service, held to six cores by a quota, takes 7 to
-8 s per scan (`deploy/verda/README.md`); with six threads on six cores a scan takes 1.8 s. The table uses that
-setting. It is one line (`intraOpNumThreads`, in the appendix) and it is not merged yet.
+8 s per scan; with six threads on six cores a scan takes 1.8 s. The table uses that setting,
+`DETECTOR_THREADS=6`, which the demo now runs with too.
 
 ## The path
 
@@ -123,8 +123,8 @@ Not built, and needed before real users:
 
 - Accounts, with uploads and cache separated per customer. Today an upload is open to anyone who knows its random id.
 - Upload limits and retention in the container. The instance has a 30 MB limit in Caddy and deletes uploads after a day.
-- The detector thread setting, and inference off Node's main thread (or stage 2), so a replica answers during a scan.
-- `/api/health` with a `status` field, and `busy` during a scan, which Verda's queue understands.
+- Inference off Node's main thread (or stage 2), so a replica answers during a scan.
+- `/api/health` saying `busy` during a scan, which Verda's queue understands (it says `status: ok` today).
 - Monitoring: queue length, replicas, latency per drawing type, the share of drawings the detectors do not recognise.
 - The batch entry point: a request that names an archive, answers it, writes the result and exits.
 - A licence for commercial use. The weights are non-commercial (Ultralytics AGPL-3.0, CubiCasa5k CC BY-NC-SA).
@@ -160,8 +160,6 @@ On the instance, as root. The server and the generator share cores 16 to 21 and 
 ```bash
 mkdir -p /data/scale-test/home && cp -ax /srv/blueline/repo /data/scale-test/repo   # -x leaves the demo's cache behind
 cd /data/scale-test/repo/app && chown nobody .cache /data/scale-test/home
-# the one-line change the measurements use, in server/src/models/detector.ts:
-#   ort.InferenceSession.create(path, process.env.DETECTOR_THREADS ? { intraOpNumThreads: Number(process.env.DETECTOR_THREADS) } : {})
 runuser -u nobody -- env HOME=/data/scale-test/home HOST=127.0.0.1 PORT=18790 STOA_DATASET=/srv/blueline/dataset \
   VISION_PROVIDER=none DETECTOR=onnx RASTER_DETECTOR_TARGETS=all RASTER_SYMBOL_VOTE=off \
   PLANNER_PROVIDER=gemma-local PLANNER_THREADS=6 DETECTOR_THREADS=6 \
@@ -198,8 +196,6 @@ threshold 1; scale-up delay 0 s, scale-down delay 300 s; request time to live 30
 
 Not confirmed without running it:
 
-- Whether a JSON health answer without a `status` field counts as healthy. The docs name `ok`, `ready`, `healthy`,
-  `running` and `up`. Until `/api/health` has the field, `/app.html` (not JSON, 200) is the safe path.
 - Whether a health probe tolerates a replica that is silent for a second during a scan.
 - Whether the scratch disk can be mounted at that path and written by uid 1000, and how it behaves with several writers.
 - How many cores a `CPU Node` replica shows to the process: `PLANNER_THREADS` and `DETECTOR_THREADS` should equal it.
