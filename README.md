@@ -5,7 +5,7 @@ so a person can check the answer. It was built at Junction 2026 for the Stoa cha
 scores itself against the dataset's `questions.jsonl` with the dataset's rules (counts exact; areas, lengths and
 volumes within 2%).
 
-Live demo: https://blueline.65-108-33-91.sslip.io
+Live demo: https://blueline.65-108-32-187.sslip.io
 
 Two-minute video: https://youtu.be/gpzQJ5wE6vc. Pitch deck: [docs/blueline-pitch-deck.pdf](docs/blueline-pitch-deck.pdf).
 

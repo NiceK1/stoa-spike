@@ -32,8 +32,8 @@ Everything is under `/srv/blueline` and belongs to the unprivileged user `blueli
 An instance with the address `a.b.c.d` is served as `https://a-b-c-d.sslip.io`; a name of your own can be given to
 `setup.sh` once it points at the instance.
 
-Limits, because the instance also trains models: `Nice=10`, `CPUWeight=20`, `CPUQuota=600%` (six cores),
-`MemoryMax=12G`. Measured with the cap: the service uses 3.0 GB of memory with both detectors and the interpreter
+Limits, so that the demo can share an instance that trains models: `Nice=10`, `CPUWeight=20`, `CPUQuota=600%`
+(six cores), `MemoryMax=12G`. Measured with the cap: the service uses 3.0 GB of memory with both detectors and the interpreter
 loaded; while it answers, a training run on the same instance kept its GPU at 99% and lost 2 to 6% of its CPU share.
 
 The first question about an image plan runs both detectors on it: about 2 seconds on the six cores, plus a second
@@ -117,8 +117,8 @@ limit in the app: set one on the keys' accounts before giving the address out.
 
 ## What it costs
 
-Nothing on top of the instance it runs on. Today that is the GPU instance we train on, 2.14 EUR per hour whether or
-not the demo runs (see `training/README.md`), and the demo stops when that instance is deleted. On its own the demo
-needs no GPU: 3 GB of memory, about 3 GB of disk, and as many cores as the first question about a drawing should be
-fast (six give about 2 seconds a scan). A small CPU instance would carry it; none was available on Verda when this was set
-up, so its price is not measured here. The certificate and the sslip.io name are free.
+Nothing on top of the instance it runs on: a CPU.8V.32G instance (8 vCPU, 32 GB, FIN-01) at 0.086 EUR per hour,
+about 62 EUR a month, with a 50 GB disk (the smallest Verda accepts). The demo needs no GPU: 3 GB of memory, about
+3 GB of disk, and as many cores as the first question about a drawing should be fast (six give about 2 seconds a
+scan). During the hackathon it ran on the GPU instance we trained on, at 2.14 EUR per hour. The certificate and the
+sslip.io name are free.

@@ -6,7 +6,7 @@ measure, where, and whether the user wants it shown. In the app's default mode t
 ourselves, FunctionGemma 270M, running on the CPU inside the web server. No question and no drawing leaves the
 machine, and understanding a question costs nothing.
 
-Live demo: https://blueline.65-108-33-91.sslip.io. The mode shown in the ask window is "Blueline only" by default,
+Live demo: https://blueline.65-108-32-187.sslip.io. The mode shown in the ask window is "Blueline only" by default,
 and the Source lines under every answer name the "Blueline interpreter (tuned Gemma)" with how it read the question.
 
 The model is published on Hugging Face: https://huggingface.co/NiceK1/blueline-interpreter-functiongemma-270m (one 292 MB GGUF file, under the Gemma Terms of Use,

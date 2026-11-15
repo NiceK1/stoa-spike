@@ -66,7 +66,7 @@ flowchart LR
 
 | Stage | Verda product, and why | Trigger | Capacity | Cost |
 |---|---|---|---|---|
-| 0. Today | One on-demand A100 instance, rented for training. The app rides along, held to six cores. | | One replica, as above. | 2.14 EUR/h; 1,540 EUR a month if kept for serving alone |
+| 0. Today | One on-demand CPU instance (CPU.8V.32G: 8 vCPU, 32 GB) with the app as a service, held to six cores. During the hackathon the app rode along on the training A100. | | One replica, as above. | 0.086 EUR/h, about 62 EUR a month |
 | 1. Replicas | Auto-scaling CPU containers (CPU Node, 8 vCPU, 32 GB) from the image we already build for the Hugging Face Space: one request per replica, queue load 1, at least one replica. The deployment's scratch disk, shared by its replicas, is mounted as the app's cache. A 4 vCPU instance stays as the front door, because a container endpoint needs a bearer key that a browser cannot hold. | A second user at the same time: with four, one replica's median answer takes 4.9 s instead of 0.7 s. | Per replica 40 answers/min with the interpreter, or 30 scans/min in bulk (measured on six cores). N replicas give N times that if the shared disk keeps up (projection). | 0.09 EUR/h per replica, 0.04 on spot. Always on, one replica and the front door: 96 EUR a month |
 | 2. Model container | One GPU container (1x L40S) serving both detectors and the Gemma with batching, scaled on its own queue. App replicas stay on CPU with the scripts and the cache. | More than about 22 CPU replicas busy all the time (2.01 / 0.09 EUR): 900 answers/min or 670 scans/min. Or a first answer on a new drawing that must stay under 2 s. | Next table. | 2.01 EUR/h, 1.00 on spot |
 | 3. Archives | Batch jobs on spot: one replica per request, gone when the process exits, with a deadline. After an eviction the retry finds the finished scans in the cache. | A customer hands over a whole project, not one drawing. | 10,000 raster drawings are 5.6 replica-hours on CPU at the measured 30 scans/min. `npm run eval` already answers in bulk: 37,584 DXF and 3,062 IFC questions scored (`app/README.md`). | 0.22 EUR on spot CPU for those 10,000 |
@@ -106,7 +106,7 @@ times as much per drawing.
 | | 1,000 raster drawings scanned | 1,000 questions answered |
 |---|---|---|
 | Outside vision model, one reading per drawing (measured, [gemini.md](gemini.md)) | $9 with Claude Sonnet 5.5; $18 to $70 with Gemini 4 Hydrogen, by thinking level | |
-| Stage 0, the A100 instance charged to serving alone | 1.19 EUR | 0.89 EUR |
+| The training A100, had it been kept for serving alone | 1.19 EUR | 0.89 EUR |
 | Stage 1, CPU container | 0.05 EUR (30/min) | 0.04 EUR with the interpreter (40/min); 0.01 EUR in bulk (177/min) |
 | Stage 2, L40S container (projection from the A100) | 0.06 EUR at the shared, unbatched rate; 0.01 EUR batched | 0.02 EUR (25 questions/s) |
 | Stage 3, CPU container on spot | 0.02 EUR | 0.004 EUR in bulk |

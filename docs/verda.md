@@ -6,7 +6,7 @@ are answered by exact geometry code. For raster floor plans we needed models of 
 Verda: we trained them there, we fine-tuned the small model that interprets questions there, and the public demo runs
 there.
 
-Live demo, served from a Verda instance: https://blueline.65-108-33-91.sslip.io
+Live demo, served from a Verda instance: https://blueline.65-108-32-187.sslip.io
 
 ![Training history: the runs in order, what went in, what came out](training-history.png)
 
@@ -16,7 +16,7 @@ Live demo, served from a Verda instance: https://blueline.65-108-33-91.sslip.io
 |---|---|---|
 | GPU instance, on demand (1x A100 80 GB, FIN-01) | The home of the project: 31 GB of data, the environment and a training queue. Nine detector runs, the fine-tune of the question interpreter (a 270M Gemma on 53,632 question-to-call pairs, three epochs in about 90 minutes), and a served Gemma 4 for comparison. | It has to stay up for two days and must not disappear mid-run. |
 | Spot instance, 8x L40S (FIN-01, 7.30 EUR/h) | Eight training runs side by side for four hours: three seeds of the reference recipe, two room-type models, the relabelled windows on a second architecture, RT-DETR, an all-class model. | Half the price of on demand. Same datacentre as the A100, so 19 GB of data arrived in about three minutes. Runs are independent, so an eviction costs one run, not the batch. |
-| The same GPU instance as a web host | The demo: a Node server with our ONNX detectors on the CPU and the interpreter, in a sandboxed service capped at six cores, behind HTTPS. | No small CPU instance was available when we deployed. One script moves the demo to one (0.04 EUR/h) when it is. |
+| CPU instance, on demand (CPU.8V.32G, FIN-01, 0.086 EUR/h) | The demo: a Node server with our ONNX detectors and the interpreter, in a sandboxed service capped at six cores, behind HTTPS. During the hackathon it ran on the A100. | The app needs no GPU: 3 GB of memory and a few cores. No small CPU instance was available during the hackathon; `setup.sh` moved the demo once one was. |
 
 Looked at and not used: cloning the data volume (the source instance must be shut down first), the serverless container
 template for Gemma 4 and managed inference (not needed once the measurements were in), object storage.
@@ -56,7 +56,7 @@ detectors, so we did not adopt it.
 
 Things that went wrong, for the next team: our first delete call failed because the API lists the system volume twice,
 and the instance idled for three hours; the coupon cannot start an instance until a payment method is on file; the API
-quotes prices in USD unless asked for EUR; small CPU instances were unavailable when we wanted one.
+quotes prices in USD unless asked for EUR; small CPU instances were unavailable until after the hackathon.
 
 ## Cost
 

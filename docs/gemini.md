@@ -5,7 +5,7 @@ person can check the answer. Vector drawings are answered by geometry code, and 
 trained ourselves. Gemini 4 Hydrogen is the second opinion that turns that into the most accurate line-up we
 measured, and the reader for everything our own models cannot do.
 
-Live demo: https://blueline.65-108-33-91.sslip.io. Switch the question box from "Blueline only" to "Best accuracy"
+Live demo: https://blueline.65-108-32-187.sslip.io. Switch the question box from "Blueline only" to "Best accuracy"
 to see Gemini at work; the Source lines under each answer say what Gemini did and what our own models did.
 
 ## The problem
