@@ -7,6 +7,8 @@ volumes within 2%).
 
 Live demo: https://blueline.65-108-33-91.sslip.io
 
+Two-minute video: https://youtu.be/gpzQJ5wE6vc. Pitch deck: [docs/blueline-pitch-deck.pdf](docs/blueline-pitch-deck.pdf).
+
 - **Vector drawings** (DXF floor plans, IFC models with numeric answers) are answered by plain geometry code, with no
   model calls: 99.4% right on each, measured on every question.
 - **Raster floor plans**: detectors we trained count every kind the dataset asks about, with no call to an outside
